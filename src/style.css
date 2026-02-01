@@ -1,0 +1,753 @@
+:root {
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 0.87);
+  background-color: transparent;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  /* UI Scaling System */
+  --ui-scale: 1;
+  --base-font-size: 16px;
+  
+  /* Core measurements (multiply by --ui-scale) */
+  --tile-size: calc(120px * var(--ui-scale));
+  --tile-border-radius: calc(6px * var(--ui-scale));
+  --effect-slot-size: calc(26px * var(--ui-scale));
+  --hero-card-min-width: calc(90px * var(--ui-scale));
+  --gap-small: calc(4px * var(--ui-scale));
+  --gap-medium: calc(8px * var(--ui-scale));
+  --gap-large: calc(12px * var(--ui-scale));
+  --gap-xlarge: calc(16px * var(--ui-scale));
+  --padding-small: calc(4px * var(--ui-scale));
+  --padding-medium: calc(8px * var(--ui-scale));
+  --padding-large: calc(12px * var(--ui-scale));
+  
+  /* Font sizes that scale */
+  --font-xs: calc(0.56rem * var(--ui-scale));
+  --font-sm: calc(0.72rem * var(--ui-scale));
+  --font-md: calc(0.85rem * var(--ui-scale));
+  --font-lg: calc(0.95rem * var(--ui-scale));
+  --font-xl: calc(1.1rem * var(--ui-scale));
+  
+  /* Layout constraints */
+  --max-content-width: calc(1280px * var(--ui-scale));
+  --boards-container-width: auto; /* Set dynamically by JS or calculated */
+}
+
+/* UI Scale classes - applied to html or body */
+.ui-scale-100 { --ui-scale: 1; }
+.ui-scale-125 { --ui-scale: 1.25; }
+.ui-scale-150 { --ui-scale: 1.5; }
+.ui-scale-175 { --ui-scale: 1.75; }
+.ui-scale-200 { --ui-scale: 2; }
+
+/* Auto-scale for high-DPI displays */
+@media (min-resolution: 192dpi), (min-resolution: 2dppx) {
+  :root:not([class*="ui-scale-"]) {
+    --ui-scale: 1.25;
+  }
+}
+
+/* Auto-scale for 4K+ displays (3840px width) */
+@media (min-width: 3000px) {
+  :root:not([class*="ui-scale-"]) {
+    --ui-scale: 1.5;
+  }
+}
+
+@media (min-width: 3840px) {
+  :root:not([class*="ui-scale-"]) {
+    --ui-scale: 1.75;
+  }
+}
+
+/* Background Styles (image or video) */
+.app-container {
+  position: relative;
+  min-height: 100vh;
+  width: 100%;
+  overflow: hidden;
+}
+
+.video-background {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  object-fit: cover;
+  pointer-events: none;
+}
+
+.app-content {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+}
+
+body {
+  margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow-x: auto; /* allow horizontal scrolling if needed */
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+#app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center;
+}
+
+.logo {
+  height: 6em;
+  padding: 1.5em;
+  will-change: filter;
+  transition: filter 300ms;
+}
+.logo:hover {
+  filter: drop-shadow(0 0 2em #646cffaa);
+}
+.logo.vanilla:hover {
+  filter: drop-shadow(0 0 2em #f7df1eaa);
+}
+
+.card {
+  padding: 2em;
+}
+
+.read-the-docs {
+  color: #888;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  a:hover {
+    color: #747bff;
+  }
+  button {
+    background-color: #f9f9f9;
+  }
+}
+
+/* DraftBoard visual improvements */
+.db-player-label {
+  font-weight: 700;
+  font-size: var(--font-lg);
+  margin-bottom: var(--gap-medium);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Player label colors */
+.db-player1 { color: #4fc3f7; }   /* bright cyan/blue */
+.db-player2 { color: #ffb74d; }   /* warm orange */
+
+/* Hero pool */
+.db-hero-pool-label {
+  color: #b2ebf2;
+  font-weight: 700;
+  margin-bottom: var(--gap-medium);
+  font-size: var(--font-md);
+}
+.db-hero-pool {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--gap-small);
+  max-height: calc(268px * var(--ui-scale));
+  overflow-y: auto;
+  padding: calc(5px * var(--ui-scale));
+  background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(0,0,0,0.05));
+  border-radius: var(--tile-border-radius);
+  width: 100%;
+  font-size: var(--font-lg);
+}
+
+/* Hero card style (responsive) */
+.db-hero-card {
+  background: linear-gradient(180deg, #1e88e5, #1565c0);
+  color: #ffffff;
+  border-radius: var(--tile-border-radius);
+  padding: calc(5px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  margin: calc(2px * var(--ui-scale));
+  min-width: var(--hero-card-min-width);
+  font-size: var(--font-md);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.32);
+  transition: transform 90ms ease;
+  cursor: grab;
+  transform: translateY(-1px);
+  border-color: #43a047;
+  background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(245,255,240,0.95));
+  color: #111;
+}
+.db-hero-card:active { cursor: grabbing; }
+.db-hero-card:hover { transform: translateY(-1px); }
+
+/* Tiles (responsive sizing) */
+.db-tile {
+  width: var(--tile-size);
+  height: var(--tile-size);
+  border-radius: var(--tile-border-radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  user-select: none;
+  position: relative; /* allow absolute internals */
+  padding: var(--padding-medium);
+}
+
+/* Empty tiles (muted) */
+.db-tile-empty {
+  background: #2b2b2b;
+  color: #9e9e9e;
+  border: 2px dashed #616161;
+}
+
+/* Dead hero tile: looks like an empty tile with a red accent */
+.db-tile-dead {
+  background: linear-gradient(180deg, #231f20, #2b2b2b);
+  color: #f5c6cb;
+  border: 2px dashed #b71c1c;
+  opacity: 0.95;
+}
+
+/* Occupied tiles (contrasting) */
+.db-tile-occupied {
+  background: transparent;
+  color: #111111;
+  border: 2px solid #90a4ae;
+  padding: 0;
+}
+
+/* Tile hero name */
+.db-tile-hero {
+  padding: var(--padding-small) calc(6px * var(--ui-scale));
+  font-weight: 600;
+  font-size: var(--font-lg);
+}
+
+/* Empty tile text */
+.db-tile-empty-text {
+  color: #9e9e9e;
+  font-size: var(--font-md);
+}
+
+/* No heroes text */
+.db-no-heroes {
+  color: #9e9e9e;
+  padding: var(--padding-medium);
+}
+
+/* Ban pile */
+.db-ban-pile {
+  min-height: calc(100px * var(--ui-scale));
+  border-radius: var(--padding-medium);
+  padding: var(--padding-medium);
+  box-sizing: border-box;
+}
+.db-ban-pile > div {
+  margin-bottom: var(--gap-medium);
+}
+
+/* Slightly dim tiles when disabled */
+.db-tile[style*="opacity: 0.6"] {
+  filter: grayscale(10%);
+}
+
+/* Hero pool adjustments already exist; keep them */
+
+/* Highlight available drop targets */
+.db-tile-can-drop {
+  box-shadow: 0 0 0 3px rgba(102, 187, 106, 0.10);
+  border-color: #66bb6a;
+  transition: box-shadow 120ms ease, transform 120ms ease, border-color 120ms ease, background 120ms;
+}
+
+/* Stronger highlight while the dragged hero is over the tile */
+.db-tile-highlight-over {
+  box-shadow: 0 10px 30px rgba(102, 187, 106, 0.16), 0 0 0 5px rgba(102,187,106,0.14);
+  transform: translateY(-3px);
+  border-color: #43a047;
+  background: linear-gradient(180deg, rgba(255,255,255,0.94), rgba(245,255,240,0.95));
+  color: #111;
+}
+
+/* queued visuals removed */
+
+/* Keep disabled tiles visibly muted */
+.db-tile-disabled {
+  pointer-events: none;
+}
+
+/* Minor polish to occupied tiles to keep contrast */
+.db-tile-occupied { transition: background 120ms, border-color 120ms; }
+
+/* Additional shrink: reduce hero pool + cards/buttons/text */
+.db-hero-pool {
+  gap: var(--gap-small);
+  max-height: calc(268px * var(--ui-scale));
+  padding: calc(5px * var(--ui-scale));
+}
+
+.db-hero-pool-label {
+  font-size: var(--font-md);
+}
+
+/* Hero cards responsive */
+.db-hero-card {
+  padding: calc(5px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  margin: calc(2px * var(--ui-scale));
+  min-width: var(--hero-card-min-width);
+  font-size: var(--font-md);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.32);
+  transition: transform 90ms ease;
+}
+.db-hero-card:hover { transform: translateY(-1px); }
+
+/* Buttons or controls inside the pool (if any) */
+.db-hero-pool button,
+.db-hero-pool .btn {
+  padding: var(--padding-small) calc(6px * var(--ui-scale));
+  font-size: var(--font-md);
+}
+
+/* Slightly reduce hero-pool container font-size for denser layout */
+.db-hero-pool { font-size: var(--font-lg); }
+
+/* BattlePhase layout helpers */
+.bp-root {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-large);
+  padding: var(--padding-large) calc(28px * var(--ui-scale));
+  align-items: stretch;
+  justify-content: flex-start;
+  flex-wrap: nowrap;
+  max-width: var(--max-content-width);
+  margin: 0 auto;
+}
+.bp-side {
+  display: flex;
+  align-items: center;
+  gap: var(--gap-large);
+}
+.bp-center {
+  display: flex;
+  flex-direction: column;
+  gap: calc(10px * var(--ui-scale));
+  align-items: flex-start;
+  width: 100%;
+  min-width: calc(320px * var(--ui-scale));
+}
+.bp-log {
+  width: 100%;
+  height: calc(260px * var(--ui-scale));
+  overflow: auto;
+  border: 1px solid #ddd;
+  padding: var(--padding-medium);
+  background: #fafafa;
+}
+.bp-controls-row { display:flex; gap:var(--gap-medium); align-items:center; }
+
+/* Post-cast wait overlay shown between casts */
+/* post-cast overlay removed */
+
+/* Main board container (matches DraftBoard) */
+.db-main-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--gap-medium);
+  background: #222;
+  padding: calc(10px * var(--ui-scale));
+  border-radius: var(--padding-medium);
+}
+
+/* Reserve column: vertical stack of reserve tiles */
+.db-reserve-column {
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap-large);
+  background: transparent;
+  padding: var(--padding-medium) calc(6px * var(--ui-scale));
+  border-radius: var(--tile-border-radius);
+  min-width: calc(96px * var(--ui-scale));
+}
+
+/* Prevent clipping: make sure contents use box-sizing and allow overflow when necessary */
+.bp-root { box-sizing: border-box; padding-left: calc(28px * var(--ui-scale)); padding-right: calc(28px * var(--ui-scale)); max-width: calc(100vw - 56px * var(--ui-scale)); overflow-x: auto; }
+
+/* Reserve tiles slightly smaller to save horizontal space */
+.db-reserve-column .db-tile-empty { border-radius: var(--tile-border-radius); }
+
+/* Effects column tweaks */
+.db-effects-column { display:flex; flex-direction:column; gap:var(--gap-small); }
+.db-effect-slot { width:var(--effect-slot-size); height:var(--effect-slot-size); border-radius:calc(4px * var(--ui-scale)); border:1px solid #ddd; display:flex; align-items:center; justify-content:center; font-size:var(--font-xs); }
+.db-effect-precast { box-shadow: 0 0 6px 2px rgba(120, 200, 255, 0.9); border-color: #7cc9ff; }
+
+/* Hero badge in tile */
+.db-tile-hero { padding:var(--padding-small) calc(6px * var(--ui-scale)); font-weight:600; font-size:var(--font-md); display:inline-flex; align-items:center; gap:var(--gap-medium); }
+
+/* Small helpers used by BattlePhase tiles */
+.bp-tile-row { display:flex; gap:0; align-items:flex-start; }
+
+/* Tile internals: stats row, spell counters, and name/badge */
+.db-tile-stats {
+  position: absolute;
+  top: calc(4px * var(--ui-scale));
+  left: calc(6px * var(--ui-scale));
+  right: auto;
+  display: flex;
+  justify-content: flex-start;
+  align-items: center;
+  gap: var(--gap-small);
+  font-size: var(--font-xs);
+  height: calc(16px * var(--ui-scale));
+}
+.db-stat { display:flex; align-items:center; gap:var(--gap-small); }
+
+.db-spell-counters {
+  display:flex;
+  flex-direction:column;
+  justify-content:space-around;
+  height:calc(100% - 40px * var(--ui-scale));
+  font-size:var(--font-xs);
+  position:absolute;
+  left:calc(6px * var(--ui-scale));
+  right:auto;
+  top:calc(21px * var(--ui-scale));
+  bottom:calc(36px * var(--ui-scale));
+  align-items: flex-start;
+  width:calc(28px * var(--ui-scale));
+}
+.db-spell-item { display:flex; align-items:center; gap:var(--gap-small); }
+
+.db-tile-name {
+  position:absolute;
+  bottom:calc(6px * var(--ui-scale));
+  left:calc(8px * var(--ui-scale));
+  right:calc(8px * var(--ui-scale));
+  text-align:center;
+  font-size:var(--font-sm);
+  font-weight:700;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:var(--gap-medium);
+}
+
+/* Improve readability over variable hero backgrounds: add a subtle white glow and
+   a soft dark drop so text remains legible on both light and dark images. */
+.db-tile-name,
+.db-tile-hero,
+.db-tile-stats,
+.db-stat,
+.db-spell-item {
+  /* White text with a clean black drop-shadow for readability over images. */
+  color: #ffffff;
+  -webkit-text-stroke: 0px transparent; /* remove previous stroke */
+  -webkit-text-fill-color: #ffffff;
+  /* Primary drop shadow (soft) plus a subtle stronger offset for legibility */
+  text-shadow:
+    0 1px 0 rgba(0,0,0,0.95),
+    0 3px 6px rgba(0,0,0,0.65);
+}
+
+/* Floating damage/heal animation badge shown above a tile when it takes damage/heal */
+.bp-float {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  font-weight: 800;
+  font-size: calc(1.4rem * var(--ui-scale));
+  pointer-events: none;
+  text-shadow: 0 1px 0 rgba(0,0,0,0.6);
+  animation: floatUpFade 2200ms ease-out forwards;
+  z-index: 80;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,235,59,0.9);
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: var(--tile-border-radius);
+}
+
+/* Spell sprite overlay (sprite-sheet animation using CSS steps).
+   - Place a sprite sheet at `/images/spells/{spellId}.png` where frames are
+     arranged horizontally.
+   - Default plays once in 400ms using 6 frames; override frames via
+     --frames CSS variable on the element if desired. */
+.bp-spell-sprite {
+  position: absolute;
+  left: 50%;
+  top: 46%;
+  transform: translate(-50%, -50%);
+  width: calc(96px * var(--ui-scale));
+  height: calc(96px * var(--ui-scale));
+  background-repeat: no-repeat;
+  background-position: 0 0;
+  image-rendering: pixelated; /* keep pixel art crisp when scaled */
+  z-index: 95;
+  pointer-events: none;
+  /* JS-driven sprite: frame stepping performed in React; keep CSS minimal. */
+  --frames: 1;
+  background-size: auto;
+  animation: none;
+}
+
+@keyframes sprite-steps {
+  from { background-position: 0 0; opacity: 1; }
+  to { background-position: 100% 0; opacity: 1; }
+}
+
+@keyframes floatUpFade {
+  0% { opacity: 1; transform: translate(-50%, -50%) translateY(0); }
+  60% { opacity: 1; transform: translate(-50%, -50%) translateY(-36px); }
+  100% { opacity: 0; transform: translate(-50%, -50%) translateY(-72px); }
+}
+
+/* Small badges for effects and cast indicators (subtle) */
+.bp-effect-badge, .bp-cast-badge {
+  position: absolute;
+  right: calc(8px * var(--ui-scale));
+  top: calc(8px * var(--ui-scale));
+  background: rgba(0,0,0,0.6);
+  color: #fff;
+  padding: calc(2px * var(--ui-scale)) calc(6px * var(--ui-scale));
+  border-radius: var(--tile-border-radius);
+  font-size: var(--font-xs);
+  opacity: 0.95;
+  transform-origin: center;
+  animation: fadePop 900ms ease-out forwards;
+  z-index: 85;
+}
+
+@keyframes fadePop {
+  0% { opacity: 0; transform: scale(0.85); }
+  50% { opacity: 1; transform: scale(1.05); }
+  100% { opacity: 0.9; transform: scale(1); }
+}
+.db-tile-badge { width:calc(20px * var(--ui-scale)); height:calc(20px * var(--ui-scale)); border-radius:var(--tile-border-radius); background:#111; color:#fff; display:flex; align-items:center; justify-content:center; font-size:var(--font-sm); font-weight:700; }
+
+/* ensure empty tile text centered and consistent */
+.db-tile-empty-text { text-align:center; }
+
+/* Cast glow: caster glows blue briefly before cast */
+/* Cast glow as a translucent overlay above the tile (not behind it) */
+.bp-cast-glow {
+  position: relative; /* ensure pseudo-element is positioned to tile */
+}
+.bp-cast-glow::after {
+  content: '';
+  position: absolute;
+  /* expand beyond tile so glow envelopes it */
+  inset: -10px;
+  pointer-events: none;
+  border-radius: 10px;
+  z-index: 30; /* above tile contents */
+  /* stronger, translucent radial overlay */
+  background: radial-gradient(ellipse at center, rgba(66,133,244,0.85) 0%, rgba(66,133,244,0.6) 25%, rgba(66,133,244,0.25) 55%, rgba(66,133,244,0.06) 80%, rgba(66,133,244,0.00) 100%);
+  opacity: 0.95;
+  mix-blend-mode: normal;
+  transform: scale(var(--bp-cast-scale, 1));
+  filter: blur(6px);
+  animation: bpCastOverlay 1100ms cubic-bezier(.2,.9,.2,1) forwards;
+}
+
+@keyframes bpCastOverlay {
+  0% { opacity: 0; transform: scale(calc(var(--bp-cast-scale, 1) * 0.95)); }
+  10% { opacity: 0.95; transform: scale(calc(var(--bp-cast-scale, 1) * 1.06)); }
+  60% { opacity: 0.85; transform: scale(calc(var(--bp-cast-scale, 1) * 1.02)); }
+  100% { opacity: 0.35; transform: scale(var(--bp-cast-scale, 1)); }
+}
+
+/* Damage shake: tile trembles vertically to indicate hit */
+.bp-damage-shake {
+  animation: bpShake 600ms ease-out;
+}
+
+/* Effect glow: blue glow when effects trigger (Prayer, Counter, etc.) */
+.bp-effect-glow {
+  position: relative;
+}
+.bp-effect-glow::after {
+  content: '';
+  position: absolute;
+  inset: -8px;
+  pointer-events: none;
+  border-radius: 10px;
+  z-index: 30;
+  background: radial-gradient(ellipse at center, rgba(64,156,255,0.7) 0%, rgba(64,156,255,0.4) 40%, rgba(64,156,255,0.1) 70%, rgba(64,156,255,0.0) 100%);
+  opacity: 1;
+  filter: blur(4px);
+  animation: bpEffectGlow 800ms ease-out forwards;
+}
+
+@keyframes bpEffectGlow {
+  0% { opacity: 0; transform: scale(0.92); }
+  20% { opacity: 1; transform: scale(1.08); }
+  100% { opacity: 0; transform: scale(1); }
+}
+@keyframes bpShake {
+  0% { transform: translateY(0); }
+  20% { transform: translateY(-6px); }
+  40% { transform: translateY(3px); }
+  60% { transform: translateY(-2px); }
+  80% { transform: translateY(1px); }
+  100% { transform: translateY(0); }
+}
+
+/* Heal glow: green highlight */
+.bp-heal-glow {
+  animation: bpHealGlow 1000ms ease-out forwards;
+}
+@keyframes bpHealGlow {
+  0% { box-shadow: 0 0 0 rgba(67,160,71,0); }
+  20% { box-shadow: 0 0 12px 4px rgba(67,160,71,0.35); }
+  100% { box-shadow: 0 0 6px 2px rgba(67,160,71,0.10); }
+}
+
+/* ============================================
+   RESPONSIVE MEDIA QUERIES
+   ============================================ */
+
+/* Small screens / mobile - reduce spacing and use smaller tiles */
+@media (max-width: 768px) {
+  :root {
+    --tile-size: calc(80px * var(--ui-scale));
+    --effect-slot-size: calc(20px * var(--ui-scale));
+    --hero-card-min-width: calc(70px * var(--ui-scale));
+  }
+  
+  .draft-board-root {
+    padding: var(--gap-medium) !important;
+  }
+  
+  .db-hero-pool {
+    max-height: calc(200px * var(--ui-scale));
+  }
+}
+
+/* Medium screens - tablets */
+@media (min-width: 769px) and (max-width: 1200px) {
+  :root {
+    --tile-size: calc(100px * var(--ui-scale));
+  }
+}
+
+/* Large screens - default sizing already defined */
+@media (min-width: 1201px) and (max-width: 2559px) {
+  /* Default values are fine */
+}
+
+/* Extra large screens (2K+) - slightly larger default if no scale set */
+@media (min-width: 2560px) {
+  :root:not([class*="ui-scale-"]) {
+    --ui-scale: 1.25;
+  }
+}
+
+/* 4K screens */
+@media (min-width: 3840px) {
+  :root:not([class*="ui-scale-"]) {
+    --ui-scale: 1.75;
+  }
+}
+
+/* Landscape mobile/tablet - adjust layout for horizontal space */
+@media (max-height: 600px) and (orientation: landscape) {
+  .draft-board-root {
+    padding: var(--gap-small) !important;
+  }
+  
+  .db-hero-pool {
+    max-height: calc(150px * var(--ui-scale));
+  }
+}
+
+/* Print styles - ensure readable output */
+@media print {
+  :root {
+    --ui-scale: 1;
+  }
+  
+  .video-background,
+  .bp-float,
+  .bp-spell-sprite {
+    display: none !important;
+  }
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+  .db-tile-empty {
+    border-width: 3px;
+  }
+  
+  .db-tile-occupied {
+    border-width: 3px;
+  }
+  
+  .db-hero-card {
+    border: 2px solid #000;
+  }
+}
+
+/* Reduced motion preference - disable animations */
+@media (prefers-reduced-motion: reduce) {
+  .bp-float,
+  .bp-spell-sprite,
+  .bp-cast-glow::after,
+  .bp-effect-glow::after,
+  .bp-damage-shake,
+  .bp-heal-glow {
+    animation: none !important;
+    transition: none !important;
+  }
+}

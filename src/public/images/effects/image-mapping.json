@@ -1,0 +1,15 @@
+{
+  "generatedAt": "2025-12-21T00:00:00.000Z",
+  "mapping": {
+    "Poison": "/images/effects/Poison.png",
+    "Marked": "/images/effects/Mark.png",
+    "Bleed": "/images/effects/bleed.png",
+    "Leech": "/images/effects/Leech.png",
+    "Elixir": "/images/effects/Elixir.png",
+    "Lie In Wait": "/images/effects/Lie in Wait.png",
+    "Dragon Year": "/images/effects/Dragon Year.png",
+    "Burn": "/images/effects/Burn.png",
+    "Rejuvenate": "/images/effects/Rejuvenate.png"
+  },
+  "notes": "Only effects with matching image files were assigned. Other effects remain unchanged."
+}

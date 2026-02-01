@@ -1,0 +1,11 @@
+{
+  "name": "bv-anim-test",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test:puppeteer": "node run-arcane-test.js"
+  },
+  "dependencies": {
+    "puppeteer": "^21.3.8"
+  }
+}

@@ -1,0 +1,382 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Neural AI Training</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+    }
+    
+    .container {
+      background: rgba(0, 0, 0, 0.3);
+      border-radius: 10px;
+      padding: 30px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    }
+    
+    h1 {
+      margin-top: 0;
+      font-size: 2.5em;
+    }
+    
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+    
+    button {
+      background: rgba(255, 255, 255, 0.2);
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      color: white;
+      padding: 15px 25px;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      font-weight: bold;
+    }
+    
+    button:hover {
+      background: rgba(255, 255, 255, 0.3);
+      transform: translateY(-2px);
+    }
+    
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+    }
+    
+    .primary {
+      background: rgba(76, 175, 80, 0.6);
+      border-color: rgba(76, 175, 80, 0.8);
+    }
+    
+    .primary:hover {
+      background: rgba(76, 175, 80, 0.8);
+    }
+    
+    .danger {
+      background: rgba(244, 67, 54, 0.6);
+      border-color: rgba(244, 67, 54, 0.8);
+    }
+    
+    .danger:hover {
+      background: rgba(244, 67, 54, 0.8);
+    }
+    
+    .status {
+      background: rgba(0, 0, 0, 0.3);
+      padding: 20px;
+      border-radius: 8px;
+      margin: 20px 0;
+      min-height: 100px;
+    }
+    
+    .status h2 {
+      margin-top: 0;
+    }
+    
+    .log {
+      background: rgba(0, 0, 0, 0.5);
+      padding: 20px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      max-height: 500px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    
+    .progress {
+      background: rgba(0, 0, 0, 0.3);
+      height: 30px;
+      border-radius: 15px;
+      overflow: hidden;
+      margin: 10px 0;
+    }
+    
+    .progress-bar {
+      background: linear-gradient(90deg, #4CAF50, #8BC34A);
+      height: 100%;
+      transition: width 0.3s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+    }
+    
+    .config {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 15px;
+      margin: 20px 0;
+    }
+    
+    .config-item {
+      background: rgba(255, 255, 255, 0.1);
+      padding: 15px;
+      border-radius: 8px;
+    }
+    
+    .config-item label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    
+    .config-item input {
+      width: 100%;
+      padding: 8px;
+      border: 2px solid rgba(255, 255, 255, 0.3);
+      border-radius: 5px;
+      background: rgba(0, 0, 0, 0.3);
+      color: white;
+      font-size: 16px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧠 Neural AI Training Center</h1>
+    <p>Train your board game AI using self-play and neural networks (AlphaZero-style)</p>
+    
+    <div class="status">
+      <h2>Status</h2>
+      <div id="status-text">Ready to train</div>
+      <div class="progress" id="progress-container" style="display: none;">
+        <div class="progress-bar" id="progress-bar" style="width: 0%">0%</div>
+      </div>
+    </div>
+    
+    <div class="config">
+      <div class="config-item">
+        <label>Iterations</label>
+        <input type="number" id="iterations" value="5" min="1" max="100">
+      </div>
+      <div class="config-item">
+        <label>Games per Iteration</label>
+        <input type="number" id="games" value="3" min="1" max="20">
+      </div>
+      <div class="config-item">
+        <label>MCTS Draft Sims</label>
+        <input type="number" id="draft-simulations" value="100" min="10" max="300">
+      </div>
+      <div class="config-item">
+        <label>MCTS Battle Sims</label>
+        <input type="number" id="battle-simulations" value="25" min="5" max="100">
+      </div>
+      <div class="config-item">
+        <label>Temperature</label>
+        <input type="number" id="temperature" value="1.0" min="0" max="2" step="0.1">
+      </div>
+      <div class="config-item">
+        <label>Uniform Mixing %</label>
+        <input type="number" id="uniform-mixing" value="90" min="10" max="95" step="1">
+      </div>
+      <div class="config-item">
+        <label>Training Epochs</label>
+        <input type="number" id="epochs" value="5" min="1" max="20">
+      </div>
+    </div>
+    
+    <div class="controls">
+      <button class="primary" id="train-btn" onclick="startTraining()">▶️ Start Training</button>
+      <button id="quick-train-btn" onclick="quickTraining()">⚡ Quick Test (3 iterations)</button>
+      <button id="continue-btn" onclick="continueTraining()">🔄 Continue Training</button>
+      <button class="danger" id="stop-btn" onclick="stopTraining()" disabled>⏹️ Stop</button>
+      <button id="clear-btn" onclick="clearData()">🗑️ Clear Data</button>
+      <button id="delete-model-btn" onclick="deleteModel()" style="background: rgba(255, 100, 100, 0.3);">🗑️ Delete Model</button>
+      <button id="save-btn" onclick="saveModel()">💾 Save Model</button>
+    </div>
+    
+    <div class="status">
+      <h2>Training Log</h2>
+      <div class="log" id="log"></div>
+    </div>
+  </div>
+  
+  <script type="module">
+    import * as tf from '@tensorflow/tfjs';
+    import { runTrainingLoop, runQuickTraining } from './ai/training/trainer.js';
+    import { saveModel, loadModel } from './ai/training/model.js';
+    import { loadTrainingExamples } from './ai/training/selfPlay.js';
+    
+    let isTraining = false;
+    
+    // Override console.log to capture logs
+    const originalLog = console.log;
+    console.log = (...args) => {
+      originalLog(...args);
+      const logDiv = document.getElementById('log');
+      const message = args.map(arg => 
+        typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+      ).join(' ');
+      logDiv.textContent += message + '\n';
+      logDiv.scrollTop = logDiv.scrollHeight;
+    };
+    
+    window.startTraining = async () => {
+      if (isTraining) return;
+      
+      isTraining = true;
+      document.getElementById('train-btn').disabled = true;
+      document.getElementById('quick-train-btn').disabled = true;
+      document.getElementById('continue-btn').disabled = true;
+      document.getElementById('stop-btn').disabled = false;
+      document.getElementById('status-text').textContent = 'Training in progress...';
+      document.getElementById('progress-container').style.display = 'block';
+      document.getElementById('log').textContent = '';
+      
+      try {
+        const config = {
+          iterations: parseInt(document.getElementById('iterations').value),
+          gamesPerIteration: parseInt(document.getElementById('games').value),
+          draftSimulations: parseInt(document.getElementById('draft-simulations').value),
+          battleSimulations: parseInt(document.getElementById('battle-simulations').value),
+          temperature: parseFloat(document.getElementById('temperature').value),
+          uniformMixing: parseFloat(document.getElementById('uniform-mixing').value) / 100,
+          trainEpochs: parseInt(document.getElementById('epochs').value)
+        };
+        
+        await runTrainingLoop(config);
+        
+        document.getElementById('status-text').textContent = 'Training complete! Model saved.';
+      } catch (error) {
+        console.error('Training error:', error);
+        document.getElementById('status-text').textContent = 'Training failed: ' + error.message;
+      } finally {
+        isTraining = false;
+        document.getElementById('train-btn').disabled = false;
+        document.getElementById('quick-train-btn').disabled = false;
+        document.getElementById('continue-btn').disabled = false;
+        document.getElementById('stop-btn').disabled = true;
+        document.getElementById('progress-container').style.display = 'none';
+      }
+    };
+    
+    window.quickTraining = async () => {
+      if (isTraining) return;
+      
+      isTraining = true;
+      document.getElementById('train-btn').disabled = true;
+      document.getElementById('quick-train-btn').disabled = true;
+      document.getElementById('continue-btn').disabled = true;
+      document.getElementById('stop-btn').disabled = false;
+      document.getElementById('status-text').textContent = 'Quick training in progress...';
+      document.getElementById('log').textContent = '';
+      
+      try {
+        await runQuickTraining();
+        document.getElementById('status-text').textContent = 'Quick training complete!';
+      } catch (error) {
+        console.error('Training error:', error);
+        document.getElementById('status-text').textContent = 'Training failed: ' + error.message;
+      } finally {
+        isTraining = false;
+        document.getElementById('train-btn').disabled = false;
+        document.getElementById('quick-train-btn').disabled = false;
+        document.getElementById('continue-btn').disabled = false;
+        document.getElementById('stop-btn').disabled = true;
+      }
+    };
+    
+    window.continueTraining = async () => {
+      document.getElementById('iterations').value = '5';
+      await startTraining();
+    };
+    
+    window.stopTraining = () => {
+      // Note: Can't actually stop async operations, but disable UI
+      isTraining = false;
+      document.getElementById('status-text').textContent = 'Stopping... (will complete current iteration)';
+    };
+    
+    window.clearData = () => {
+      if (confirm('Are you sure you want to clear all training data? This cannot be undone.')) {
+        localStorage.removeItem('training_data.json');
+        document.getElementById('log').textContent = '';
+        console.log('Training data cleared');
+        document.getElementById('status-text').textContent = 'Data cleared';
+      }
+    };
+    
+    window.deleteModel = async () => {
+      if (confirm('Delete the saved model? You will need to retrain from scratch.')) {
+        try {
+          await tf.io.removeModel('indexeddb://board-game-ai');
+          console.log('[DeleteModel] Model deleted successfully');
+          document.getElementById('status-text').textContent = 'Model deleted! Train a new one.';
+          currentModel = null;
+        } catch (error) {
+          console.error('[DeleteModel] Error:', error);
+          document.getElementById('status-text').textContent = 'Delete failed: ' + error.message;
+        }
+      }
+    };
+    
+    window.saveModel = async () => {
+      try {
+        if (currentModel) {
+          await saveModel(currentModel);
+          console.log('Model saved successfully');
+          document.getElementById('status-text').textContent = 'Model saved!';
+        } else {
+          console.log('No model in memory, trying to load from disk...');
+          const model = await loadModel();
+          if (model) {
+            await saveModel(model);
+            console.log('Model re-saved successfully');
+            document.getElementById('status-text').textContent = 'Model saved!';
+          } else {
+            console.log('No model to save');
+            document.getElementById('status-text').textContent = 'No model found - run training first';
+          }
+        }
+      } catch (error) {
+        console.error('Save error:', error);
+        document.getElementById('status-text').textContent = 'Save failed: ' + error.message;
+      }
+    };
+    
+    function getRecommendedDefaults(exampleCount) {
+      if (exampleCount < 500) {
+        return { temperature: 1.8, uniformMixing: 90, draftSimulations: 100, battleSimulations: 25 };
+      }
+      if (exampleCount < 2000) {
+        return { temperature: 1.3, uniformMixing: 70, draftSimulations: 120, battleSimulations: 35 };
+      }
+      return { temperature: 0.9, uniformMixing: 50, draftSimulations: 150, battleSimulations: 50 };
+    }
+
+    function applyRecommendedDefaults(exampleCount) {
+      const rec = getRecommendedDefaults(exampleCount);
+      document.getElementById('temperature').value = String(rec.temperature);
+      document.getElementById('uniform-mixing').value = String(rec.uniformMixing);
+      document.getElementById('draft-simulations').value = String(rec.draftSimulations);
+      document.getElementById('battle-simulations').value = String(rec.battleSimulations);
+    }
+
+    // Load existing data on startup
+    window.addEventListener('load', () => {
+      const examples = loadTrainingExamples();
+      const count = examples.length;
+      applyRecommendedDefaults(count);
+      if (count > 0) {
+        console.log(`Found ${count} existing training examples`);
+        document.getElementById('status-text').textContent = `Ready (${count} training examples loaded)`;
+      }
+    });
+  </script>
+</body>
+</html>

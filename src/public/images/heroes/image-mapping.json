@@ -1,0 +1,56 @@
+{
+  "generatedAt": "2025-12-21T00:00:00.000Z",
+  "mapping": {
+    "Blacksmith": "/images/heroes/Blacksmith cropped.jpg",
+    "Lancer": "/images/heroes/Lancer Cropped.jpg",
+    "Archer": "/images/heroes/Archer Cropped.jpg",
+    "Alchemist": "/images/heroes/Alchemist Cropped.jpg",
+    "Huntress": "/images/heroes/Huntress Cropped.jpg",
+    "Blood Mage": "/images/heroes/Blood Mage Cropped.jpg",
+    "Assassin": "/images/heroes/Assassin cropped.jpg"
+  },
+  "suggestions": [
+    {
+      "id": "blacksmithID",
+      "name": "Blacksmith",
+      "image": "/images/heroes/Blacksmith cropped.jpg"
+    },
+    {
+      "id": "lancerID",
+      "name": "Lancer",
+      "image": "/images/heroes/Lancer Cropped.jpg"
+    },
+    {
+      "id": "archerID",
+      "name": "Archer",
+      "image": "/images/heroes/Archer Cropped.jpg"
+    },
+    {
+      "id": "alchemistID",
+      "name": "Alchemist",
+      "image": "/images/heroes/Alchemist Cropped.jpg"
+    },
+    {
+      "id": "bloodmageID",
+      "name": "Blood Mage",
+      "image": "/images/heroes/Blood Mage Cropped.jpg"
+    },
+    {
+      "id": "assassinID",
+      "name": "Assassin",
+      "image": "/images/heroes/Assassin cropped.jpg"
+    }
+  ],
+  "deletedSVGs": [
+    "alchemist.svg",
+    "archer.svg",
+    "assassin-detailed.svg",
+    "assassin-ps1.svg",
+    "assassin-sample-ps1.svg",
+    "assassin.svg",
+    "blacksmith.svg",
+    "bloodmage.svg",
+    "lancer-ps1.svg",
+    "lancer.svg"
+  ]
+}

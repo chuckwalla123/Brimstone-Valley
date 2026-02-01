@@ -1,0 +1,7 @@
+{
+  "name": "brimstone-valley-root",
+  "private": true,
+  "scripts": {
+    "test": "node ./scripts/smoke-test.mjs"
+  }
+}
