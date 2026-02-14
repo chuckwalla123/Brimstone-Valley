@@ -2,6 +2,8 @@
   "name": "brimstone-valley-root",
   "private": true,
   "scripts": {
-    "test": "node ./scripts/smoke-test.mjs"
+    "test": "node ./scripts/smoke-test.mjs",
+    "backup": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-to-github.ps1",
+    "backup:msg": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-to-github.ps1 -Message"
   }
 }
