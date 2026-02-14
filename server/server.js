@@ -104,6 +104,29 @@ const recordMatchResult = async (winnerPlayFabId, loserPlayFabId, isDraw = false
   }
 };
 
+const recordFfa3Result = async (match, winnerKey) => {
+  if (!match) return;
+  const p1Id = match.p1 && match.p1.playFabId ? match.p1.playFabId : null;
+  const p2Id = match.p2 && match.p2.playFabId ? match.p2.playFabId : null;
+  const p3Id = match.p3 && match.p3.playFabId ? match.p3.playFabId : null;
+  const playerIds = [p1Id, p2Id, p3Id].filter(Boolean);
+  if (playerIds.length === 0) return;
+
+  if (winnerKey === 'draw') {
+    await Promise.all(playerIds.map((id) => updatePlayerStatistics(id, [{ StatisticName: 'Draws', Value: 1 }])));
+    console.log('[PlayFab] FFA3 draw recorded for', playerIds.join(', '));
+    return;
+  }
+
+  const winnerId = winnerKey === 'player1' ? p1Id : (winnerKey === 'player2' ? p2Id : p3Id);
+  const loserIds = playerIds.filter((id) => id && id !== winnerId);
+  if (!winnerId) return;
+
+  await updatePlayerStatistics(winnerId, [{ StatisticName: 'Wins', Value: 1 }]);
+  await Promise.all(loserIds.map((id) => updatePlayerStatistics(id, [{ StatisticName: 'Losses', Value: 1 }])));
+  console.log('[PlayFab] FFA3 win recorded for', winnerId, ', losses for', loserIds.join(', '));
+};
+
 const app = express();
 app.use(cors()); // Allow client connections
 const server = http.createServer(app);
@@ -112,6 +135,16 @@ const io = new SocketIOServer(server, {
   pingInterval: 25000,
   pingTimeout: 60000
 }); // WebSockets for real-time
+
+const isDraftableHero = (hero) => hero && hero.draftable !== false;
+const DRAFTABLE_HEROES = HEROES.filter(isDraftableHero);
+
+// Sample n heroes from source array (Fisher-Yates shuffle)
+const sampleHeroes = (source, n) => {
+  const pool = Array.isArray(source) ? source.filter(isDraftableHero) : [];
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, Math.max(0, Math.min(n, shuffled.length)));
+};
 
 const cloneForWire = (value) => {
   const seen = new WeakMap();
@@ -157,11 +190,12 @@ let gameState = {
   p1Reserve: makeReserve('player1'),
   p2Main: makeEmptyMain('player2'),
   p2Reserve: makeReserve('player2'),
-  availableHeroes: HEROES,
+  availableHeroes: DRAFTABLE_HEROES,
   bans: [],
   step: 0,
   roundNumber: 0,
-  phase: 'draft' // or 'battle'
+  phase: 'draft', // or 'battle'
+  gameMode: 'classic'
 };
 
 // Global step queue for non-match games only
@@ -173,9 +207,24 @@ let isRunningRound = false;
 let pendingMovementStart = null;
 
 // Matchmaking
-let matchQueue = [];
+const matchQueues = {
+  classic: [],
+  ffa3: []
+};
 const activeMatches = new Map();
 const matchStates = new Map();
+const normalizeGameMode = (mode) => (mode === 'ffa3' ? 'ffa3' : 'classic');
+const getMatchQueue = (mode) => (matchQueues[mode] || matchQueues.classic);
+const removeFromQueues = (socketId) => {
+  Object.values(matchQueues).forEach((queue) => {
+    let idx = queue.indexOf(socketId);
+    while (idx >= 0) {
+      queue.splice(idx, 1);
+      idx = queue.indexOf(socketId);
+    }
+  });
+};
+
 
 // Per-match step queues and execution state
 // Key: matchId, Value: { stepQueue, stepIndex, awaitingAck, stepTimeout, isRunningRound, pendingMovementStart }
@@ -217,10 +266,74 @@ const clearStepTimeout = () => {
   clearMatchStepTimeout(null);
 };
 
+const isSideAlive = (boardArr) => (boardArr || []).some(t => {
+  if (!t || !t.hero) return false;
+  if (t._dead) return false;
+  if (typeof t.currentHealth === 'number' && t.currentHealth <= 0) return false;
+  return true;
+});
+
+const getAliveSides = (state) => {
+  if (!state) return [];
+  const alive = [];
+  if (isSideAlive(state.p1Main)) alive.push('p1');
+  if (isSideAlive(state.p2Main)) alive.push('p2');
+  if (state.gameMode === 'ffa3' && isSideAlive(state.p3Main)) alive.push('p3');
+  return alive;
+};
+
+const getActiveOrder = (state) => {
+  const alive = getAliveSides(state);
+  const order = ['p1', 'p2', 'p3'];
+  return order.filter(side => alive.includes(side));
+};
+
+const normalizePrioritySide = (prio) => (
+  (prio === 'player1' || prio === 'p1') ? 'p1' : (prio === 'player2' || prio === 'p2') ? 'p2' : 'p3'
+);
+
+const sideToPlayerKey = (side) => (side === 'p1' ? 'player1' : (side === 'p2' ? 'player2' : 'player3'));
+
+const getNextPriorityPlayer = (state) => {
+  const active = getActiveOrder(state);
+  if (active.length === 0) return 'player1';
+  const curSide = normalizePrioritySide(state.priorityPlayer);
+  const idx = active.indexOf(curSide);
+  const nextSide = active[(idx >= 0 ? (idx + 1) % active.length : 0)];
+  return sideToPlayerKey(nextSide);
+};
+
 const startMovementPhase = (state, matchId = null) => {
-  const prioShort = (state.priorityPlayer === 'player1' || state.priorityPlayer === 'p1') ? 'p1' : 'p2';
-  const other = prioShort === 'p1' ? 'p2' : 'p1';
-  const sequence = prioShort === 'p1' ? ['p1', 'p2', 'p2', 'p1'] : ['p2', 'p1', 'p1', 'p2'];
+  const prio = state.priorityPlayer || 'player1';
+  let prioShort = normalizePrioritySide(prio);
+  let sequence;
+  if (state.gameMode === 'ffa3') {
+    const order = getActiveOrder(state);
+    if (order.length <= 1) {
+      state.movementPhase = null;
+      state.phase = 'ready';
+      if (matchId) {
+        matchStates.set(matchId, state);
+        io.to(matchId).emit('gameState', cloneForWire(state));
+      } else {
+        gameState = state;
+        io.emit('gameState', cloneForWire(gameState));
+      }
+      return;
+    }
+    if (!order.includes(prioShort)) {
+      prioShort = order[0];
+      state.priorityPlayer = sideToPlayerKey(prioShort);
+    }
+    const prioIdx = order.indexOf(prioShort);
+    const forward = prioIdx >= 0
+      ? [...order.slice(prioIdx), ...order.slice(0, prioIdx)]
+      : order;
+    const backward = [...forward].reverse();
+    sequence = [...forward, ...backward];
+  } else {
+    sequence = prioShort === 'p1' ? ['p1', 'p2', 'p2', 'p1'] : ['p2', 'p1', 'p1', 'p2'];
+  }
   state.movementPhase = { sequence, index: 0 };
   state.phase = 'movement';
   console.log('[Server] Starting movement phase. matchId:', matchId, 'priorityPlayer:', state.priorityPlayer, 'prioShort:', prioShort, 'sequence:', sequence);
@@ -355,12 +468,16 @@ io.on('connection', (socket) => {
                 execState.resultRecorded = true;  // Prevent double-recording on disconnect
                 const winner = gameEndStep.winner;
                 console.log(`[SERVER] Match ${matchId} ended with winner: ${winner}`);
-                if (winner === 'draw') {
-                  recordMatchResult(match.p1.playFabId, match.p2.playFabId, true);
-                } else if (winner === 'player1') {
-                  recordMatchResult(match.p1.playFabId, match.p2.playFabId, false);
-                } else if (winner === 'player2') {
-                  recordMatchResult(match.p2.playFabId, match.p1.playFabId, false);
+                if (match.gameMode !== 'ffa3') {
+                  if (winner === 'draw') {
+                    recordMatchResult(match.p1.playFabId, match.p2.playFabId, true);
+                  } else if (winner === 'player1') {
+                    recordMatchResult(match.p1.playFabId, match.p2.playFabId, false);
+                  } else if (winner === 'player2') {
+                    recordMatchResult(match.p2.playFabId, match.p1.playFabId, false);
+                  }
+                } else {
+                  recordFfa3Result(match, winner);
                 }
               } else if (execState.resultRecorded) {
                 console.log(`[SERVER] Match ${matchId}: Result already recorded, skipping`);
@@ -433,8 +550,10 @@ io.on('connection', (socket) => {
       if (!payload) return;
       if (payload.p1Main) state.p1Main = payload.p1Main;
       if (payload.p2Main) state.p2Main = payload.p2Main;
+      if (payload.p3Main) state.p3Main = payload.p3Main;
       if (payload.p1Reserve) state.p1Reserve = payload.p1Reserve;
       if (payload.p2Reserve) state.p2Reserve = payload.p2Reserve;
+      if (payload.p3Reserve) state.p3Reserve = payload.p3Reserve;
       if (payload.priorityPlayer) state.priorityPlayer = payload.priorityPlayer;
       state.phase = 'battle';
       if (matchId) {
@@ -467,7 +586,7 @@ io.on('connection', (socket) => {
           if (idx !== -1) return { boardName, index: idx, tile: arr[idx] };
           return null;
         };
-        const direct = findIn(state.p1Main, 'p1Main') || findIn(state.p2Main, 'p2Main') || findIn(state.p1Reserve, 'p1Reserve') || findIn(state.p2Reserve, 'p2Reserve');
+        const direct = findIn(state.p1Main, 'p1Main') || findIn(state.p2Main, 'p2Main') || findIn(state.p3Main, 'p3Main') || findIn(state.p1Reserve, 'p1Reserve') || findIn(state.p2Reserve, 'p2Reserve') || findIn(state.p3Reserve, 'p3Reserve');
         if (direct) return direct;
 
         if (typeof tileId === 'string') {
@@ -480,23 +599,26 @@ io.on('connection', (socket) => {
               const plow = p.toLowerCase();
               if (plow === 'p1') return { boardName: 'p1Main', index: idx, tile: (state.p1Main || [])[idx] };
               if (plow === 'p2') return { boardName: 'p2Main', index: idx, tile: (state.p2Main || [])[idx] };
+              if (plow === 'p3') return { boardName: 'p3Main', index: idx, tile: (state.p3Main || [])[idx] };
               if (plow === 'p1reserve') return { boardName: 'p1Reserve', index: idx, tile: (state.p1Reserve || [])[idx] };
               if (plow === 'p2reserve') return { boardName: 'p2Reserve', index: idx, tile: (state.p2Reserve || [])[idx] };
+              if (plow === 'p3reserve') return { boardName: 'p3Reserve', index: idx, tile: (state.p3Reserve || [])[idx] };
             }
           } else if (parts.length === 3 && parts[1] === 'reserve') {
             const idx = parseInt(parts[2], 10);
             if (!isNaN(idx)) {
               if (parts[0] === 'p1') return { boardName: 'p1Reserve', index: idx, tile: (state.p1Reserve || [])[idx] };
               if (parts[0] === 'p2') return { boardName: 'p2Reserve', index: idx, tile: (state.p2Reserve || [])[idx] };
+              if (parts[0] === 'p3') return { boardName: 'p3Reserve', index: idx, tile: (state.p3Reserve || [])[idx] };
             }
-          } else if (tileId.includes('player1-main-') || tileId.includes('player2-main-') || tileId.includes('player1-reserve-') || tileId.includes('player2-reserve-')) {
-            const m = tileId.match(/(player1|player2)-(main|reserve)-(\d+)/);
+          } else if (tileId.includes('player1-main-') || tileId.includes('player2-main-') || tileId.includes('player3-main-') || tileId.includes('player1-reserve-') || tileId.includes('player2-reserve-') || tileId.includes('player3-reserve-')) {
+            const m = tileId.match(/(player1|player2|player3)-(main|reserve)-(\d+)/);
             if (m) {
-              const side = m[1] === 'player1' ? 'p1' : 'p2';
+              const side = m[1] === 'player1' ? 'p1' : (m[1] === 'player2' ? 'p2' : 'p3');
               const kind = m[2];
               const idx = parseInt(m[3], 10);
-              if (kind === 'main') return { boardName: side === 'p1' ? 'p1Main' : 'p2Main', index: idx, tile: (side === 'p1' ? state.p1Main : state.p2Main)[idx] };
-              return { boardName: side === 'p1' ? 'p1Reserve' : 'p2Reserve', index: idx, tile: (side === 'p1' ? state.p1Reserve : state.p2Reserve)[idx] };
+              if (kind === 'main') return { boardName: side === 'p1' ? 'p1Main' : (side === 'p2' ? 'p2Main' : 'p3Main'), index: idx, tile: (side === 'p1' ? state.p1Main : (side === 'p2' ? state.p2Main : state.p3Main))[idx] };
+              return { boardName: side === 'p1' ? 'p1Reserve' : (side === 'p2' ? 'p2Reserve' : 'p3Reserve'), index: idx, tile: (side === 'p1' ? state.p1Reserve : (side === 'p2' ? state.p2Reserve : state.p3Reserve))[idx] };
             }
           }
         }
@@ -520,7 +642,11 @@ io.on('connection', (socket) => {
           if (nextIndex >= mp.sequence.length) {
             state.movementPhase = null;
             state.phase = 'ready';
-            state.priorityPlayer = (state.priorityPlayer === 'player1' || state.priorityPlayer === 'p1') ? 'player2' : 'player1';
+            if (state.gameMode === 'ffa3') {
+              state.priorityPlayer = getNextPriorityPlayer(state);
+            } else {
+              state.priorityPlayer = (state.priorityPlayer === 'player1' || state.priorityPlayer === 'p1') ? 'player2' : 'player1';
+            }
             console.log('[Server] Movement complete (shackled move skipped), switching to ready phase');
           } else {
             state.movementPhase = { ...mp, index: nextIndex };
@@ -547,7 +673,11 @@ io.on('connection', (socket) => {
           if (nextIndex >= mp.sequence.length) {
             state.movementPhase = null;
             state.phase = 'ready';
-            state.priorityPlayer = (state.priorityPlayer === 'player1' || state.priorityPlayer === 'p1') ? 'player2' : 'player1';
+            if (state.gameMode === 'ffa3') {
+              state.priorityPlayer = getNextPriorityPlayer(state);
+            } else {
+              state.priorityPlayer = (state.priorityPlayer === 'player1' || state.priorityPlayer === 'p1') ? 'player2' : 'player1';
+            }
             console.log('[Server] Movement complete (shackled move skipped), switching to ready phase');
           } else {
             state.movementPhase = { ...mp, index: nextIndex };
@@ -564,7 +694,7 @@ io.on('connection', (socket) => {
         }
       }
 
-      const srcPlayer = src.boardName.startsWith('p1') ? 'p1' : 'p2';
+      const srcPlayer = src.boardName.startsWith('p1') ? 'p1' : (src.boardName.startsWith('p2') ? 'p2' : 'p3');
       if (srcPlayer !== mover) {
         console.log('[Server] movementMove: Wrong player trying to move', srcPlayer, 'vs', mover);
         return;
@@ -574,10 +704,11 @@ io.on('connection', (socket) => {
       const srcIsReserve = src.boardName.includes('Reserve');
       const dstIsMain = dst.boardName.includes('Main');
       if (srcIsReserve && dstIsMain) {
-        const mainBoard = srcPlayer === 'p1' ? state.p1Main : state.p2Main;
-        const mainAliveCount = (mainBoard || []).filter(t => t && t.hero && !t._dead).length;
+        const countsTowardMainLimit = (tile) => tile && tile.hero && !tile._dead && !tile._revivedExtra && tile.hero.isMinion !== true;
+        const mainBoard = srcPlayer === 'p1' ? state.p1Main : (srcPlayer === 'p2' ? state.p2Main : state.p3Main);
+        const mainAliveCount = (mainBoard || []).filter(countsTowardMainLimit).length;
         const dstTile = dst.tile;
-        const dstHasLivingHero = dstTile && dstTile.hero && !dstTile._dead;
+        const dstHasLivingHero = countsTowardMainLimit(dstTile);
         
         // If destination doesn't have a living hero, we're adding one
         if (!dstHasLivingHero && mainAliveCount >= 5) {
@@ -587,7 +718,11 @@ io.on('connection', (socket) => {
           if (nextIndex >= mp.sequence.length) {
             state.movementPhase = null;
             state.phase = 'ready';
-            state.priorityPlayer = (state.priorityPlayer === 'player1' || state.priorityPlayer === 'p1') ? 'player2' : 'player1';
+            if (state.gameMode === 'ffa3') {
+              state.priorityPlayer = getNextPriorityPlayer(state);
+            } else {
+              state.priorityPlayer = (state.priorityPlayer === 'player1' || state.priorityPlayer === 'p1') ? 'player2' : 'player1';
+            }
             console.log('[Server] Movement complete (blocked move skipped), switching to ready phase');
           } else {
             state.movementPhase = { ...mp, index: nextIndex };
@@ -607,8 +742,10 @@ io.on('connection', (socket) => {
       const getBoardRef = (name) => {
         if (name === 'p1Main') return state.p1Main;
         if (name === 'p2Main') return state.p2Main;
+        if (name === 'p3Main') return state.p3Main;
         if (name === 'p1Reserve') return state.p1Reserve;
-        return state.p2Reserve;
+        if (name === 'p2Reserve') return state.p2Reserve;
+        return state.p3Reserve;
       };
 
       const boardA = getBoardRef(src.boardName);
@@ -622,7 +759,11 @@ io.on('connection', (socket) => {
         // Movement complete - transition to ready phase
         state.movementPhase = null;
         state.phase = 'ready';
-        state.priorityPlayer = (state.priorityPlayer === 'player1' || state.priorityPlayer === 'p1') ? 'player2' : 'player1';
+        if (state.gameMode === 'ffa3') {
+          state.priorityPlayer = getNextPriorityPlayer(state);
+        } else {
+          state.priorityPlayer = (state.priorityPlayer === 'player1' || state.priorityPlayer === 'p1') ? 'player2' : 'player1';
+        }
         console.log('[Server] Movement complete, switching to ready phase, new priority:', state.priorityPlayer);
       } else {
         state.movementPhase = { ...mp, index: nextIndex };
@@ -668,18 +809,23 @@ io.on('connection', (socket) => {
   });
 
   // Handle game reset
-  socket.on('resetGame', () => {
+  socket.on('resetGame', (payload = null) => {
     console.log('Resetting game state');
+    const gameMode = payload && payload.gameMode ? payload.gameMode : 'classic';
+    const isFfa3 = gameMode === 'ffa3';
+    const availableHeroes = isFfa3 ? sampleHeroes(DRAFTABLE_HEROES, 26) : DRAFTABLE_HEROES;
     gameState = {
       p1Main: makeEmptyMain('player1'),
       p1Reserve: makeReserve('player1'),
       p2Main: makeEmptyMain('player2'),
       p2Reserve: makeReserve('player2'),
-      availableHeroes: HEROES,
+      ...(isFfa3 ? { p3Main: makeEmptyMain('player3'), p3Reserve: makeReserve('player3') } : {}),
+      availableHeroes,
       bans: [],
       step: 0,
       roundNumber: 0,
-      phase: 'draft'
+      phase: 'draft',
+      gameMode
     };
     stepQueue = [];
     stepIndex = 0;
@@ -714,7 +860,7 @@ io.on('connection', (socket) => {
   socket.on('disconnect', () => {
     console.log('Player disconnected:', socket.id);
     // Remove from queue if present
-    matchQueue = matchQueue.filter(id => id !== socket.id);
+    removeFromQueues(socket.id);
     // Clean up match mapping and execution state
     if (socket.data && socket.data.matchId) {
       const matchId = socket.data.matchId;
@@ -723,26 +869,33 @@ io.on('connection', (socket) => {
       
       // Notify the other player that opponent disconnected
       if (match) {
-        const disconnectedPlayerId = socket.id;
-        const otherPlayerId = match.p1.id === socket.id ? match.p2.id : match.p1.id;
-        const otherSocket = io.sockets.sockets.get(otherPlayerId);
-        
-        // Only record disconnect as win if game result wasn't already recorded
+        const otherPlayers = [];
+        if (match.p1 && match.p1.id !== socket.id) otherPlayers.push(match.p1);
+        if (match.p2 && match.p2.id !== socket.id) otherPlayers.push(match.p2);
+        if (match.p3 && match.p3.id !== socket.id) otherPlayers.push(match.p3);
+
+        // Only record disconnect as win for classic matches
         if (!execState || !execState.resultRecorded) {
-          const winnerPlayFabId = match.p1.id === socket.id ? match.p2.playFabId : match.p1.playFabId;
-          const loserPlayFabId = match.p1.id === socket.id ? match.p1.playFabId : match.p2.playFabId;
-          console.log(`[SERVER] Match ${matchId} - player disconnected, recording win for opponent`);
-          recordMatchResult(winnerPlayFabId, loserPlayFabId, false);
+          if (match.gameMode !== 'ffa3' && otherPlayers.length === 1) {
+            const winnerPlayFabId = otherPlayers[0].playFabId;
+            const loserPlayFabId = match.p1.id === socket.id ? match.p1.playFabId : match.p2.playFabId;
+            console.log(`[SERVER] Match ${matchId} - player disconnected, recording win for opponent`);
+            recordMatchResult(winnerPlayFabId, loserPlayFabId, false);
+          } else {
+            console.log(`[SERVER] Match ${matchId} - player disconnected, skipping result record for ffa3`);
+          }
         } else {
           console.log(`[SERVER] Match ${matchId} - player disconnected, but result already recorded (game ended normally)`);
         }
-        
-        if (otherSocket) {
-          otherSocket.emit('opponentDisconnected', { matchId });
-          // Remove the other player from the match too
-          otherSocket.data.matchId = null;
-          otherSocket.leave(matchId);
-        }
+
+        otherPlayers.forEach((player) => {
+          const otherSocket = io.sockets.sockets.get(player.id);
+          if (otherSocket) {
+            otherSocket.emit('opponentDisconnected', { matchId });
+            otherSocket.data.matchId = null;
+            otherSocket.leave(matchId);
+          }
+        });
       }
       
       // Clean up match resources
@@ -760,8 +913,9 @@ io.on('connection', (socket) => {
   });
 
   // Matchmaking
-  socket.on('findMatch', () => {
-    console.log('[Matchmaking] findMatch', socket.id, socket.data?.playfab?.playFabId || 'no-auth');
+  socket.on('findMatch', (payload = {}) => {
+    const gameMode = normalizeGameMode(payload.gameMode || payload.mode);
+    console.log('[Matchmaking] findMatch', socket.id, socket.data?.playfab?.playFabId || 'no-auth', 'mode', gameMode);
     if (!socket.data || !socket.data.playfab) {
       socket.emit('matchError', { message: 'Not authenticated' });
       return;
@@ -770,50 +924,80 @@ io.on('connection', (socket) => {
       socket.emit('matchError', { message: 'Already in match' });
       return;
     }
-    if (matchQueue.includes(socket.id)) return;
+    const queue = getMatchQueue(gameMode);
+    socket.data.queueMode = gameMode;
+    if (queue.includes(socket.id)) return;
 
-    if (matchQueue.length > 0) {
-      const opponentId = matchQueue.shift();
-      const opponent = io.sockets.sockets.get(opponentId);
-      if (!opponent || !opponent.data || !opponent.data.playfab) {
-        // Opponent not available, requeue this socket
-        matchQueue = matchQueue.filter(id => id !== opponentId);
-        matchQueue.push(socket.id);
-        socket.emit('matchQueued', { position: matchQueue.length });
-        return;
+    const requiredPlayers = gameMode === 'ffa3' ? 3 : 2;
+    const opponents = [];
+
+    const pullNextValid = () => {
+      while (queue.length > 0) {
+        const id = queue.shift();
+        const s = io.sockets.sockets.get(id);
+        if (s && s.data && s.data.playfab && !s.data.matchId) return s;
       }
-      const matchId = `match_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
-      const p1 = { id: socket.id, playFabId: socket.data.playfab.playFabId, username: socket.data.playfab.username };
-      const p2 = { id: opponent.id, playFabId: opponent.data.playfab.playFabId, username: opponent.data.playfab.username };
-      activeMatches.set(matchId, { p1, p2, createdAt: Date.now() });
-      socket.data.matchId = matchId;
-      opponent.data.matchId = matchId;
-      socket.join(matchId);
-      opponent.join(matchId);
-      matchStates.set(matchId, {
-        p1Main: makeEmptyMain('player1'),
-        p1Reserve: makeReserve('player1'),
-        p2Main: makeEmptyMain('player2'),
-        p2Reserve: makeReserve('player2'),
-        availableHeroes: HEROES,
-        bans: [],
-        step: 0,
-        roundNumber: 0,
-        phase: 'draft'
-      });
-      io.to(matchId).emit('gameState', cloneForWire(matchStates.get(matchId)));
-      socket.emit('matchFound', { matchId, side: 'p1', opponent: { playFabId: p2.playFabId, username: p2.username } });
-      opponent.emit('matchFound', { matchId, side: 'p2', opponent: { playFabId: p1.playFabId, username: p1.username } });
-      console.log('[Matchmaking] Match found', matchId, p1.playFabId, p2.playFabId);
-    } else {
-      matchQueue.push(socket.id);
-      socket.emit('matchQueued', { position: matchQueue.length });
-      console.log('[Matchmaking] Queued', socket.id, 'position', matchQueue.length);
+      return null;
+    };
+
+    for (let i = 0; i < requiredPlayers - 1; i += 1) {
+      const s = pullNextValid();
+      if (!s) break;
+      opponents.push(s);
     }
+
+    if (opponents.length < requiredPlayers - 1) {
+      opponents.forEach((s) => queue.push(s.id));
+      queue.push(socket.id);
+      socket.emit('matchQueued', { position: queue.length, gameMode });
+      console.log('[Matchmaking] Queued', socket.id, 'position', queue.length, 'mode', gameMode);
+      return;
+    }
+
+    const matchId = `match_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    const p1 = { id: socket.id, playFabId: socket.data.playfab.playFabId, username: socket.data.playfab.username };
+    const p2 = { id: opponents[0].id, playFabId: opponents[0].data.playfab.playFabId, username: opponents[0].data.playfab.username };
+    const p3 = gameMode === 'ffa3' ? { id: opponents[1].id, playFabId: opponents[1].data.playfab.playFabId, username: opponents[1].data.playfab.username } : null;
+
+    activeMatches.set(matchId, { p1, p2, p3, gameMode, createdAt: Date.now() });
+    socket.data.matchId = matchId;
+    opponents.forEach((s) => { s.data.matchId = matchId; });
+    socket.join(matchId);
+    opponents.forEach((s) => s.join(matchId));
+
+    const baseState = {
+      p1Main: makeEmptyMain('player1'),
+      p1Reserve: makeReserve('player1'),
+      p2Main: makeEmptyMain('player2'),
+      p2Reserve: makeReserve('player2'),
+      ...(gameMode === 'ffa3' ? { p3Main: makeEmptyMain('player3'), p3Reserve: makeReserve('player3') } : {}),
+      availableHeroes: gameMode === 'ffa3' ? sampleHeroes(DRAFTABLE_HEROES, 26) : DRAFTABLE_HEROES,
+      bans: [],
+      step: 0,
+      roundNumber: 0,
+      phase: 'draft',
+      gameMode
+    };
+
+    matchStates.set(matchId, baseState);
+    io.to(matchId).emit('gameState', cloneForWire(matchStates.get(matchId)));
+
+    const playersPayload = {
+      p1: p1.username || 'Player 1',
+      p2: p2.username || 'Player 2',
+      ...(p3 ? { p3: p3.username || 'Player 3' } : {})
+    };
+
+    socket.emit('matchFound', { matchId, side: 'p1', gameMode, players: playersPayload, opponent: { playFabId: p2.playFabId, username: p2.username } });
+    opponents[0].emit('matchFound', { matchId, side: 'p2', gameMode, players: playersPayload, opponent: { playFabId: p1.playFabId, username: p1.username } });
+    if (p3) {
+      opponents[1].emit('matchFound', { matchId, side: 'p3', gameMode, players: playersPayload, opponent: { playFabId: p1.playFabId, username: p1.username } });
+    }
+    console.log('[Matchmaking] Match found', matchId, p1.playFabId, p2.playFabId, p3 ? p3.playFabId : null, 'mode', gameMode);
   });
 
   socket.on('cancelMatch', () => {
-    matchQueue = matchQueue.filter(id => id !== socket.id);
+    removeFromQueues(socket.id);
     socket.emit('matchCanceled');
   });
 
@@ -831,13 +1015,19 @@ io.on('connection', (socket) => {
     
     // Notify the other player
     if (match) {
-      const otherPlayerId = match.p1.id === socket.id ? match.p2.id : match.p1.id;
-      const otherSocket = io.sockets.sockets.get(otherPlayerId);
-      if (otherSocket) {
-        otherSocket.emit('opponentLeft', { matchId });
-        otherSocket.data.matchId = null;
-        otherSocket.leave(matchId);
-      }
+      const otherPlayers = [];
+      if (match.p1 && match.p1.id !== socket.id) otherPlayers.push(match.p1);
+      if (match.p2 && match.p2.id !== socket.id) otherPlayers.push(match.p2);
+      if (match.p3 && match.p3.id !== socket.id) otherPlayers.push(match.p3);
+
+      otherPlayers.forEach((player) => {
+        const otherSocket = io.sockets.sockets.get(player.id);
+        if (otherSocket) {
+          otherSocket.emit('opponentLeft', { matchId });
+          otherSocket.data.matchId = null;
+          otherSocket.leave(matchId);
+        }
+      });
     }
     
     // Clean up

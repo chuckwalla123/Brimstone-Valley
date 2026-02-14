@@ -56,7 +56,7 @@ export default function AnimationLayer({ children }) {
     <AnimationsContext.Provider value={{ play, remove }}>
       {children}
       {typeof document !== 'undefined' && createPortal(
-        <div style={{ position: 'fixed', inset: 0, pointerEvents: 'none', zIndex: 1000 }}>
+        <div style={{ position: 'absolute', inset: 0, pointerEvents: 'none', zIndex: 1000 }}>
           {entries.map(entry => {
             const { Component, key, from, to, props, duration } = entry;
             // Store the callback on the entry object to maintain reference stability

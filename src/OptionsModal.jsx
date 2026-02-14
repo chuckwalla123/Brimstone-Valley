@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import musicManager from './MusicManager';
+import sfxManager from './SfxManager';
 
 // UI Scale options
 const UI_SCALE_OPTIONS = [
@@ -45,6 +46,7 @@ if (typeof window !== 'undefined') {
 export default function OptionsModal({ onClose }) {
   const [musicType, setMusicType] = useState(musicManager.getMusicType());
   const [volume, setVolume] = useState(musicManager.getVolume());
+  const [sfxVolume, setSfxVolume] = useState(sfxManager.getVolume());
   const [uiScale, setUiScale] = useState(getInitialScale());
 
   // Update music manager when settings change
@@ -57,6 +59,12 @@ export default function OptionsModal({ onClose }) {
     const newVolume = parseFloat(e.target.value);
     setVolume(newVolume);
     musicManager.setVolume(newVolume);
+  };
+
+  const handleSfxVolumeChange = (e) => {
+    const newVolume = parseFloat(e.target.value);
+    setSfxVolume(newVolume);
+    sfxManager.setVolume(newVolume);
   };
 
   const handleScaleChange = (scale) => {
@@ -135,16 +143,16 @@ export default function OptionsModal({ onClose }) {
     gap: '15px',
   };
 
-  const sliderStyle = {
+  const getSliderStyle = (value) => ({
     flex: 1,
     height: '8px',
     WebkitAppearance: 'none',
     appearance: 'none',
-    background: `linear-gradient(to right, #667eea 0%, #667eea ${volume * 100}%, rgba(255,255,255,0.2) ${volume * 100}%, rgba(255,255,255,0.2) 100%)`,
+    background: `linear-gradient(to right, #667eea 0%, #667eea ${value * 100}%, rgba(255,255,255,0.2) ${value * 100}%, rgba(255,255,255,0.2) 100%)`,
     borderRadius: '4px',
     outline: 'none',
     cursor: 'pointer',
-  };
+  });
 
   const volumeValueStyle = {
     fontSize: '1rem',
@@ -229,9 +237,27 @@ export default function OptionsModal({ onClose }) {
               step="0.01"
               value={volume}
               onChange={handleVolumeChange}
-              style={sliderStyle}
+              style={getSliderStyle(volume)}
             />
             <span style={volumeValueStyle}>{Math.round(volume * 100)}%</span>
+          </div>
+        </div>
+
+        {/* Sound Effects Slider */}
+        <div style={sectionStyle}>
+          <label style={labelStyle}>💥 Sound Effects Volume</label>
+          <div style={sliderContainerStyle}>
+            <span style={speakerIconStyle}>{sfxVolume === 0 ? '🔇' : sfxVolume < 0.5 ? '🔉' : '🔊'}</span>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.01"
+              value={sfxVolume}
+              onChange={handleSfxVolumeChange}
+              style={getSliderStyle(sfxVolume)}
+            />
+            <span style={volumeValueStyle}>{Math.round(sfxVolume * 100)}%</span>
           </div>
         </div>
 

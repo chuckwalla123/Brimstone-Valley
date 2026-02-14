@@ -134,7 +134,7 @@ function MiniTile({ tile }) {
             gridTemplateColumns: '1fr 1fr',
             gridTemplateRows: '1fr 1fr',
             gap: `calc(1px * var(--ui-scale) * ${miniScale})`,
-            fontSize: `calc(1.0rem * var(--ui-scale) * ${miniScale})`,
+            fontSize: `calc(1.1rem * var(--ui-scale) * ${miniScale})`,
             lineHeight: 1,
             color: '#ffffff',
             textShadow: '0 1px 0 rgba(0,0,0,0.95), 0 3px 6px rgba(0,0,0,0.65)',
@@ -166,7 +166,7 @@ function MiniTile({ tile }) {
             display: 'flex',
             flexDirection: 'column',
             gap: `calc(1px * var(--ui-scale) * ${miniScale})`,
-            fontSize: `calc(1.0rem * var(--ui-scale) * ${miniScale})`,
+            fontSize: `calc(1.1rem * var(--ui-scale) * ${miniScale})`,
             lineHeight: 1,
             color: '#ffffff',
             textShadow: '0 1px 0 rgba(0,0,0,0.95), 0 3px 6px rgba(0,0,0,0.65)',
@@ -491,7 +491,24 @@ function makeReserve(playerId) {
 }
 
 /* Draft action builder: extended to 14 picks (7 per player), each preceded by opponent ban */
-function buildActionQueue() {
+function buildActionQueue(gameMode = 'classic') {
+  if (gameMode === 'ffa3') {
+    const actions = [];
+    // One ban per player in order: P1, P2, P3
+    ['player1', 'player2', 'player3'].forEach(p => actions.push({ type: 'ban', player: p }));
+    // Snake picks: P1, P2, P3, P3, P2, P1 ... until 7 per player (21 total)
+    const pattern = ['player1', 'player2', 'player3', 'player3', 'player2', 'player1'];
+    const picks = [];
+    while (picks.length < 21) {
+      for (const p of pattern) {
+        if (picks.length >= 21) break;
+        picks.push(p);
+      }
+    }
+    picks.forEach(p => actions.push({ type: 'pick', player: p }));
+    return actions;
+  }
+
   const picks = [
     'player1','player2','player2','player1','player1','player2','player2',
     'player1','player1','player2','player2','player1','player1','player2'
@@ -506,8 +523,9 @@ function buildActionQueue() {
 }
 
 /* Simple sampler for initial pool */
+const isDraftableHero = (hero) => hero && hero.draftable !== false;
 function sampleHeroes(source, n) {
-  const arr = Array.isArray(source) ? [...source] : [];
+  const arr = Array.isArray(source) ? source.filter(isDraftableHero) : [];
   const k = Math.max(0, Math.min(n, arr.length));
   for (let i = arr.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -519,15 +537,18 @@ function sampleHeroes(source, n) {
 /* --- Main component --- */
 export default function DraftBoard({ aiDifficulty = null, socket, gameState, localSide = null, matchPlayers = null }) {
   // Use gameState from server, with defaults if not set
+  const gameMode = gameState?.gameMode || 'classic';
   const p1Main = gameState?.p1Main || makeEmptyMain('player1');
   const p1Reserve = gameState?.p1Reserve || makeReserve('player1');
   const p2Main = gameState?.p2Main || makeEmptyMain('player2');
   const p2Reserve = gameState?.p2Reserve || makeReserve('player2');
-  const availableHeroes = gameState?.availableHeroes || sampleHeroes(HEROES, 30);
+  const p3Main = gameState?.p3Main || makeEmptyMain('player3');
+  const p3Reserve = gameState?.p3Reserve || makeReserve('player3');
+  const availableHeroes = (gameState?.availableHeroes || sampleHeroes(HEROES, gameMode === 'ffa3' ? 26 : 30)).filter(isDraftableHero);
   const bans = gameState?.bans || [];
   const step = gameState?.step || 0;
   const inBattle = gameState?.inBattle || false;
-  const localPlayerId = localSide === 'p1' ? 'player1' : (localSide === 'p2' ? 'player2' : (aiDifficulty ? 'player1' : null));
+  const localPlayerId = localSide === 'p1' ? 'player1' : (localSide === 'p2' ? 'player2' : (localSide === 'p3' ? 'player3' : (aiDifficulty ? 'player1' : null)));
 
   // Track the step that AI has already acted on to prevent double actions
   const aiActedStepRef = useRef(-1);
@@ -558,10 +579,12 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
     return () => window.removeEventListener('resize', updateWidth);
   }, []);
 
-  const actions = useMemo(buildActionQueue, []);
+  const actions = useMemo(() => buildActionQueue(gameMode), [gameMode]);
   const currentAction = actions[step] || null;
   const countPicks = (main, reserve) => main.filter(t => t.hero).length + reserve.filter(t => t.hero).length;
-  const finished = countPicks(p1Main, p1Reserve) >= 7 && countPicks(p2Main, p2Reserve) >= 7;
+  const finished = gameMode === 'ffa3'
+    ? (countPicks(p1Main, p1Reserve) >= 7 && countPicks(p2Main, p2Reserve) >= 7 && countPicks(p3Main, p3Reserve) >= 7)
+    : (countPicks(p1Main, p1Reserve) >= 7 && countPicks(p2Main, p2Reserve) >= 7);
 
   const advance = () => {
     if (socket) {
@@ -638,7 +661,7 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
         }
         
         if (decision) {
-          console.log(`[AI Draft] Picking ${decision.hero.name} to ${decision.slotType}[${decision.slotIndex}]`);
+          
           handleHeroDropToTile(decision.hero, 'player2', decision.slotIndex, decision.slotType);
         }
       }
@@ -648,7 +671,7 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
   }, [aiDifficulty, currentAction, step]);
 
   const handleBanDrop = (hero) => {
-    console.log('handleBanDrop called', { hero, currentAction });
+    
     if (!currentAction || currentAction.type !== 'ban') return;
     // Block human player from making opponent's moves, but allow AI moves
     if (localPlayerId && currentAction.player !== localPlayerId && currentAction.player !== 'player2') return;
@@ -658,7 +681,7 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
   };
 
   const handleHeroDropToTile = (hero, tilePlayer, tileIndex, tileType) => {
-    console.log('handleHeroDropToTile called', { hero, tilePlayer, tileIndex, tileType, currentAction });
+    
     if (!currentAction || currentAction.type !== 'pick') return;
     if (currentAction.player !== tilePlayer) return;
     // Block human player from making opponent's moves, but allow AI moves
@@ -671,7 +694,7 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
       if (tileType === 'reserve') {
         startingRow = 'reserve';
       } else {
-        const boardSide = tilePlayer === 'player1' ? 'p1' : 'p2';
+        const boardSide = tilePlayer === 'player1' ? 'p1' : (tilePlayer === 'player2' ? 'p2' : 'p3');
         const rowIdx = indexToRow(tileIndex, boardSide);
         startingRow = rowIdx === 0 ? 'front' : (rowIdx === 1 ? 'middle' : 'back');
       }
@@ -704,7 +727,8 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
         borderRadius: 'var(--tile-border-radius, 6px)',
         transition: 'background 0.3s ease'
       }}>
-        {mainTiles.map((tile) => {
+        {(playerId === 'player3' ? [0,1,2,3,4,5,6,7,8] : mainTiles.map((_, i) => i)).map((i) => {
+          const tile = mainTiles[i];
           const disabled = !isPickForPlayer || !!tile.hero || mainCount >= 5;
           const highlightFor = isPickForPlayer ? playerId : null;
           return <Tile key={tile.id} tile={tile} onHeroDrop={handleHeroDropToTile} disabled={disabled} highlightFor={highlightFor} onHover={handleTileHover} onUnhover={handleTileUnhover} />;
@@ -750,7 +774,7 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
           {renderMainGrid(mainTiles, playerLabel, playerId, isPickForPlayer, mainCount)}
         </div>
       );
-    } else {
+    } else if (playerId === 'player2') {
       // player2: main then reserve on outer right
       return (
         <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-large, 12px)' }}>
@@ -761,6 +785,14 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
           {renderReserveColumn(reserveTiles, playerLabel, playerId, isPickForPlayer, reserveCount)}
         </div>
       );
+    } else {
+      // player3: main then reserve on outer right
+      return (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--gap-large, 12px)' }}>
+          {renderMainGrid(mainTiles, playerLabel, playerId, isPickForPlayer, mainCount)}
+          {renderReserveColumn(reserveTiles, playerLabel, playerId, isPickForPlayer, reserveCount)}
+        </div>
+      );
     }
   };
 
@@ -768,8 +800,12 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
   const handleGameEnd = (winner) => {
     // simple behavior: exit battle and show result
     setInBattle(false);
-    if (winner === 'player1' || winner === 'player2') {
-      const winnerName = winner === 'player1' ? (matchPlayers?.p1 || 'Player 1') : (matchPlayers?.p2 || 'Player 2');
+    if (winner === 'player1' || winner === 'player2' || winner === 'player3') {
+      const winnerName = winner === 'player1'
+        ? (matchPlayers?.p1 || 'Player 1')
+        : (winner === 'player2'
+          ? (matchPlayers?.p2 || 'Player 2')
+          : (matchPlayers?.p3 || 'Player 3'));
       alert(`${winnerName} wins!`);
     } else {
       alert('Game ended: ' + winner);
@@ -935,6 +971,12 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
                 )}
               </div>
             </div>
+
+            {gameMode === 'ffa3' && (
+              <div style={{ marginTop: 'var(--gap-medium, 8px)' }}>
+                {renderPlayerSection(p3Main, p3Reserve, matchPlayers?.p3 || 'Player 3', 'player3')}
+              </div>
+            )}
 
             {/* Start Battle Button when draft finished */}
             {finished && (

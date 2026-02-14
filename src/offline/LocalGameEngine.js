@@ -34,16 +34,56 @@ import { processMove, makeEmptyMain, makeReserve } from '../../shared/gameLogic.
 import { HEROES } from '../heroes.js';
 
 // Sample n heroes from source array (Fisher-Yates shuffle)
+const isDraftableHero = (hero) => hero && hero.draftable !== false;
 function sampleHeroes(source, n) {
-  const shuffled = [...source].sort(() => Math.random() - 0.5);
+  const pool = Array.isArray(source) ? source.filter(isDraftableHero) : [];
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
   return shuffled.slice(0, n);
 }
+
+const isSideAlive = (boardArr) => (boardArr || []).some(t => {
+  if (!t || !t.hero) return false;
+  if (t._dead) return false;
+  if (typeof t.currentHealth === 'number' && t.currentHealth <= 0) return false;
+  return true;
+});
+
+const getAliveSides = (state) => {
+  if (!state) return [];
+  const alive = [];
+  if (isSideAlive(state.p1Main)) alive.push('p1');
+  if (isSideAlive(state.p2Main)) alive.push('p2');
+  if (state.gameMode === 'ffa3' && isSideAlive(state.p3Main)) alive.push('p3');
+  return alive;
+};
+
+const getActiveOrder = (state) => {
+  const alive = getAliveSides(state);
+  const order = ['p1', 'p2', 'p3'];
+  return order.filter(side => alive.includes(side));
+};
+
+const normalizePrioritySide = (prio) => (
+  (prio === 'player1' || prio === 'p1') ? 'p1' : (prio === 'player2' || prio === 'p2') ? 'p2' : 'p3'
+);
+
+const sideToPlayerKey = (side) => (side === 'p1' ? 'player1' : (side === 'p2' ? 'player2' : 'player3'));
+
+const getNextPriorityPlayer = (state) => {
+  const active = getActiveOrder(state);
+  if (active.length === 0) return 'player1';
+  const curSide = normalizePrioritySide(state.priorityPlayer);
+  const idx = active.indexOf(curSide);
+  const nextSide = active[(idx >= 0 ? (idx + 1) % active.length : 0)];
+  return sideToPlayerKey(nextSide);
+};
 
 class LocalGameEngine {
   constructor() {
     this.gameState = null;
     this.listeners = new Map();
     this.connected = true; // Always "connected" locally
+    this.gameMode = 'classic';
     // Step queue for ACK-based animation sequencing
     this.stepQueue = [];
     this.stepIndex = 0;
@@ -91,7 +131,7 @@ class LocalGameEngine {
 
   // Mimic socket.io's emit() method - process actions locally
   async emit(event, data) {
-    console.log('[LocalGameEngine] emit:', event, data);
+    
     
     switch (event) {
       case 'auth':
@@ -100,7 +140,7 @@ class LocalGameEngine {
         break;
 
       case 'resetGame':
-        this._resetGame();
+        this._resetGame(data);
         break;
 
       case 'makeMove':
@@ -138,7 +178,7 @@ class LocalGameEngine {
 
       case 'findMatch':
         // Local mode doesn't do matchmaking
-        console.log('[LocalGameEngine] Matchmaking not available in offline mode');
+        
         break;
 
       case 'cancelMatch':
@@ -146,14 +186,17 @@ class LocalGameEngine {
         break;
 
       default:
-        console.log('[LocalGameEngine] Unhandled event:', event);
+        
     }
   }
 
   // Initialize/reset game state
-  _resetGame() {
-    // Sample 30 heroes for the draft pool
-    const availableHeroes = sampleHeroes(HEROES, 30);
+  _resetGame(payload = null) {
+    const nextMode = payload && payload.gameMode ? payload.gameMode : this.gameMode;
+    this.gameMode = nextMode || 'classic';
+    const isFfa3 = this.gameMode === 'ffa3';
+    // Sample heroes for the draft pool
+    const availableHeroes = sampleHeroes(HEROES, isFfa3 ? 26 : 30);
 
     this.gameState = {
       phase: 'draft',
@@ -163,9 +206,11 @@ class LocalGameEngine {
       p1Reserve: makeReserve('player1'),
       p2Main: makeEmptyMain('player2'),
       p2Reserve: makeReserve('player2'),
+      ...(isFfa3 ? { p3Main: makeEmptyMain('player3'), p3Reserve: makeReserve('player3') } : {}),
       availableHeroes,
       bans: [],
-      priorityPlayer: 'player1'
+      priorityPlayer: 'player1',
+      gameMode: this.gameMode
     };
 
     // Reset step queue state
@@ -175,16 +220,38 @@ class LocalGameEngine {
 
     // Emit the new game state
     this._emit('gameState', { ...this.gameState });
-    console.log('[LocalGameEngine] Game reset, draft pool size:', availableHeroes.length);
+    
   }
 
   // Start the movement phase after a battle round
   _startMovementPhase() {
-    const prioShort = (this.gameState.priorityPlayer === 'player1' || this.gameState.priorityPlayer === 'p1') ? 'p1' : 'p2';
-    const sequence = prioShort === 'p1' ? ['p1', 'p2', 'p2', 'p1'] : ['p2', 'p1', 'p1', 'p2'];
+    const prio = this.gameState.priorityPlayer || 'player1';
+    let prioShort = normalizePrioritySide(prio);
+    let sequence;
+    if (this.gameState.gameMode === 'ffa3') {
+      const order = getActiveOrder(this.gameState);
+      if (order.length <= 1) {
+        this.gameState.movementPhase = null;
+        this.gameState.phase = 'ready';
+        this._emit('gameState', { ...this.gameState });
+        return;
+      }
+      if (!order.includes(prioShort)) {
+        prioShort = order[0];
+        this.gameState.priorityPlayer = sideToPlayerKey(prioShort);
+      }
+      const prioIdx = order.indexOf(prioShort);
+      const forward = prioIdx >= 0
+        ? [...order.slice(prioIdx), ...order.slice(0, prioIdx)]
+        : order;
+      const backward = [...forward].reverse();
+      sequence = [...forward, ...backward];
+    } else {
+      sequence = prioShort === 'p1' ? ['p1', 'p2', 'p2', 'p1'] : ['p2', 'p1', 'p1', 'p2'];
+    }
     this.gameState.movementPhase = { sequence, index: 0 };
     this.gameState.phase = 'movement';
-    console.log('[LocalGameEngine] Starting movement phase. priorityPlayer:', this.gameState.priorityPlayer, 'sequence:', sequence);
+    
     this._emit('gameState', { ...this.gameState });
   }
 
@@ -195,7 +262,7 @@ class LocalGameEngine {
       // All steps complete
       this.stepQueue = [];
       this.stepIndex = 0;
-      console.log('[LocalGameEngine] All steps complete');
+      
       
       // Start movement phase if it was pending (just like the server does)
       if (this.pendingMovementStart) {
@@ -206,7 +273,7 @@ class LocalGameEngine {
     }
     const step = this.stepQueue[this.stepIndex];
     this.awaitingAck = true;
-    console.log('[LocalGameEngine] Sending step', this.stepIndex, step?.type);
+    
     this._emit('step', step);
   }
 
@@ -226,13 +293,15 @@ class LocalGameEngine {
     // Update board state with any movement changes
     if (payload.p1Main) this.gameState.p1Main = payload.p1Main;
     if (payload.p2Main) this.gameState.p2Main = payload.p2Main;
+    if (payload.p3Main) this.gameState.p3Main = payload.p3Main;
     if (payload.p1Reserve) this.gameState.p1Reserve = payload.p1Reserve;
     if (payload.p2Reserve) this.gameState.p2Reserve = payload.p2Reserve;
+    if (payload.p3Reserve) this.gameState.p3Reserve = payload.p3Reserve;
     if (payload.priorityPlayer) this.gameState.priorityPlayer = payload.priorityPlayer;
     
     // Transition back to battle phase
     this.gameState.phase = 'battle';
-    console.log('[LocalGameEngine] Movement complete, transitioning to battle phase');
+    
     this._emit('gameState', { ...this.gameState });
   }
 
@@ -246,6 +315,10 @@ class LocalGameEngine {
 
     const mp = this.gameState.movementPhase;
     const mover = mp.sequence[mp.index];
+    if (this.gameState.gameMode === 'ffa3' && !getActiveOrder(this.gameState).includes(mover)) {
+      this._advanceMovementPhase();
+      return;
+    }
 
     // Helper to find tile by ID
     const findTileById = (tileId) => {
@@ -255,9 +328,11 @@ class LocalGameEngine {
         return null;
       };
       const direct = findIn(this.gameState.p1Main, 'p1Main') || 
-                     findIn(this.gameState.p2Main, 'p2Main') || 
-                     findIn(this.gameState.p1Reserve, 'p1Reserve') || 
-                     findIn(this.gameState.p2Reserve, 'p2Reserve');
+             findIn(this.gameState.p2Main, 'p2Main') || 
+             findIn(this.gameState.p3Main, 'p3Main') || 
+             findIn(this.gameState.p1Reserve, 'p1Reserve') || 
+             findIn(this.gameState.p2Reserve, 'p2Reserve') ||
+             findIn(this.gameState.p3Reserve, 'p3Reserve');
       if (direct) return direct;
 
       // Parse string-based tile IDs like "p1:2" or "p1reserve:0"
@@ -270,14 +345,26 @@ class LocalGameEngine {
             const plow = p.toLowerCase();
             if (plow === 'p1') return { boardName: 'p1Main', index: idx, tile: (this.gameState.p1Main || [])[idx] };
             if (plow === 'p2') return { boardName: 'p2Main', index: idx, tile: (this.gameState.p2Main || [])[idx] };
+            if (plow === 'p3') return { boardName: 'p3Main', index: idx, tile: (this.gameState.p3Main || [])[idx] };
             if (plow === 'p1reserve') return { boardName: 'p1Reserve', index: idx, tile: (this.gameState.p1Reserve || [])[idx] };
             if (plow === 'p2reserve') return { boardName: 'p2Reserve', index: idx, tile: (this.gameState.p2Reserve || [])[idx] };
+            if (plow === 'p3reserve') return { boardName: 'p3Reserve', index: idx, tile: (this.gameState.p3Reserve || [])[idx] };
           }
         } else if (parts.length === 3 && parts[1] === 'reserve') {
           const idx = parseInt(parts[2], 10);
           if (!isNaN(idx)) {
             if (parts[0] === 'p1') return { boardName: 'p1Reserve', index: idx, tile: (this.gameState.p1Reserve || [])[idx] };
             if (parts[0] === 'p2') return { boardName: 'p2Reserve', index: idx, tile: (this.gameState.p2Reserve || [])[idx] };
+            if (parts[0] === 'p3') return { boardName: 'p3Reserve', index: idx, tile: (this.gameState.p3Reserve || [])[idx] };
+          }
+        } else if (tileId.includes('player1-main-') || tileId.includes('player2-main-') || tileId.includes('player3-main-') || tileId.includes('player1-reserve-') || tileId.includes('player2-reserve-') || tileId.includes('player3-reserve-')) {
+          const m = tileId.match(/(player1|player2|player3)-(main|reserve)-(\d+)/);
+          if (m) {
+            const side = m[1] === 'player1' ? 'p1' : (m[1] === 'player2' ? 'p2' : 'p3');
+            const kind = m[2];
+            const idx = parseInt(m[3], 10);
+            if (kind === 'main') return { boardName: side === 'p1' ? 'p1Main' : (side === 'p2' ? 'p2Main' : 'p3Main'), index: idx, tile: (side === 'p1' ? this.gameState.p1Main : (side === 'p2' ? this.gameState.p2Main : this.gameState.p3Main))[idx] };
+            return { boardName: side === 'p1' ? 'p1Reserve' : (side === 'p2' ? 'p2Reserve' : 'p3Reserve'), index: idx, tile: (side === 'p1' ? this.gameState.p1Reserve : (side === 'p2' ? this.gameState.p2Reserve : this.gameState.p3Reserve))[idx] };
           }
         }
       }
@@ -287,13 +374,22 @@ class LocalGameEngine {
     const src = findTileById(srcId);
     const dst = findTileById(dstId);
     if (!src || !dst) {
-      console.log('[LocalGameEngine] movementMove: Invalid src/dst', srcId, dstId);
+      
       return;
     }
 
-    const srcPlayer = src.boardName.startsWith('p1') ? 'p1' : 'p2';
+    const srcPlayer = src.boardName.startsWith('p1') ? 'p1' : (src.boardName.startsWith('p2') ? 'p2' : 'p3');
     if (srcPlayer !== mover) {
       console.log('[LocalGameEngine] movementMove: Wrong player trying to move', srcPlayer, 'vs', mover);
+      return;
+    }
+
+    // Prevent bosses from being moved into reserve slots
+    const dstIsReserve = dst.boardName.includes('Reserve');
+    if (dstIsReserve && src?.tile?.hero?.isBoss) {
+      console.log('[LocalGameEngine] movementMove: BLOCKED - boss cannot move to reserve');
+      // Advance the phase (treat as skip)
+      this._advanceMovementPhase();
       return;
     }
 
@@ -301,10 +397,11 @@ class LocalGameEngine {
     const srcIsReserve = src.boardName.includes('Reserve');
     const dstIsMain = dst.boardName.includes('Main');
     if (srcIsReserve && dstIsMain) {
-      const mainBoard = srcPlayer === 'p1' ? this.gameState.p1Main : this.gameState.p2Main;
-      const mainAliveCount = (mainBoard || []).filter(t => t && t.hero && !t._dead).length;
+      const countsTowardMainLimit = (tile) => tile && tile.hero && !tile._dead && !tile._revivedExtra && tile.hero.isMinion !== true;
+      const mainBoard = srcPlayer === 'p1' ? this.gameState.p1Main : (srcPlayer === 'p2' ? this.gameState.p2Main : this.gameState.p3Main);
+      const mainAliveCount = (mainBoard || []).filter(countsTowardMainLimit).length;
       const dstTile = dst.tile;
-      const dstHasLivingHero = dstTile && dstTile.hero && !dstTile._dead;
+      const dstHasLivingHero = countsTowardMainLimit(dstTile);
       
       if (!dstHasLivingHero && mainAliveCount >= 5) {
         console.log('[LocalGameEngine] movementMove: BLOCKED - would exceed 5 heroes');
@@ -318,8 +415,10 @@ class LocalGameEngine {
     const getBoardRef = (name) => {
       if (name === 'p1Main') return this.gameState.p1Main;
       if (name === 'p2Main') return this.gameState.p2Main;
+      if (name === 'p3Main') return this.gameState.p3Main;
       if (name === 'p1Reserve') return this.gameState.p1Reserve;
-      return this.gameState.p2Reserve;
+      if (name === 'p2Reserve') return this.gameState.p2Reserve;
+      return this.gameState.p3Reserve;
     };
 
     const boardA = getBoardRef(src.boardName);
@@ -340,7 +439,11 @@ class LocalGameEngine {
       // Movement complete - transition to ready phase
       this.gameState.movementPhase = null;
       this.gameState.phase = 'ready';
-      this.gameState.priorityPlayer = (this.gameState.priorityPlayer === 'player1' || this.gameState.priorityPlayer === 'p1') ? 'player2' : 'player1';
+      if (this.gameState.gameMode === 'ffa3') {
+        this.gameState.priorityPlayer = getNextPriorityPlayer(this.gameState);
+      } else {
+        this.gameState.priorityPlayer = (this.gameState.priorityPlayer === 'player1' || this.gameState.priorityPlayer === 'p1') ? 'player2' : 'player1';
+      }
       console.log('[LocalGameEngine] Movement complete, switching to ready phase, new priority:', this.gameState.priorityPlayer);
     } else {
       this.gameState.movementPhase = { ...mp, index: nextIndex };
@@ -378,8 +481,10 @@ class LocalGameEngine {
     
     if (payload.p1Main) this.gameState.p1Main = payload.p1Main;
     if (payload.p2Main) this.gameState.p2Main = payload.p2Main;
+    if (payload.p3Main) this.gameState.p3Main = payload.p3Main;
     if (payload.p1Reserve) this.gameState.p1Reserve = payload.p1Reserve;
     if (payload.p2Reserve) this.gameState.p2Reserve = payload.p2Reserve;
+    if (payload.p3Reserve) this.gameState.p3Reserve = payload.p3Reserve;
     if (payload.priorityPlayer) this.gameState.priorityPlayer = payload.priorityPlayer;
     if (payload.phase) this.gameState.phase = payload.phase;
     

@@ -44,6 +44,8 @@
  *        cols: 2, rows: 2, maxDisplaySize: 120 
  *      }
  *    - ⚠️ Spells will NOT work without this config entry!
+ *    - If a new spell uses a new sprite key, update BOTH src/animations/index.js
+ *      and src/spellConfigs.js (this step is commonly missed).
  * 
  * =============================================================================
  * EFFECTS
@@ -68,7 +70,7 @@
  *   description: 'What the spell does',     // From card description
  *   spec: {
  *     targets: [{                           // Targeting configuration
- *       type: 'projectile|highestHealth|lowestHealth|board|column|adjacent|self|random',
+ *       type: 'projectile|highestHealth|lowestHealth|board|column|adjacent|self|random|furthest',
  *       side: 'enemy|ally',
  *       max: 1                              // Optional: limit number of targets
  *     }],
@@ -99,13 +101,21 @@
  * - projectile: First enemy in line
  * - highestHealth: Enemy with highest current health
  * - lowestHealth: Enemy with lowest current health  
+ * - furthest: Furthest enemy (back row priority)
  * - board: All heroes on the board
  * - column: All heroes in the same column
  * - adjacent: Heroes adjacent to the target
+ * - nearestToLastTarget: Closest living hero to the last resolved target
  * - self: The casting hero
  * - random: Random target(s)
  * - projectilePlus1: Projectile target + 1 adjacent
+ * - nearestDeadAlly: Nearest ally corpse
+ * - nearestDeadEnemy: Nearest enemy corpse
  * - rowWithHighestSumArmor: Targets entire row with highest total armor
+ * - backmostRowWithHero: Targets the backmost row that has at least one hero
+ * - mostPoisonEffects: Enemy with the most Poison effects
+ * - middleRow: Targets the middle row (supports optional excludeColumn)
+ * - cornerTiles: Targets the four corner tiles on the target board (occupied tiles only)
  * 
  * =============================================================================
  */
@@ -119,6 +129,8 @@ export const SPELLS = {
     id: 'basicAttack', name: 'Basic Attack',
     description: 'Fallback attack: deals 1 damage to the highest-health enemy. Ignores armor and spellPower, bypasses triggers.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 1, ignoreArmor: true, ignoreSpellPower: true }, post: { bypassTriggers: true }, animationMs: 500 },
+    animation: 'Basic Attack_2x2_4frames',
+    animationPlacement: 'travel',
     sound: '/images/sounds/Basic Attack.mp3',
     soundVolume: 0.3
   },
@@ -214,6 +226,58 @@ export const SPELLS = {
     animationPlacement: 'inplace'
   },
 
+  // Necromancer spells
+  corpseExplosion: {
+    id: 'corpseExplosion',
+    name: 'Corpse Explosion',
+    description: 'Targets the nearest dead enemy Hero, removes the dead Hero from play and targets the enemy nearest the dead Hero for 6 Attack Power.',
+    spec: {
+      targets: [
+        { type: 'nearestDeadEnemy', side: 'enemy', max: 1 },
+        { type: 'nearestToLastTarget', side: 'enemy', max: 1 }
+      ],
+      formula: { type: 'attackPower', value: 6 },
+      post: { removeCorpse: true },
+      perTargetExtras: [ { action: null }, {} ],
+      animationMs: 1200
+    },
+    animation: 'Corpse Explosion_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  raiseDead: {
+    id: 'raiseDead',
+    name: 'Raise Dead',
+    description: 'Targets the nearest dead ally Hero and replaces with a Skeleton.',
+    spec: {
+      targets: [{ type: 'nearestDeadAlly', side: 'ally', max: 1 }],
+      post: { raiseDeadToHeroId: 'skeletonID' },
+      animationMs: 1200
+    },
+    animation: 'Raise Dead_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  soulDrain: {
+    id: 'soulDrain',
+    name: 'Soul Drain',
+    description: 'Targets the enemy with the highest Energy, dealing 3 Attack Power ignoring Armor and decreases energy by 1. Also targets the caster with a Heal Power of 3 and increases Energy by 1.',
+    spec: {
+      targets: [
+        { type: 'highestEnergy', side: 'enemy', max: 1 },
+        { type: 'self' }
+      ],
+      formula: { type: 'attackPower', value: 3, ignoreArmor: true },
+      post: { secondaryHeal: { amount: 3, side: 'ally', target: 'self' } },
+      perTargetExtras: [
+        { post: { deltaEnergy: -1 } },
+        { post: { deltaEnergy: { amount: 1, target: 'self' } } }
+      ],
+      animationMs: 1200
+    },
+    animation: 'Soul Drain_2x2_4frames',
+    animationSecondary: 'Healing_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
   // Behemoth — Monster hero spells
   brutalSmash: {
     id: 'brutalSmash',
@@ -299,7 +363,7 @@ export const SPELLS = {
   heatingUp: {
     id: 'heatingUp', name: 'Heating Up',
     description: "Targets the nearest ally and applies an effect: Heating Up which causes the effected Hero's spells to apply Burn to all targeted enemies.",
-    spec: { targets: [{ type: 'nearest', side: 'ally', max: 1 }], effects: [EFFECTS.HeatingUp], animationMs: 1200 },
+    spec: { targets: [{ type: 'nearest', side: 'ally', max: 1, excludeSelf: true }], effects: [EFFECTS.HeatingUp], animationMs: 1200 },
     animation: 'Elixir_2x2_4frames',
     animationPlacement: 'inplace'
   },
@@ -342,7 +406,7 @@ export const SPELLS = {
   },
   counter: {
     id: 'counter', name: 'Counter',
-    description: 'Targets the caster and applies Counter: deals 2 damage to any enemy who damages the effected Hero with a spell.',
+    description: 'Targets the caster and applies Counter: deals 2 damage to any enemy who targets the effected Hero with a spell.',
     spec: { targets: [{ type: 'self' }], effects: [EFFECTS.Counter], animationMs: 1200 },
     animation: 'Counter_2x2_4frames',
     animationPlacement: 'inplace'
@@ -398,7 +462,7 @@ export const SPELLS = {
     id: 'staffFinisher', name: 'Staff Finisher',
     description: 'Targets the enemy with the lowest Health, dealing 2 Attack Power (ignores Armor).',
     spec: { targets: [{ type: 'lowestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 2, ignoreArmor: true }, animationMs: 1200 },
-    animation: 'Staff Finisher_2x2_frames', animationPlacement: 'travel'
+    animation: 'Staff Finisher_2x2_4frames', animationPlacement: 'travel'
   },
 
   battle: {
@@ -460,6 +524,286 @@ export const SPELLS = {
     sound: '/images/sounds/Slash.mp3',
     soundVolume: 0.3
   },
+  // Iron Golem (new)
+  ironHand: {
+    id: 'ironHand', name: 'Iron Hand',
+    description: "Targets the enemy with the most Health and deals Attack Power equal to the caster's Armor.",
+    spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 0, addCasterArmor: true, ignoreSpellPower: true }, animationMs: 1200 },
+    animation: 'Iron Hand_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  magnetize: {
+    id: 'magnetize', name: 'Magnetize',
+    description: "Targets the enemy with the highest Armor and applies Armor Down (-1 Armor). Targets the caster and applies Armor (+1 Armor).",
+    spec: {
+      targets: [{ type: 'highestArmor', side: 'enemy', max: 1 }, { type: 'self' }],
+      perTargetExtras: [
+        { effects: [EFFECTS.ArmorDown] },
+        { effects: [EFFECTS.Armor] }
+      ],
+      animationMs: 1200
+    },
+    animation: 'Magnetize_2x2_4frames',
+    animationSecondary: 'Elixir_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  bodySlam: {
+    id: 'bodySlam', name: 'Body Slam',
+    description: "Targets the enemy with the lowest Speed and deals Attack Power equal to 2 + the caster's Armor.",
+    spec: { targets: [{ type: 'lowestSpeed', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 2, addCasterArmor: true, ignoreSpellPower: true }, animationMs: 1200 },
+    animation: 'Body Slam_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  // King (new)
+  subjugation: {
+    id: 'subjugation', name: 'Subjugation',
+    description: 'Targets the ally with lowest Speed and applies Subjugation (single-target spells always target lowest Armor).',
+    spec: {
+      targets: [{ type: 'lowestSpeed', side: 'ally', max: 1 }],
+      effects: [EFFECTS.Subjugation],
+      animationMs: 1200
+    },
+    animation: 'Elixir_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  benevolence: {
+    id: 'benevolence', name: 'Benevolence',
+    description: 'Targets nearest ally and increases their number of spell casts by 1 for the row the target is in.',
+    spec: {
+      targets: [{ type: 'nearest', side: 'ally', max: 1, excludeSelf: true }],
+      post: { increaseRowCastsBy: 1 },
+      animationMs: 1200
+    },
+    animation: 'Benevolence_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  superiority: {
+    id: 'superiority', name: 'Superiority',
+    description: 'Targets the enemy with the lowest Armor dealing 3 Attack Power. If the target has more Health than the caster, deal an additional 3 Attack Power.',
+    spec: {
+      targets: [{ type: 'leastArmor', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 3 },
+      post: {
+        conditionalOnCasterVsTargetHealth: {
+          lessThan: { attackPower: 6 },
+          greaterOrEqual: { attackPower: 3 }
+        }
+      },
+      animationMs: 1200
+    },
+    animation: 'Superiority_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  // Queen (new)
+  corruptingTongue: {
+    id: 'corruptingTongue', name: 'Corrupting Tongue',
+    description: 'Targets the frontmost enemy row that has at least 1 Hero, dealing 4 Attack Power and applying Curse (-1 Spell Power).',
+    spec: {
+      targets: [{ type: 'frontmostRowWithHero', side: 'enemy' }],
+      formula: { type: 'attackPower', value: 4 },
+      effects: [EFFECTS.Curse],
+      animationMs: 1200
+    },
+    animation: 'Corrupting Tongue_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  tyranny: {
+    id: 'tyranny', name: 'Tyranny',
+    description: 'Targets the four corner tiles of the enemy board, dealing Attack Power equal to 2 + the number of enemies hit.',
+    spec: {
+      targets: [{ type: 'cornerTiles', side: 'enemy' }],
+      formula: { type: 'attackPower', value: 2, addResolvedTargetCountMultiplier: 1 },
+      animationMs: 1200
+    },
+    animation: 'Tyranny_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  queensWrath: {
+    id: 'queensWrath', name: 'Queen\'s Wrath',
+    description: 'Targets the enemy with the highest Health, dealing 6 Attack Power and applying Curse (-1 Spell Power).',
+    spec: {
+      targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 6 },
+      effects: [EFFECTS.Curse],
+      animationMs: 1200
+    },
+    animation: "Queen's Wrath_2x2_4frames",
+    animationPlacement: 'travel'
+  },
+  // Reaper (new)
+  reapersHarvest: {
+    id: 'reapersHarvest', name: 'Scythe\'s Harvest',
+    description: 'Targets the backmost enemy row that has at least 1 Hero, dealing 5 Attack Power.',
+    spec: {
+      targets: [{ type: 'backmostRowWithHero', side: 'enemy' }],
+      formula: { type: 'attackPower', value: 5 },
+      animationMs: 1200
+    },
+    animation: 'Scythes Harvest_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  reap: {
+    id: 'reap', name: 'Reap',
+    description: 'Targets the caster and applies Reap, which deals 999 damage to any enemy whose Health is 2 or less.',
+    spec: {
+      targets: [{ type: 'self' }],
+      effects: [EFFECTS.Reap],
+      animationMs: 1200
+    },
+    animation: 'Elixir_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  cleave: {
+    id: 'cleave', name: 'Cleave',
+    description: 'Targets the frontmost enemy row that has at least 1 Hero, dealing 5 Attack Power.',
+    spec: {
+      targets: [{ type: 'frontmostRowWithHero', side: 'enemy' }],
+      formula: { type: 'attackPower', value: 5 },
+      animationMs: 1200
+    },
+    animation: 'Cleave_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  // Prince (new)
+  duel: {
+    id: 'duel', name: 'Duel',
+    description: 'Targets the enemy with the highest Health, dealing 7 Attack Power. If target Speed is greater than 2, the target retaliates for 2 Attack Power to the caster.',
+    spec: {
+      targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 7 },
+      post: { targetRetaliatesIfSpeedAbove: { speed: 2, amount: 2 } },
+      animationMs: 1200
+    },
+    animation: 'Duel_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  armorBearer: {
+    id: 'armorBearer', name: 'Armor Bearer',
+    description: 'Targets the caster and applies Armor Bearer (+3 Armor).',
+    spec: { targets: [{ type: 'self' }], effects: [EFFECTS.ArmorBearer], animationMs: 1200 },
+    animation: 'Elixir_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  battleFormation: {
+    id: 'battleFormation', name: 'Battle Formation',
+    description: 'Targets the enemy middle column, then the enemy middle row, dealing 5 Attack Power.',
+    spec: {
+      targets: [
+        { type: 'column', side: 'enemy', col: 1 },
+        { type: 'middleRow', side: 'enemy', excludeColumn: 1 }
+      ],
+      formula: { type: 'attackPower', value: 5 },
+      animationMs: 1200
+    },
+    animation: 'Battle Formation_2x2_4frames',
+    animationSecondary: 'Battle Formation_2x2_4frames',
+    secondaryAnimationMode: 'rowSweep',
+    animationPlacement: 'travel'
+  },
+  // Monk (new)
+  deadlyFist: {
+    id: 'deadlyFist', name: 'Deadly Fist',
+    description: "Targets the enemy with the highest Health dealing 8 Attack Power, but the targeted enemy's Armor has double effectiveness.",
+    spec: {
+      targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 8, armorMultiplier: 2 },
+      animationMs: 1200
+    },
+    animation: 'Deadly Fist_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  exorcism: {
+    id: 'exorcism', name: 'Exorcism',
+    description: 'Targets the ally with the most negative effects, removing the top negative effect and dealing 4 damage to the enemy who originally cast the negative effect.',
+    spec: {
+      targets: [{ type: 'mostDebuffs', side: 'ally', max: 1 }],
+      post: { removeTopDebuff: true, damageEffectApplier: { amount: 4, ignoreSpellPower: true } },
+      animationMs: 1200
+    },
+    animation: 'Excorcism_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  revive: {
+    id: 'revive', name: 'Revive',
+    description: 'Targets the nearest ally corpse reviving them with a Heal Power of 8.',
+    spec: {
+      targets: [{ type: 'nearestDeadAlly', side: 'ally', max: 1 }],
+      post: { revive: { heal: 8 } },
+      animationMs: 1200
+    },
+    animation: 'Revive_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  // Mud Golem (new)
+  mudSling: {
+    id: 'mudSling', name: 'Mud Sling',
+    description: 'Targets the enemy with the most Energy dealing 3 Attack Power and applying Slowed (-1 Speed).',
+    spec: {
+      targets: [{ type: 'highestEnergy', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 3 },
+      effects: [EFFECTS.Slowed],
+      animationMs: 1200
+    },
+    animation: 'Mud Sling_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  mudArmor: {
+    id: 'mudArmor', name: 'Mud Armor',
+    description: 'Targets the ally with the least Armor and applies Mud Armor (+3 Armor). Cannot target the caster.',
+    spec: {
+      targets: [{ type: 'leastArmor', side: 'ally', max: 1, excludeSelf: true }],
+      effects: [EFFECTS.MudArmor],
+      animationMs: 1200
+    },
+    animation: 'Mud Armor_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  quicksand: {
+    id: 'quicksand', name: 'Quicksand',
+    description: 'Targets the enemy with the highest Speed dealing Attack Power equal to 4 + the target’s Speed.',
+    spec: {
+      targets: [{ type: 'highestSpeed', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 4, addTargetSpeed: true },
+      animationMs: 1200
+    },
+    animation: 'Quicksand_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  // Nature Golem (new)
+  entanglingRoots: {
+    id: 'entanglingRoots', name: 'Entangling Roots',
+    description: 'Targets the enemy with the highest Health and deals 4 Attack Power. If the target has 2 or more Armor, applies Spores.',
+    spec: {
+      targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 4 },
+      post: { applyEffectIfTargetArmorAtLeast: { minArmor: 2, effects: ['Spores'] } },
+      animationMs: 1200
+    },
+    animation: 'Entangling Roots_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  naturesBlessing: {
+    id: 'naturesBlessing', name: "Nature's Blessing",
+    description: 'Targets the ally with the most negative effects, removes the topmost negative effect, and if one is removed applies Regen (heals 1 at the beginning of each round).',
+    spec: {
+      targets: [{ type: 'mostDebuffs', side: 'ally', max: 1 }],
+      post: { removeTopDebuff: true, applyEffectIfRemoved: { effects: ['Regen'] } },
+      animationMs: 1200
+    },
+    animation: 'Natures Blessing_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  protectiveGrowth: {
+    id: 'protectiveGrowth', name: 'Protective Growth',
+    description: 'Targets the caster and applies Protective Growth which causes enemy multi-target spells to only target Nature Golem.',
+    spec: {
+      targets: [{ type: 'self' }],
+      effects: [EFFECTS.ProtectiveGrowth],
+      animationMs: 1200
+    },
+    animation: 'Elixir_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
   // Jester (new) -- front: copies last enemy cast; middle: slash; back: special conditional
   copyCat: {
     id: 'copyCat', name: 'Copy Cat',
@@ -477,7 +821,7 @@ export const SPELLS = {
         // Engine will check this after computing deferred changes and, if the chosen ally would die,
         // run the `secondarySpec` as an additional deferred attack from the original caster.
         conditionalSecondaryOnWouldKill: {
-          secondarySpec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 999 } }
+          secondarySpec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 25 } }
         }
       },
       animationMs: 1200
@@ -524,6 +868,60 @@ export const SPELLS = {
     animationPlacement: 'travel'
   },
 
+  // Giant
+  trample: {
+    id: 'trample', name: 'Trample',
+    description: 'Column attack dealing 2 Attack Power ignoring Armor and applying Slowed (-1 Speed).',
+    spec: { targets: [{ type: 'column', side: 'enemy' }], formula: { type: 'attackPower', value: 2, ignoreArmor: true }, effects: [EFFECTS.Slowed], animationMs: 1200 },
+    animation: 'Trample_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  defend: {
+    id: 'defend', name: 'Defend',
+    description: 'Targets the caster and applies Defend (+1 Armor, nullifies projectile and column attacks that would hit the effected Hero).',
+    spec: {
+      targets: [{ type: 'self' }],
+      effects: [EFFECTS.Defend],
+      animationMs: 1200
+    },
+    animation: 'Elixir_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  throwRock: {
+    id: 'throwRock', name: 'Throw Rock',
+    description: 'Projectile dealing 2 Attack Power. Also targets the caster and applies Taunt, forcing single-target enemy spells to target this Hero.',
+    spec: {
+      targets: [{ type: 'projectile', side: 'enemy', max: 1 }, { type: 'self' }],
+      formula: { type: 'attackPower', value: 2 },
+      perTargetExtras: [null, { action: null, effects: [EFFECTS.Taunt] }],
+      animationMs: 1200
+    },
+    animation: 'Throw Rock_2x2_4frames',
+    animationSecondary: 'Elixir_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  demoralizingBlow: {
+    id: 'demoralizingBlow',
+    name: 'Demoralizing Blow',
+    description: 'Targets the enemy with the most positive effects, dealing 4 Attack Power and removing the top positive effect. Casts at -1 priority.',
+    castPriority: -1,
+    spec: {
+      targets: [{ type: 'mostBuffs', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 4 },
+      post: { removeTopPositiveEffect: true },
+      animationMs: 1200
+    },
+    animation: 'Humble_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  hardFall: {
+    id: 'hardFall', name: 'Hard Fall',
+    description: "Targets Giant and applies Hard Fall: upon the effected Hero's death, deals 3 Attack Power (ignores Armor) to all enemies with 2 or less Speed.",
+    spec: { targets: [{ type: 'self' }], effects: [EFFECTS.HardFall], animationMs: 1200 },
+    animation: 'Elixir_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+
   // Angel
   lightPillar: {
     id: 'lightPillar', name: 'Light Pillar',
@@ -554,6 +952,51 @@ export const SPELLS = {
     description: 'Targets the caster and applies Prayer: heals all allies except the effected Hero by 1 each time the effected Hero is damaged.',
     spec: { targets: [{ type: 'self' }], effects: [EFFECTS.Prayer], animationMs: 1200 },
     animation: 'Prayer_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+
+  // Nephilim
+  dualityStrike: {
+    id: 'dualityStrike', name: 'Duality Strike',
+    description: 'Targets the enemy with the highest Health dealing 6 Attack Power and targets the caster for a Heal Power equal to the damage dealt.',
+    spec: {
+      targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 6 },
+      post: { healCasterEqualToDamage: true },
+      animationMs: 1200
+    },
+    animation: 'Duality Strike_2x2_4frames',
+    animationSecondary: 'Healing_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  lifeForALife: {
+    id: 'lifeForALife', name: 'Life for a Life',
+    description: '(1) Targets the enemy with the lowest Health and deals 4 Attack Power. (2) If the enemy\'s Health is brought to 0, target the ally with the least Health with a Heal Power of 4.',
+    spec: {
+      targets: [{ type: 'lowestHealth', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 4 },
+      post: {
+        conditionalSecondaryOnWouldKill: {
+          secondarySpec: { targets: [{ type: 'lowestHealth', side: 'ally', max: 1 }], formula: { type: 'healPower', value: 4 } }
+        }
+      },
+      animationMs: 1200
+    },
+    animation: 'Life for a Life_2x2_4frames',
+    animationSecondary: 'Healing_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  lightAndDark: {
+    id: 'lightAndDark', name: 'Light and Dark',
+    description: 'Targets the ally column for a heal of 3 and targets the enemy column for an Attack Power of 5.',
+    spec: {
+      targets: [{ type: 'column', side: 'enemy' }, { type: 'column', side: 'ally' }],
+      formula: { type: 'attackPower', value: 5 },
+      post: { secondaryHeal: { amount: 3, side: 'ally', target: 'column' } },
+      animationMs: 1200
+    },
+    animation: 'Dark Pillar_2x2_4frames',
+    animationSecondary: 'Healing_2x2_4frames',
     animationPlacement: 'inplace'
   },
 
@@ -632,7 +1075,7 @@ export const SPELLS = {
     id: 'justice', name: 'Justice',
     description: 'Targets the enemy with the highest Energy, dealing 6 Attack Power.',
     spec: { targets: [{ type: 'highestEnergy', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6 }, animationMs: 1200 },
-    animation: 'Hammer_2x2_4frames',
+    animation: 'Justice_2x2_4frames',
     animationPlacement: 'travel'
   },
   armorUp: {
@@ -646,7 +1089,7 @@ export const SPELLS = {
     id: 'humble', name: 'Humble',
     description: 'Targets the enemy with the most positive effects, dealing 4 Attack Power plus 2× the number of positive effects.',
     spec: { targets: [{ type: 'mostBuffs', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4, addTargetEffectsMultiplier: 2 }, animationMs: 1200 },
-    animation: 'Humiliation_2x2_4frames',
+    animation: 'Humble_2x2_4frames',
     animationPlacement: 'travel'
   },
   ironForge: {
@@ -745,6 +1188,34 @@ export const SPELLS = {
     animationPlacement: 'travel'
   },
 
+  poison: {
+    id: 'poison', name: 'Poison',
+    description: 'Targets the enemy with the least effects, and applies Poison which deals 2 damage at the start of each round.',
+    spec: { targets: [{ type: 'leastEffects', side: 'enemy', max: 1 }], effects: [EFFECTS.Poison], animationMs: 1200 },
+    animation: 'Poison_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
+  venomStrike: {
+    id: 'venomStrike', name: 'Venom Strike',
+    description: 'Targets the enemy with the highest Health, dealing 4 Attack Power and applying Poison.',
+    spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4 }, effects: [EFFECTS.Poison], animationMs: 1200 },
+    animation: 'Venom Strike_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
+  poisonExplosion: {
+    id: 'poisonExplosion', name: 'Poison Explosion',
+    description: 'Targets the enemy with the most Poison effects, dealing 3 Attack Power plus 3 Attack Power for each Poison effect on the target.',
+    spec: {
+      targets: [{ type: 'mostPoisonEffects', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 3, addTargetEffectNameCount: 'Poison', addTargetEffectCountMultiplier: 3 },
+      animationMs: 1200
+    },
+    animation: 'Poison Explosion_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
   // Apothecary spells
   vitalityPotion: {
     id: 'vitalityPotion', name: 'Vitality Potion',
@@ -759,6 +1230,31 @@ export const SPELLS = {
     spec: { targets: [{ type: 'mostDebuffs', side: 'ally', max: 1 }], post: { removeTopDebuff: true, deltaEnergy: 2 }, animationMs: 1200 },
     animation: 'Brimberry Leaves_2x2_4frames',
     animationPlacement: 'travel'
+  },
+
+  // Inn Keeper spells
+  giveAQuest: {
+    id: 'giveAQuest', name: 'Give a Quest',
+    description: 'Targets the closest ally and applies Give A Quest. If they get a killing blow, they heal 2 and gain Iron Forge.',
+    spec: { targets: [{ type: 'nearest', side: 'ally', max: 1, excludeSelf: true }], effects: [EFFECTS.GiveAQuest], animationMs: 1200 },
+    animation: 'Elixir_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+
+  offerARoom: {
+    id: 'offerARoom', name: 'Offer a Room',
+    description: 'Targets the ally with the most missing Health and heals for 5 (+spellPower).',
+    spec: { targets: [{ type: 'mostMissingHealth', side: 'ally', max: 1 }], formula: { type: 'healPower', value: 5 }, animationMs: 1200 },
+    animation: 'Healing_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+
+  herbs: {
+    id: 'herbs', name: 'Herbs',
+    description: 'Targets the entire ally board and removes the top negative effect.',
+    spec: { targets: [{ type: 'board', side: 'ally' }], post: { removeTopDebuff: true }, animationMs: 1200 },
+    animation: 'Herbs_2x2_4frames',
+    animationPlacement: 'inplace'
   },
 
   assassinate: {
@@ -923,6 +1419,74 @@ export const SPELLS = {
     animationPlacement: 'travel'
   },
 
+  // Ninja spells
+  shuriken: {
+    id: 'shuriken', name: 'Shuriken',
+    description: 'Targets the furthest enemy, dealing 4 Attack Power.',
+    spec: { targets: [{ type: 'furthest', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4 }, animationMs: 1200 },
+    animation: 'Shuriken_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
+  smokeBomb: {
+    id: 'smokeBomb', name: 'Smoke Bomb',
+    description: 'Swaps Ninja with the first living Hero in reserve (top to bottom). The swapped-in Hero gains 3 Energy. If no living reserve Hero exists, this spell misses.',
+    spec: {
+      targets: [{ type: 'self' }],
+      post: { swapWithReserve: { gainEnergy: 3 } },
+      animationMs: 1200
+    },
+    animation: 'Smoke Bomb_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+
+  swiftness: {
+    id: 'swiftness', name: 'Swiftness',
+    description: 'Targets the enemy with the highest Health, dealing Attack Power equal to 18 divided by the target’s Speed, rounded up.',
+    spec: {
+      targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 18, ignoreSpellPower: true, divideByTargetSpeed: true, roundUp: true },
+      animationMs: 1200
+    },
+    animation: 'Swiftness_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
+  // Nymph spells
+  spores: {
+    id: 'spores', name: 'Spores',
+    description: 'Targets the enemy with the least effects and applies Spores.',
+    spec: { targets: [{ type: 'leastEffects', side: 'enemy', max: 1 }], effects: [EFFECTS.Spores], animationMs: 1200 },
+    animation: 'Spores_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
+  naturesWrath: {
+    id: 'naturesWrath', name: "Nature's Wrath",
+    description: 'Targets the enemy with the most positive effects, removes the topmost positive effect, and deals 3 damage.',
+    spec: {
+      targets: [{ type: 'mostBuffs', side: 'enemy', max: 1 }],
+      formula: { type: 'damage', value: 3 },
+      post: { removeTopPositiveEffect: true },
+      animationMs: 1200
+    },
+    animation: 'Natures Wrath_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
+  fruitOfTheVine: {
+    id: 'fruitOfTheVine', name: 'Fruit Of The Vine',
+    description: 'Targets the ally with the lowest Health (cannot target caster) with a Heal Power of 6. Also targets the caster dealing 1 Attack Power.',
+    spec: {
+      targets: [{ type: 'lowestHealth', side: 'ally', max: 1, excludeSelf: true }],
+      formula: { type: 'healPower', value: 6 },
+      post: { damageCaster: { amount: 1, asAttackPower: true } },
+      animationMs: 1200
+    },
+    animation: 'Fruit Of The Vine_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
   // Geisha spells
   fan: {
     id: 'fan', name: 'Fan',
@@ -983,6 +1547,13 @@ export const SPELLS = {
     animation: 'Healing_2x2_4frames', animationPlacement: 'inplace'
   },
   // Cleric spells
+  holyFervor: {
+    id: 'holyFervor', name: 'Holy Fervor',
+    description: 'Targets the ally with the highest Energy with a Heal Power of 2 and applies Quickness (+1 Speed, +1 Spell Power).',
+    spec: { targets: [{ type: 'highestEnergy', side: 'ally', max: 1 }], formula: { type: 'healPower', value: 2 }, effects: [EFFECTS.Quickness], animationMs: 1200 },
+    animation: 'Healing_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
   purify: {
     id: 'purify', name: 'Purify',
     description: 'Targets the enemy with the most positive effects, dealing 5 Attack Power and removing the top positive effect.',
@@ -1001,6 +1572,12 @@ export const SPELLS = {
     id: 'clericHeal', name: 'Heal',
     description: 'Targets the two allies with the lowest Health, with a Heal Power of 5 (+spellPower).',
     spec: { targets: [{ type: 'lowestHealth', side: 'ally', max: 2 }], formula: { type: 'healPower', value: 5 }, animationMs: 1200 },
+    animation: 'Healing_2x2_4frames', animationPlacement: 'inplace'
+  },
+  massHeal: {
+    id: 'massHeal', name: 'Mass Heal',
+    description: 'Targets the entire ally board with a Heal Power of 2 (+spellPower).',
+    spec: { targets: [{ type: 'board', side: 'ally' }], formula: { type: 'healPower', value: 2 }, animationMs: 1200 },
     animation: 'Healing_2x2_4frames', animationPlacement: 'inplace'
   },
   // Dragonling spells (each heals the caster for 2 and applies Dragon Year to self)
@@ -1071,7 +1648,7 @@ export const SPELLS = {
     description: 'Targets the enemy with the lowest Health, dealing Attack Power equal to 2 + the target\'s missing Health.',
     spec: { 
       targets: [{ type: 'lowestHealth', side: 'enemy', max: 1 }], 
-      formula: { type: 'attackPower', value: 2, addTargetMissingHealth: true }, 
+      formula: { type: 'attackPower', value: 2, addTargetMissingHealth: true, maxValue: 25 }, 
       animationMs: 1200 
     },
     animation: 'Excecute_2x2_4frames',
@@ -1087,7 +1664,7 @@ export const SPELLS = {
       effects: [EFFECTS.Bleed], 
       animationMs: 1200 
     },
-    animation: 'Guillotine',
+    animation: 'Guillotine_2x2_4frames',
     animationPlacement: 'travel'
   },
 
@@ -1101,6 +1678,69 @@ export const SPELLS = {
     },
     animation: 'Shackle_2x2_4frames',
     animationPlacement: 'inplace'
+  },
+
+  // Pyro spells
+  wildFire: {
+    id: 'wildFire', name: 'Wildfire',
+    description: 'Targets the enemy with the least effects and applies Wildfire: at the beginning of each round, it first deals 1 damage to that hero, then applies Wildfire to adjacent heroes.',
+    spec: {
+      targets: [{ type: 'leastEffects', side: 'enemy', max: 1 }],
+      effects: [EFFECTS.Wildfire],
+      animationMs: 1200
+    },
+    animation: 'Wild Fire_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
+  conflagration: {
+    id: 'conflagration', name: 'Conflagration',
+    description: 'Targets the entire enemy board, dealing 2 Attack Power.',
+    spec: {
+      targets: [{ type: 'board', side: 'enemy' }],
+      formula: { type: 'attackPower', value: 2 },
+      animationMs: 1200
+    },
+    animation: 'Conflagration_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+
+  flameThrower: {
+    id: 'flameThrower', name: 'Flame Thrower',
+    description: 'Column attack dealing 4 Attack Power and applies Burn (1 damage at the beginning of each round).',
+    spec: {
+      targets: [{ type: 'column', side: 'enemy' }],
+      formula: { type: 'attackPower', value: 4 },
+      effects: [EFFECTS.Burn],
+      animationMs: 1200
+    },
+    animation: 'Flame Thrower_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
+  // Prisoner spells
+  releaseInmates: {
+    id: 'releaseInmates', name: 'Release Inmates',
+    description: 'Targets the backmost enemy row that has at least 1 Hero, dealing 4 Attack Power (ignores Armor).',
+    spec: { targets: [{ type: 'backmostRowWithHero', side: 'enemy' }], formula: { type: 'attackPower', value: 4, ignoreArmor: true }, animationMs: 1200 },
+    animation: 'Release The Inmates_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+
+  usurp: {
+    id: 'usurp', name: 'Usurp',
+    description: 'Targets the enemy with the highest Armor, dealing 6 Attack Power (ignores Armor).',
+    spec: { targets: [{ type: 'highestArmor', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6, ignoreArmor: true }, animationMs: 1200 },
+    animation: 'Usurrp_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
+  chainWhip: {
+    id: 'chainWhip', name: 'Chain Whip',
+    description: 'Projectile dealing 6 Attack Power (ignores Armor) and moves the targeted Hero to the frontmost available row.',
+    spec: { targets: [{ type: 'projectile', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6, ignoreArmor: true }, post: { moveToFrontmostAvailable: true }, animationMs: 1200 },
+    animation: 'Chain Whipe_2x2_4frames',
+    animationPlacement: 'travel'
   },
 
   // Fallen Angel spells

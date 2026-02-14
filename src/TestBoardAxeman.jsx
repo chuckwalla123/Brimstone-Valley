@@ -6,6 +6,7 @@ import { SPELLS } from "./spells.js";
 import { makeEmptyMain, makeReserve } from "../shared/gameLogic.js";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
+const draftableHeroes = HEROES.filter(hero => hero && hero.draftable !== false);
 
 export default function TestBoardAxeman() {
   // Build boards for testing: Two Axemen vs Two Axemen
@@ -74,7 +75,7 @@ export default function TestBoardAxeman() {
       p1Reserve,
       p2Main,
       p2Reserve,
-      availableHeroes: HEROES,
+      availableHeroes: draftableHeroes,
       bans: [],
       step: 0,
       phase: 'battle',

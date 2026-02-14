@@ -160,12 +160,12 @@ export const makeMovementDecision = async (p2Board, p2ReserveBoard, movement, p1
 
   if (!isModelLoaded || !model) {
     // Fallback to noop if model not loaded
-    console.log('[NeuralAI] Model not loaded, returning noop');
+    
     return getNoopMove();
   }
   
   if (!movement || !movement.movementPhase) {
-    console.log('[NeuralAI] No movement phase, returning noop');
+    
     return getNoopMove();
   }
 
@@ -173,7 +173,7 @@ export const makeMovementDecision = async (p2Board, p2ReserveBoard, movement, p1
   const currentMover = phase.sequence[phase.index];
   
   if (currentMover !== 'p2') {
-    console.log('[NeuralAI] Not P2 turn, returning noop');
+    
     return getNoopMove();
   }
   
@@ -199,7 +199,7 @@ export const makeMovementDecision = async (p2Board, p2ReserveBoard, movement, p1
   
   // Convert move to expected format
   if (!move || move.type === 'noop') {
-    console.log('[NeuralAI] Neural net chose noop');
+    
     return getNoopMove();
   }
   
@@ -212,7 +212,7 @@ export const makeMovementDecision = async (p2Board, p2ReserveBoard, movement, p1
     : `p2Reserve:${move.to - MAIN_SLOTS}`;
   
   const result = { sourceId, destinationId };
-  console.log('[NeuralAI] Returning move:', result.sourceId, '->', result.destinationId);
+  
   return result;
 };
 

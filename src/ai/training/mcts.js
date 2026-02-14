@@ -196,7 +196,8 @@ async function applyMoveAndSimulate(state, move, isP2Turn) {
     p1Picks: state.p1Picks ? [...state.p1Picks] : [],
     p2Picks: state.p2Picks ? [...state.p2Picks] : [],
     battleRoundMoveIndex: state.battleRoundMoveIndex || 0,
-    priorityPlayer: state.priorityPlayer || 'player1'
+    priorityPlayer: state.priorityPlayer || 'player1',
+    lastCastActionBySide: state.lastCastActionBySide || null
   };
   
   // Handle ban action
@@ -355,7 +356,8 @@ async function applyMoveAndSimulate(state, move, isP2Turn) {
         p2Reserve: result.p2Reserve || newState.p2Reserve,
         phase: 'battle',
         battleRoundMoveIndex: 0,
-        priorityPlayer: result.priorityPlayer || newState.priorityPlayer
+        priorityPlayer: result.priorityPlayer || newState.priorityPlayer,
+        lastCastActionBySide: result.lastCastActionBySide || newState.lastCastActionBySide || null
       };
     } catch (error) {
       console.error('[MCTS] Battle simulation error:', error);

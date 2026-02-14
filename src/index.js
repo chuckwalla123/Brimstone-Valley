@@ -8,7 +8,7 @@ const board1Div = document.getElementById('board1');
 const board2Div = document.getElementById('board2');
 const nextPhaseBtn = document.getElementById('next-phase');
 
-let heroPool = [...HEROES];
+let heroPool = HEROES.filter(hero => hero && hero.draftable !== false);
 let boards = {
   player1: Array(9).fill(null),
   player2: Array(9).fill(null)

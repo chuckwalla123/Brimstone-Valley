@@ -31,7 +31,8 @@ function applyMove(state, move, isP2Turn) {
     p1Bans: state.p1Bans || 0,
     p2Bans: state.p2Bans || 0,
     battleRoundMoveIndex: state.battleRoundMoveIndex || 0,
-    priorityPlayer: state.priorityPlayer || 'player1'
+    priorityPlayer: state.priorityPlayer || 'player1',
+    lastCastActionBySide: state.lastCastActionBySide || null
   };
   
   // Handle ban action during draft phase
@@ -139,7 +140,7 @@ function applyMove(state, move, isP2Turn) {
     
     const slotType = slotIndex < 9 ? 'main' : 'reserve';
     const slotPos = slotType === 'main' ? slotIndex : slotIndex - 9;
-    console.log(`[Draft Pick] ${isP2Turn ? 'P2' : 'P1'} ${heroWithDefaults.name || heroWithDefaults.id} -> ${slotType}:${slotPos}`);
+  
 
     // Check if draft is complete (28 turns: 14 bans + 14 picks)
     if (newState.draftTurn >= newState.maxDraftTurns) {
@@ -157,7 +158,7 @@ function applyMove(state, move, isP2Turn) {
   if (move.type === 'noop') {
     const moveIdx = (newState.battleRoundMoveIndex ?? 0) + 1;
     const prio = newState.priorityPlayer || (isP2Turn ? 'player2' : 'player1');
-    console.log(`[Movement] ${isP2Turn ? 'P2' : 'P1'} noop (prio:${prio}, move ${moveIdx}/4)`);
+  
     return newState;
   }
   
@@ -178,7 +179,7 @@ function applyMove(state, move, isP2Turn) {
   
   const moveIdx = (newState.battleRoundMoveIndex ?? 0) + 1;
   const prio = newState.priorityPlayer || (isP2Turn ? 'player2' : 'player1');
-  console.log(`[Movement] ${isP2Turn ? 'P2' : 'P1'} ${move.type} ${fromIndex}->${toIndex} (prio:${prio}, move ${moveIdx}/4)`);
+  
   return newState;
 }
 
@@ -226,7 +227,7 @@ export async function playSelfPlayGame(model, draftSimulations = 100, battleSimu
   }
   
   // Initialize draft state
-  const availableHeroes = [...HEROES].map(h => h.id);
+  const availableHeroes = HEROES.filter(h => h.draftable !== false).map(h => h.id);
   let state = {
     p1Board: new Array(9).fill(null),
     p1Reserve: new Array(2).fill(null),
@@ -320,11 +321,12 @@ export async function playSelfPlayGame(model, draftSimulations = 100, battleSimu
           phase: 'battle',
           round1Executed: true,
           battleRoundMoveIndex: 0,
-          priorityPlayer
+          priorityPlayer,
+          lastCastActionBySide: result.lastCastActionBySide || state.lastCastActionBySide || null
         };
         const p1Alive = [...state.p1Board, ...state.p1Reserve].filter(t => t && t.hero && !t._dead).length;
         const p2Alive = [...state.p2Board, ...state.p2Reserve].filter(t => t && t.hero && !t._dead).length;
-        console.log(`[Round Executed] Round 1 resolved. Alive P1=${p1Alive}, P2=${p2Alive}, priority=${priorityPlayer}`);
+        
       } catch (error) {
         console.error('[Self-Play] Round 1 execution error:', error);
       }
@@ -385,11 +387,12 @@ export async function playSelfPlayGame(model, draftSimulations = 100, battleSimu
             phase: 'battle',
             round1Executed: true,
             battleRoundMoveIndex: 0,
-            priorityPlayer: priorityPlayer
+            priorityPlayer: priorityPlayer,
+            lastCastActionBySide: result.lastCastActionBySide || state.lastCastActionBySide || null
           };
           const p1Alive = [...state.p1Board, ...state.p1Reserve].filter(t => t && t.hero && !t._dead).length;
           const p2Alive = [...state.p2Board, ...state.p2Reserve].filter(t => t && t.hero && !t._dead).length;
-          console.log(`[Round Executed] Round ${Math.floor((turnNumber - 29) / 4) + 2} resolved. Alive P1=${p1Alive}, P2=${p2Alive}, priority=${priorityPlayer}`);
+          
         } catch (error) {
           console.error('[Self-Play] Battle simulation error:', error);
         }
@@ -427,7 +430,7 @@ export async function generateSelfPlayBatch(model, numGames = 10, draftSimulatio
   const allExamples = [];
   
   for (let i = 0; i < numGames; i++) {
-    console.log(`[Game ${i + 1}/${numGames}]`);
+    
     
     try {
       const examples = await playSelfPlayGame(model, draftSimulations, battleSimulations, temperature);

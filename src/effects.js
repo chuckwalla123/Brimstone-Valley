@@ -12,19 +12,28 @@
 
 export const EFFECTS = {
   Poison: {
-    name: 'Poison', image: '/images/effects/Poison.png', kind: 'debuff', duration: 'permanent', pulse: { type: 'damage', value: 2 }
+    name: 'Poison', image: '/images/effects/Poison.png', kind: 'debuff', duration: 'permanent', pulse: { type: 'damage', value: 2 },
+    description: 'Deals 2 damage at the beginning of each round.'
   },
   CloudedPoison: {
-    name: 'Clouded Poison', kind: 'debuff', duration: 2, pulse: { type: 'damage', value: 2 }
+    name: 'Clouded Poison', kind: 'debuff', duration: 2, pulse: { type: 'damage', value: 2 },
+    description: 'Deals 2 damage at the beginning of each round for 2 rounds.'
   },
   Marked: {
     name: 'Marked', image: '/images/effects/Mark.png', kind: 'debuff', duration: 'permanent',
     description: 'A debuff that makes this hero vulnerable to Assassin abilities.'
   },
   WildfireTurret: {
-    name: 'Wildfire Turret', kind: 'neutral', duration: 3, trigger: 'onRoundStart', spellSpec: { targets: [{ type: 'projectile', side: 'enemy' }], formula: { type: 'attackPower', value: 3 } }
+    name: 'Wildfire Turret', kind: 'neutral', duration: 3, trigger: 'onRoundStart', spellSpec: { targets: [{ type: 'projectile', side: 'enemy' }], formula: { type: 'attackPower', value: 3 } },
+    description: 'At the start of each round, fires a projectile for 3 damage at a random enemy for 3 rounds.'
   },
-  Burn: { name: 'Burn', image: '/images/effects/Burn.png', kind: 'debuff', duration: 'permanent', pulse: { type: 'damage', value: 1 } },
+  Burn: { name: 'Burn', image: '/images/effects/Burn.png', kind: 'debuff', duration: 'permanent', pulse: { type: 'damage', value: 1 }, description: 'Deals 1 damage at the beginning of each round.' },
+  Wildfire: {
+    name: 'Wildfire', image: '/images/effects/Wild Fire.png', kind: 'debuff', duration: 'permanent',
+    pulse: { type: 'damage', value: 1 },
+    spreadEffectToAdjacentOnPulse: { effect: 'Wildfire' },
+    description: 'At the beginning of each round, first deals 1 damage to this hero, then applies Wildfire to adjacent heroes.'
+  },
   HeatingUp: {
     name: 'Heating Up',
     image: '/images/effects/Heating Up.png',
@@ -51,14 +60,12 @@ export const EFFECTS = {
     pulse: { type: 'damage', value: 1 },
     description: 'Reduces Armor by 1 and deals 1 damage at the beginning of each round.'
   },
-  Slowed: { name: 'Slowed', image: '/images/effects/Slowed.png', kind: 'debuff', duration: 'permanent', modifiers: { speed: -1 } },
-  Shielded: { name: 'Shielded', kind: 'buff', duration: 2, modifiers: { armor: 3 } },
-  // Dragon Scales: passive forcing Armor to 0 and Speed to 1 while active.
+  Slowed: { name: 'Slowed', image: '/images/effects/Slowed.png', kind: 'debuff', duration: 'permanent', modifiers: { speed: -1 }, description: 'Reduces Speed by 1.' },
+  Shielded: { name: 'Shielded', kind: 'buff', duration: 2, modifiers: { armor: 3 }, description: 'Grants +3 Armor for 2 rounds.' },
+  // Dragon Scales: passive that allows Armor/Speed to scale with augments.
   DragonScales: {
     name: 'Dragon Scales', kind: 'passive', duration: 'permanent',
-    // `force` is interpreted by `recomputeModifiers` to override computed stats.
-    force: { armor: 0, speed: 1 },
-    description: "Passive: Dragon's Armor is always 0 and Speed is always 1."
+    description: "Passive: Dragon's Armor and Speed can scale with augments."
   },
   // Dragon Year: applied to caster on spell cast by Dragonling via spell post hook.
   // Increases Spell Power by 2 and Armor by 1 for a short duration.
@@ -67,27 +74,82 @@ export const EFFECTS = {
     modifiers: { spellPower: 2, armor: 1 },
     description: 'Permanent: grants +2 Spell Power and +1 Armor.'
   },
-  BulwarkAura: { name: 'Bulwark Aura', kind: 'buff', duration: 2, modifiers: { armor: 1, speed: 1 } },
-  Haste: { name: 'Haste', kind: 'buff', duration: 2, modifiers: { speed: 2 } },
-  BlessedRegen: { name: 'Blessed Regen', kind: 'buff', duration: 2, pulse: { type: 'heal', value: 1 } },
-  Regen: { name: 'Regen', image: '/images/effects/Regen.png', kind: 'buff', duration: 10, pulse: { type: 'heal', value: 1 } },
-  Dexterity: { name: 'Dexterity', image: '/images/effects/Dexterity.png', kind: 'buff', duration: 'permanent', modifiers: { armor: 1, speed: 1 } },
-  WatcherPrayer: { name: 'Watcher Prayer', kind: 'buff', duration: 'permanent', onDeath: { type: 'healAlliesExceptSelf', value: 3 } },
-  VengefulWards: { name: 'Vengeful Wards', kind: 'neutral', duration: 3, onTargeted: { type: 'damage', value: 2 } },
+  BulwarkAura: { name: 'Bulwark Aura', kind: 'buff', duration: 2, modifiers: { armor: 1, speed: 1 }, description: 'Grants +1 Armor and +1 Speed for 2 rounds.' },
+  Haste: { name: 'Haste', kind: 'buff', duration: 2, modifiers: { speed: 2 }, description: 'Grants +2 Speed for 2 rounds.' },
+  Quickness: { name: 'Quickness', image: '/images/effects/Quickness.png', kind: 'buff', duration: 'permanent', modifiers: { speed: 1, spellPower: 1 }, description: 'Increases Speed and Spell Power by 1.' },
+  BlessedRegen: { name: 'Blessed Regen', kind: 'buff', duration: 2, pulse: { type: 'heal', value: 1 }, description: 'Heals 1 at the beginning of each round for 2 rounds.' },
+  Regen: { name: 'Regen', image: '/images/effects/Regen.png', kind: 'buff', duration: 10, pulse: { type: 'heal', value: 1 }, description: 'Heals 1 at the beginning of each round for 10 rounds.' },
+  Spores: {
+    name: 'Spores', image: '/images/effects/Spores.png', kind: 'debuff', duration: 'permanent',
+    pulse: { type: 'damage', value: 1 },
+    healApplierOnPulse: { amount: 1 },
+    description: 'Deals 1 damage at the beginning of each round and heals the applier for 1.'
+  },
+  ProtectiveGrowth: {
+    name: 'Protective Growth', image: '/images/effects/Protective Growth.png', kind: 'buff', duration: 'permanent',
+    forceMultiTargetToSelf: true,
+    description: 'Enemy multi-target spells are redirected to this hero.'
+  },
+  Dexterity: { name: 'Dexterity', image: '/images/effects/Dexterity.png', kind: 'buff', duration: 'permanent', modifiers: { armor: 1, speed: 1 }, description: 'Permanently grants +1 Armor and +1 Speed.' },
+  WatcherPrayer: { name: 'Watcher Prayer', kind: 'buff', duration: 'permanent', onDeath: { type: 'healAlliesExceptSelf', value: 3 }, description: 'On death, heals all allies except self for 3.' },
+  VengefulWards: { name: 'Vengeful Wards', kind: 'neutral', duration: 3, onTargeted: { type: 'damage', value: 2 }, description: 'When targeted, deal 2 damage back for 3 rounds.' },
   Bleed: { name: 'Bleed', image: '/images/effects/bleed.png', kind: 'debuff', duration: 'permanent', pulse: { type: 'damage', value: 1 }, description: 'Deals 1 Damage at the beginning of each round.' },
-  Leech: { name: 'Leech', image: '/images/effects/Leech.png', kind: 'debuff', duration: 'permanent', pulse: { type: 'damage', value: 3 } },
-  Elixir: { name: 'Elixir', image: '/images/effects/Elixir.png', kind: 'buff', duration: 'permanent', modifiers: { speed: 1, armor: 1, spellPower: 1 } },
+  Leech: { name: 'Leech', image: '/images/effects/Leech.png', kind: 'debuff', duration: 'permanent', pulse: { type: 'damage', value: 3 }, description: 'Deals 3 damage at the beginning of each round.' },
+  Elixir: { name: 'Elixir', image: '/images/effects/Elixir.png', kind: 'buff', duration: 'permanent', modifiers: { speed: 1, armor: 1, spellPower: 1 }, description: 'Permanently grants +1 Speed, +1 Armor, and +1 Spell Power.' },
   // Lie In Wait: grants +2 Spell Power and prevents single-target spells from targeting the affected hero for 5 rounds
   LieInWait: { name: 'Lie In Wait', image: '/images/effects/Lie in Wait.png', kind: 'buff', duration: 5, modifiers: { spellPower: 2 }, preventSingleTarget: true, description: 'Grants +2 Spell Power and makes the affected hero untargetable by single-target spells for 5 rounds.' },
-  IronForge: { name: 'Iron Forge', image: '/images/effects/Iron Forge.png', kind: 'buff', duration: 'permanent', modifiers: { armor: 1, spellPower: 1 } },
-  SentryPyre: { name: 'Sentry Pyre', kind: 'neutral', duration: 4, trigger: 'onRoundStart', spellSpec: { targets: [{ type: 'projectile', side: 'enemy' }], formula: { type: 'attackPower', value: 2 } } },
-  ScavengedInsight: { name: 'Scavenged Insight', kind: 'buff', duration: 2, modifiers: { spellPower: 1 } },
-  ExplosiveTrap: { name: 'Explosive Trap', kind: 'neutral', duration: 3, trigger: 'onRoundStart', spellSpec: { targets: [{ type: 'projectile', side: 'enemy' }], formula: { type: 'attackPower', value: 3 } } },
-  LesserWard: { name: 'Lesser Ward', kind: 'buff', duration: 1, modifiers: { armor: 2 } }
+  LieInWaitLevel5: { name: 'Lie In Wait', image: '/images/effects/Lie in Wait.png', kind: 'buff', duration: 1, modifiers: { spellPower: 2 }, preventSingleTarget: true, description: 'Grants +2 Spell Power and makes the affected hero untargetable by single-target spells for 1 round.' },
+  // Taunt: forces single-target enemy spells to target this hero
+  Taunt: { name: 'Taunt', image: '/images/effects/Taunt.png', kind: 'buff', duration: 'permanent', taunt: true, description: 'Forces single-target enemy spells to target this Hero.' },
+  Defend: {
+    name: 'Defend',
+    image: '/images/effects/Defend.png',
+    kind: 'buff',
+    duration: 'permanent',
+    modifiers: { armor: 1 },
+    blocksProjectileAndColumn: true,
+    description: 'Increases Armor by 1 and nullifies projectile and column attacks that would hit this hero.'
+  },
+  // Subjugation: single-target spells cast by this hero always target lowest Armor
+  Subjugation: { name: 'Subjugation', image: '/images/effects/Subjugation.png', kind: 'buff', duration: 'permanent', forceSingleTargetLowestArmor: true, description: 'Single-target spells cast by this hero always target the lowest Armor.' },
+  IronForge: { name: 'Iron Forge', image: '/images/effects/Iron Forge.png', kind: 'buff', duration: 'permanent', modifiers: { armor: 1, spellPower: 1 }, description: 'Permanently grants +1 Armor and +1 Spell Power.' },
+  GiveAQuest: {
+    name: 'Give A Quest',
+    image: '/images/effects/Give A Quest.png',
+    kind: 'buff',
+    duration: 'permanent',
+    onKill: { heal: 2, applyEffect: 'IronForge' },
+    description: 'When this hero gets a killing blow, heal 2 and gain Iron Forge.'
+  },
+  SentryPyre: { name: 'Sentry Pyre', kind: 'neutral', duration: 4, trigger: 'onRoundStart', spellSpec: { targets: [{ type: 'projectile', side: 'enemy' }], formula: { type: 'attackPower', value: 2 } }, description: 'At the start of each round, fires a projectile for 2 damage at a random enemy for 4 rounds.' },
+  ScavengedInsight: { name: 'Scavenged Insight', kind: 'buff', duration: 2, modifiers: { spellPower: 1 }, description: 'Grants +1 Spell Power for 2 rounds.' },
+  ExplosiveTrap: { name: 'Explosive Trap', kind: 'neutral', duration: 3, trigger: 'onRoundStart', spellSpec: { targets: [{ type: 'projectile', side: 'enemy' }], formula: { type: 'attackPower', value: 3 } }, description: 'At the start of each round, fires a projectile for 3 damage at a random enemy for 3 rounds.' },
+  LesserWard: { name: 'Lesser Ward', kind: 'buff', duration: 1, modifiers: { armor: 2 }, description: 'Grants +2 Armor for 1 round.' }
   ,
   ArmorUp: { name: 'Armor Up', image: '/images/effects/Armor Up.png', kind: 'buff', duration: 'permanent', modifiers: { armor: 2 }, description: 'Increases Armor by 2.' }
   ,
-  Strength: { name: 'Strength',image: '/images/effects/Strength.png', kind: 'buff', duration: 'permanent', modifiers: { spellPower: 1 } },
+  ArmorDown: { name: 'Armor Down', image: '/images/effects/Armor Down.png', kind: 'debuff', duration: 'permanent', modifiers: { armor: -1 }, description: 'Reduces Armor by 1.' }
+  ,
+  Armor: { name: 'Armor', image: '/images/effects/Armor.png', kind: 'buff', duration: 'permanent', modifiers: { armor: 1 }, description: 'Increases Armor by 1.' }
+  ,
+  ArmorBearer: { name: 'Armor Bearer', image: '/images/effects/Armor Bearer.png', kind: 'buff', duration: 'permanent', modifiers: { armor: 3 }, description: 'Increases Armor by 3.' }
+  ,
+  Overencumbered: {
+    name: 'Overencumbered', kind: 'passive', duration: 'permanent',
+    maxArmor: 4,
+    description: "Passive: This hero's Armor cannot exceed 4."
+  }
+  ,
+  HardFall: {
+    name: 'Hard Fall',
+    image: '/images/effects/Hard Fall.png',
+    kind: 'buff',
+    duration: 'permanent',
+    onDeath: { type: 'damageEnemiesWithSpeedAtMost', value: 3, maxSpeed: 2, ignoreArmor: true, onlySelf: true },
+    description: 'On death, deal 3 damage (ignores Armor) to all enemies with Speed 2 or less.'
+  }
+  ,
+  Strength: { name: 'Strength',image: '/images/effects/Strength.png', kind: 'buff', duration: 'permanent', modifiers: { spellPower: 1 }, description: 'Permanently grants +1 Spell Power.' },
   Bounty: {
     name: 'Bounty', kind: 'passive', duration: 'permanent',
     description: 'Upon dealing a killing blow gain 2 Health and apply Strength (spellPower +1).'
@@ -109,10 +171,24 @@ export const EFFECTS = {
   },
   Frenzy: {
     name: 'Frenzy', kind: 'passive', duration: 'permanent',
-    description: 'Passive: Each time this hero takes damage, they gain +1 Energy (engine hook not implemented).' },
+    description: 'Passive: Each time this hero takes damage, they gain +1 Energy.' },
+  Lifesteal: {
+    name: 'Lifesteal', kind: 'passive', duration: 'permanent',
+    healPerDamagedEnemy: 1,
+    description: 'Passive: Each time this hero damages an enemy with a spell, heal 1 Health per enemy damaged.'
+  },
   UndyingRage: {
     name: 'Undying Rage', kind: 'passive', duration: 'permanent',
     description: 'Passive: The first instance of damage that would have killed this hero instead reduces them to 1 Health. One-time use.'
+  },
+  MudArmor: {
+    name: 'Mud Armor', image: '/images/effects/Mud Armor.png', kind: 'buff', duration: 'permanent',
+    modifiers: { armor: 3 },
+    description: 'Increases Armor by 3.'
+  },
+  Regeloop: {
+    name: 'Regeloop', kind: 'passive', duration: 'permanent',
+    description: 'Passive: Up to 3 times per game, lethal damage instead restores this hero to 4 Health and removes all buffs and debuffs.'
   }
 };
 
@@ -121,6 +197,13 @@ EFFECTS.Rejuvenate = {
   name: 'Rejuvenate', image: '/images/effects/Rejuvenate.png', kind: 'buff', duration: 10,
   pulse: { type: 'heal', value: 2 },
   description: 'Heals host for 2 at the start of each round for 10 rounds.'
+};
+
+EFFECTS.Reap = {
+  name: 'Reap', image: '/images/effects/Reap.png', kind: 'buff', duration: 'permanent',
+  executeAtOrBelowHealth: 2,
+  executeDamage: 999,
+  description: 'When an enemy is at 2 or less Health, deal 999 damage to that enemy.'
 };
 
 // Dark Knight: Treachery effect — deals damage equal to the target's Armor at round start.
@@ -132,21 +215,21 @@ EFFECTS.Treachery = {
 };
 
 // Prayer effect: when the effected hero is damaged, heal all allies except the effected hero.
-EFFECTS.Prayer = { name: 'Prayer', image: '/images/effects/Prayer.png', kind: 'buff', duration: 'permanent', onDamaged: { type: 'healAlliesExceptSelf', value: 1 } };
+EFFECTS.Prayer = { name: 'Prayer', image: '/images/effects/Prayer.png', kind: 'buff', duration: 'permanent', onDamaged: { type: 'healAlliesExceptSelf', value: 1 }, description: 'When damaged, heal all allies except self for 1.' };
 
 // Death Pact: when the effected hero is damaged by an enemy spell, return
 // equal damage to the attacking enemy (reflect). `onDamaged.value` uses
 // the special marker string 'equal' to indicate the reaction should mirror
 // the actual damage taken rather than a fixed numeric value.
-EFFECTS.DeathPact = { name: 'Death Pact', image: '/images/effects/Death Pact.png', kind: 'buff', duration: 'permanent', onDamaged: { type: 'damage', value: 'equal' } };
+EFFECTS.DeathPact = { name: 'Death Pact', image: '/images/effects/Death Pact.png', kind: 'buff', duration: 'permanent', onDamaged: { type: 'damage', value: 'equal' }, description: 'When damaged by an enemy spell, deal equal damage back to the attacker.' };
   
 // Curse: decreases Spell Power by 1 on the affected target
-EFFECTS.Curse = { name: 'Curse', image: '/images/effects/Curse.png', kind: 'debuff', duration: 'permanent', modifiers: { spellPower: -1 } };
-// Counter: retaliate when damaged by an enemy spell. Deals fixed damage to the attacker.
+EFFECTS.Curse = { name: 'Curse', image: '/images/effects/Curse.png', kind: 'debuff', duration: 'permanent', modifiers: { spellPower: -1 }, description: 'Reduces Spell Power by 1.' };
+// Counter: retaliate when targeted by an enemy spell. Deals fixed damage to the attacker.
 EFFECTS.Counter = {
   name: 'Counter', image: '/images/effects/Counter.png', kind: 'buff', duration: 'permanent',
-  onDamaged: { type: 'damage', value: 2 },
-  description: 'When the effected Hero is damaged by an enemy spell, deal 2 damage to that attacker.'
+  onTargeted: { type: 'damage', value: 2 },
+  description: 'When the effected Hero is targeted by an enemy spell, deal 2 damage to that attacker.'
 };
 
 // New effect: damages adjacent enemy tiles at the start of each round.

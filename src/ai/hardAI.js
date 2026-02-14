@@ -7,10 +7,11 @@
  * - Movement: Predict opponent moves, optimal positioning for multi-turn plans
  */
 
-// Placeholder - uses super easy AI logic for now
+// Placeholder - use easy AI movement for better positioning
 import * as superEasyAI from './superEasyAI.js';
+import * as easyAI from './easyAI.js';
 
 export const makeBanDecision = superEasyAI.makeBanDecision;
 export const makePickDecision = superEasyAI.makePickDecision;
-export const makeMovementDecision = superEasyAI.makeMovementDecision;
+export const makeMovementDecision = easyAI.makeMovementDecision;
 export const getThinkingDelay = () => 400; // Fastest thinking

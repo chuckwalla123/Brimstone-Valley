@@ -73,6 +73,7 @@ import { EFFECTS } from './effects.js';
  * Optional properties:
  *   - fixedPositional: true      // Bonuses locked at draft time
  *   - positionalModifiers: {}    // Row-specific stat bonuses
+ *   - leavesCorpse: false        // Minions can opt out of leaving a corpse on death
  * 
  * =============================================================================
  */
@@ -145,7 +146,7 @@ export const HEROES = [
     },
   },
   {
-    id: 'arcaneMage',
+    id: 'arcaneMageID',
     name: 'Arcane Mage',
     image: '/images/heroes/Arcane Mage Cropped.jpg',
     health: 8,
@@ -176,6 +177,23 @@ export const HEROES = [
     description: 'Angel: Slash [2] (front), Light Pillar [4] (middle), Prayer [3] (back).'
   },
 
+  // New hero: Nephilim (from provided card)
+  {
+    id: 'nephilimID',
+    name: 'Nephilim',
+    image: '/images/heroes/Nephilim Cropped.jpg',
+    health: 11,
+    armor: 1,
+    speed: 2,
+    energy: 0,
+    spells: {
+      front: { id: 'dualityStrike', cost: 3, casts: 3 },
+      middle: { id: 'lifeForALife', cost: 2, casts: 4 },
+      back: { id: 'lightAndDark', cost: 4, casts: 2 },
+    },
+    description: 'Nephilim: Duality Strike [3] hits highest Health for 6 and heals equal damage; Life for a Life [2] hits lowest Health for 4, healing lowest ally for 4 if it kills; Light and Dark [4] heals ally column for 3 and hits enemy column for 5.'
+  },
+
   // New hero: Paladin (from provided card)
   {
     id: 'paladinID',
@@ -191,6 +209,92 @@ export const HEROES = [
       back: { id: 'humble', cost: 3, casts: 2 },
     },
     description: 'Paladin: Justice [3] targets highest-energy enemy for 6 Attack Power; Armor Up [2] gives +2 Armor; Humble [3] deals 4 + 2×positive effects.'
+  },
+
+  // New hero: King (from provided card)
+  {
+    id: 'kingID',
+    name: 'King',
+    image: '/images/heroes/King Cropped.jpg',
+    health: 11,
+    armor: 3,
+    speed: 3,
+    energy: 0,
+    spells: {
+      front: { id: 'subjugation', cost: 3, casts: 2 },
+      middle: { id: 'benevolence', cost: 3, casts: 3 },
+      back: { id: 'superiority', cost: 4, casts: 3 },
+    },
+    description: 'King: Subjugation [3] applies a targeting override; Benevolence [3] grants +1 casts to the target’s row; Superiority [4] hits lowest Armor for 3 (or 6 if target has more Health).'
+  },
+
+  // New hero: Queen (from provided card)
+  {
+    id: 'queenID',
+    name: 'Queen',
+    image: '/images/heroes/Queen Cropped.jpg',
+    health: 9,
+    armor: 0,
+    speed: 4,
+    energy: 0,
+    spells: {
+      front: { id: 'corruptingTongue', cost: 4, casts: 3 },
+      middle: { id: 'tyranny', cost: 4, casts: 3 },
+      back: { id: 'queensWrath', cost: 4, casts: 3 },
+    },
+    description: 'Queen: Corrupting Tongue [4] hits the frontmost enemy row with heroes for 4 and applies Curse; Tyranny [4] hits enemy corner tiles for (2 + enemies hit); Queen’s Wrath [4] hits highest Health for 6 and applies Curse.'
+  },
+
+  {
+    id: 'reaperID',
+    name: 'Reaper',
+    image: '/images/heroes/Reaper Cropped.jpg',
+    health: 5,
+    armor: 2,
+    speed: 2,
+    energy: 0,
+    passives: [EFFECTS.Lifesteal],
+    spells: {
+      front: { id: 'reapersHarvest', cost: 2, casts: 2 },
+      middle: { id: 'reap', cost: 2, casts: 2 },
+      back: { id: 'cleave', cost: 2, casts: 2 },
+    },
+    description: 'Reaper: Reaper\'s Harvest [2] hits the backmost enemy row with heroes for 5; Reap [2] applies Reap (executes enemies at 2 or less Health); Cleave [2] hits the frontmost enemy row with heroes for 5. Passive: Lifesteal heals 1 per enemy damaged by Reaper.'
+  },
+
+  // New hero: Prince (from provided card)
+  {
+    id: 'princeID',
+    name: 'Prince',
+    image: '/images/heroes/Prince Cropped.jpg',
+    health: 11,
+    armor: 0,
+    speed: 3,
+    energy: 0,
+    passives: [EFFECTS.Overencumbered],
+    spells: {
+      front: { id: 'duel', cost: 3, casts: 5 },
+      middle: { id: 'armorBearer', cost: 2, casts: 2 },
+      back: { id: 'battleFormation', cost: 4, casts: 3 },
+    },
+    description: 'Prince: Duel [3] deals 7 to highest Health (fast targets retaliate for 2); Armor Bearer [2] grants +3 Armor; Battle Formation [4] hits enemy middle column then middle row for 5. Passive: Overencumbered (Armor cannot exceed 4).'
+  },
+
+  // New hero: Monk (from provided card)
+  {
+    id: 'monkID',
+    name: 'Monk',
+    image: '/images/heroes/Monk Cropped.jpg',
+    health: 10,
+    armor: 1,
+    speed: 2,
+    energy: 1,
+    spells: {
+      front: { id: 'deadlyFist', cost: 2, casts: 4 },
+      middle: { id: 'exorcism', cost: 2, casts: 4 },
+      back: { id: 'revive', cost: 5, casts: 1 },
+    },
+    description: 'Monk: Deadly Fist [2] hits the highest-health enemy for 8 with double Armor effectiveness; Exorcism [2] cleanses a debuff and damages its applier; Revive [5] restores a nearby corpse with 8 Heal Power.'
   },
 
   // New hero: Fire Mage (from provided card image)
@@ -225,6 +329,24 @@ export const HEROES = [
       back: { id: 'oops', cost: 4, casts: 2 },
     },
     description: 'Jester: copies the last enemy spell (front), slashes (middle) and has a chaotic "OOPS!!" back-row effect.'
+  },
+
+  // New hero: Iron Golem (from provided card image)
+  {
+    id: 'ironGolemID',
+    name: 'Iron Golem',
+    image: '/images/heroes/Iron Golem Cropped.jpg',
+    health: 5,
+    armor: 5,
+    speed: 2,
+    energy: 0,
+    monster: true,
+    spells: {
+      front: { id: 'ironHand', cost: 2, casts: 4 },
+      middle: { id: 'magnetize', cost: 2, casts: 2 },
+      back: { id: 'bodySlam', cost: 4, casts: 2 },
+    },
+    description: 'Iron Golem: armor-scaling attacks with a two-effect magnetize spell.'
   },
 
   // New hero: Ice Mage (from provided card)
@@ -279,6 +401,44 @@ export const HEROES = [
     description: 'Berserker: aggressive frontliner. Spells: Berserk [2] (front), Slash [2] (middle), Rage [3] (back). Passive: Undying Rage — the first instance of damage that would have killed Berserker instead takes Berserker to 1 health.'
   },
 
+  // New hero: Mud Golem
+  {
+    id: 'mudGolemID',
+    name: 'Mud Golem',
+    image: '/images/heroes/Mud Golem Cropped.jpg',
+    health: 4,
+    armor: 0,
+    speed: 2,
+    energy: 0,
+    monster: true,
+    passives: [EFFECTS.Regeloop],
+    spells: {
+      front: { id: 'mudSling', cost: 2, casts: 2 },
+      middle: { id: 'mudArmor', cost: 2, casts: 1 },
+      back: { id: 'quicksand', cost: 3, casts: 3 },
+    },
+    description: 'Mud Golem: Mud Sling [2] hits highest Energy and applies Slowed; Mud Armor [2] grants +3 Armor to the lowest-Armor ally (not self); Quicksand [3] deals 4 + target Speed. Passive: Regeloop triggers up to 3 times to restore to 4 HP and cleanse buffs/debuffs.'
+  },
+
+  // New hero: Nature Golem
+  {
+    id: 'natureGolemID',
+    name: 'Nature Golem',
+    image: '/images/heroes/Nature Golem Cropped.jpg',
+    health: 10,
+    armor: 2,
+    speed: 2,
+    energy: 0,
+    monster: true,
+    startingEffects: [EFFECTS.Regen],
+    spells: {
+      front: { id: 'entanglingRoots', cost: 2, casts: 4 },
+      middle: { id: 'naturesBlessing', cost: 2, casts: 3 },
+      back: { id: 'protectiveGrowth', cost: 2, casts: 2 },
+    },
+    description: 'Nature Golem: Entangling Roots [2] deals 4 and applies Spores if the target has 2+ Armor; Nature\'s Blessing [2] removes a debuff and, if removed, applies Regen; Protective Growth [2] redirects enemy multi-target spells. Passive: starts with Regen.'
+  },
+
   {
     id: 'bileCreatureID',
     name: 'Bile Creature',
@@ -294,6 +454,43 @@ export const HEROES = [
       back: { id: 'acidPool', cost: 4, casts: 2 },
     },
     description: 'Bile Creature: toxic monster that applies persistent damage-over-time effects. Acid [2] applies growing damage, Armor Melt [2] targets armored rows, Acid Pool [4] spreads Burn to all enemies.'
+  },
+
+  // New hero: Necromancer (from provided card)
+  {
+    id: 'necromancerID',
+    name: 'Necromancer',
+    image: '/images/heroes/Necromancer Cropped.jpg',
+    health: 7,
+    armor: 2,
+    speed: 3,
+    energy: 0,
+    spells: {
+      front: { id: 'corpseExplosion', cost: 3, casts: 3 },
+      middle: { id: 'raiseDead', cost: 2, casts: 5 },
+      back: { id: 'soulDrain', cost: 5, casts: 2 },
+    },
+    description: 'Necromancer: Corpse Explosion [3], Raise Dead [2], Soul Drain [5].'
+  },
+
+  // Special hero: Skeleton (non-draftable; used for summoning/necromancy content)
+  {
+    id: 'skeletonID',
+    name: 'Skeleton',
+    image: '/images/heroes/Skeleton Cropped.jpg',
+    health: 6,
+    armor: 0,
+    speed: 2,
+    energy: 0,
+    isMinion: true,
+    leavesCorpse: false,
+    draftable: false,
+    spells: {
+      front: { id: 'slash', cost: 2, casts: 5 },
+      middle: { id: 'slash', cost: 2, casts: 5 },
+      back: { id: 'slash', cost: 2, casts: 5 }
+    },
+    description: 'Skeleton: basic fighter with Slash in every row.'
   },
 
   {
@@ -327,6 +524,23 @@ export const HEROES = [
     },
   },
 
+  // New hero: Priest (from provided card)
+  {
+    id: 'priestID',
+    name: 'Priest',
+    image: '/images/heroes/Priest Cropped.jpg',
+    health: 8,
+    armor: 1,
+    speed: 3,
+    energy: 0,
+    spells: {
+      front: { id: 'holyFervor', cost: 3, casts: 2 },
+      middle: { id: 'cleanse', cost: 2, casts: 6 },
+      back: { id: 'massHeal', cost: 6, casts: 3 },
+    },
+    description: 'Priest: Holy Fervor [3] heals highest-energy ally for 2 and applies Quickness (+1 Speed, +1 Spell Power); Cleanse [2] removes top debuff and heals 2 if removed; Mass Heal [6] heals all allies for 2.'
+  },
+
   // New hero: Enchantress (from provided card image)
   {
     id: 'enchantressID',
@@ -356,6 +570,36 @@ export const HEROES = [
       front: { id: 'fan', cost: 4, casts: 2 },
       middle: { id: 'slap', cost: 3, casts: 4 },
       back: { id: 'poisonedHairpin', cost: 5, casts: 4 },
+    },
+  },
+  // New hero: Ninja (from provided card image)
+  {
+    id: 'ninjaID',
+    name: 'Ninja',
+    image: '/images/heroes/Ninja Cropped.jpg',
+    health: 6,
+    armor: 1,
+    speed: 4,
+    energy: 0,
+    spells: {
+      front: { id: 'shuriken', cost: 2, casts: 6 },
+      middle: { id: 'smokeBomb', cost: 4, casts: 2 },
+      back: { id: 'swiftness', cost: 5, casts: 2 },
+    },
+  },
+  // New hero: Nymph (from provided card image)
+  {
+    id: 'nymphID',
+    name: 'Nymph',
+    image: '/images/heroes/Dryad.jpeg',
+    health: 10,
+    armor: 0,
+    speed: 2,
+    energy: 0,
+    spells: {
+      front: { id: 'spores', cost: 1, casts: 4 },
+      middle: { id: 'naturesWrath', cost: 2, casts: 4 },
+      back: { id: 'fruitOfTheVine', cost: 2, casts: 4 },
     },
   },
   // New hero: Lightning Mage (from provided card image)
@@ -437,6 +681,38 @@ export const HEROES = [
       back: { id: 'brimberryLeaves', cost: 2, casts: 5 },
     },
   },
+  // New hero: Poison Mage (from provided card)
+  {
+    id: 'poisonMageID',
+    name: 'Poison Mage',
+    image: '/images/heroes/Poison Mage Cropped.jpg',
+    health: 6,
+    armor: 1,
+    speed: 4,
+    energy: 1,
+    spells: {
+      front: { id: 'poison', cost: 2, casts: 6 },
+      middle: { id: 'venomStrike', cost: 4, casts: 3 },
+      back: { id: 'poisonExplosion', cost: 4, casts: 2 },
+    },
+    description: 'Poison Mage: Poison [2], Venom Strike [4], Poison Explosion [4].'
+  },
+  // New hero: Inn Keeper (from provided card)
+  {
+    id: 'innKeeperID',
+    name: 'Inn Keeper',
+    image: '/images/heroes/Inn Keeper Cropped.jpg',
+    health: 8,
+    armor: 0,
+    speed: 2,
+    energy: 0,
+    spells: {
+      front: { id: 'giveAQuest', cost: 2, casts: 3 },
+      middle: { id: 'offerARoom', cost: 2, casts: 4 },
+      back: { id: 'herbs', cost: 2, casts: 3 },
+    },
+    description: 'Inn Keeper: Give a Quest [2], Offer a Room [2], Herbs [2].'
+  },
   // New hero: Huntress (from provided card)
   {
     id: 'huntressID',
@@ -447,7 +723,7 @@ export const HEROES = [
     speed: 3,
     energy: 0,
     spells: {
-      front: { id: 'lieInWait', cost: 3, casts: 3 },
+      front: { id: 'lieInWait', cost: 3, casts: 1 },
       middle: { id: 'spear', cost: 4, casts: 3 },
       back: { id: 'blowDart', cost: 2, casts: 4 },
     },
@@ -660,6 +936,37 @@ export const HEROES = [
     description: 'Fire Golem: Consumed By Flames [2] scales with Burn stacks, Heating Up [2] grants a Burn-on-cast buff, Consume Burn [2] removes a Burn for burst damage and self-heal. Passive: Smolder (targeting the golem applies Burn to the attacker).'
   },
   {
+    id: 'giantID',
+    name: 'Giant',
+    image: '/images/heroes/Giant Cropped.jpg',
+    health: 19,
+    armor: 0,
+    speed: 3,
+    energy: 0,
+    monster: true,
+    spells: {
+      front: { id: 'trample', cost: 4, casts: 3 },
+      middle: { id: 'throwRock', cost: 2, casts: 3 },
+      back: { id: 'hardFall', cost: 3, casts: 2 },
+    },
+    description: 'Giant: Trample [4] column attack for 2 (ignores Armor) and applies Slowed; Throw Rock [2] deals 2 and applies Taunt to self; Hard Fall [3] applies a death trigger that hits slow enemies.'
+  },
+  {
+    id: 'palaceGuardID',
+    name: 'Palace Guard',
+    image: '/images/heroes/Palace Guard Cropped.jpg',
+    health: 10,
+    armor: 2,
+    speed: 2,
+    energy: 3,
+    spells: {
+      front: { id: 'defend', cost: 3, casts: 2 },
+      middle: { id: 'throwRock', cost: 3, casts: 2 },
+      back: { id: 'demoralizingBlow', cost: 3, casts: 4 },
+    },
+    description: 'Palace Guard: Defend [3] grants +1 Armor and nullifies projectile/column targeting that would hit him; Throw Rock [3] deals 2 and applies Taunt to self; Demoralizing Blow [3] deals 4 to the enemy with the most buffs, removes top buff, and casts at -1 priority.'
+  },
+  {
     id: 'behemothID',
     name: 'Behemoth',
     image: '/images/heroes/Behemoth.jpg',
@@ -705,6 +1012,21 @@ export const HEROES = [
     description: 'Axeman: Chop [2] targets frontmost row for 3 Attack Power; Axe Throw [4] projectile for 5 Attack Power; Sharpen Axe [3] grants +2 Spell Power.'
   },
   {
+    id: 'prisonerID',
+    name: 'Prisoner',
+    image: '/images/heroes/Prisoner Cropped.jpg',
+    health: 10,
+    armor: 0,
+    speed: 2,
+    energy: 0,
+    spells: {
+      front: { id: 'releaseInmates', cost: 2, casts: 3 },
+      middle: { id: 'usurp', cost: 3, casts: 3 },
+      back: { id: 'chainWhip', cost: 3, casts: 3 },
+    },
+    description: 'Prisoner: Release Inmates [2] targets the backmost enemy row for 4 Attack Power (ignores Armor); Usurp [3] targets highest Armor for 6 Attack Power (ignores Armor); Chain Whip [3] is a projectile for 6 Attack Power (ignores Armor) and moves the target to the frontmost available row.'
+  },
+  {
     id: 'fallenAngelID',
     name: 'Fallen Angel',
     image: '/images/heroes/Fallen  Angle cropped.jpg',
@@ -718,6 +1040,21 @@ export const HEROES = [
       back: { id: 'retribution', cost: 3, casts: 2 },
     },
     description: 'Fallen Angel: slash deals 5 Attack Power to highest Health; darkPillar is a column attack applying Curse (-1 Spell Power); retribution grants retaliation buff (3 damage when targeted).'
+  },
+  {
+    id: 'pyroID',
+    name: 'Pyro',
+    image: '/images/heroes/Pyro Cropped.jpg',
+    health: 8,
+    armor: 0,
+    speed: 3,
+    energy: 1,
+    spells: {
+      front: { id: 'wildFire', cost: 2, casts: 2 },
+      middle: { id: 'conflagration', cost: 3, casts: 3 },
+      back: { id: 'flameThrower', cost: 3, casts: 4 },
+    },
+    description: 'Pyro: Wildfire [2] targets the enemy with the least effects and applies Wildfire (at the beginning of each round, it deals 1 damage, then spreads to adjacent heroes); Conflagration [3] deals 2 to the entire enemy board; Flame Thrower [3] is a column attack for 4 and applies Burn.'
   },
 ];
 

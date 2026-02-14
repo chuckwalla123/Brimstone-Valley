@@ -6,9 +6,10 @@ import { SPELLS } from "./spells.js";
 import { makeEmptyMain, makeReserve } from "../shared/gameLogic.js";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
+const draftableHeroes = HEROES.filter(hero => hero && hero.draftable !== false);
 
 export default function TestBattle() {
-  // Build boards for testing: Two Fire Golems on each board
+  // Build boards for testing: 2 Reapers + 1 Lancer on each main board
   const { p1Main, p1Reserve, p2Main, p2Reserve } = useMemo(() => {
     const clone = (v) => JSON.parse(JSON.stringify(v));
     const p1Main = makeEmptyMain('p1');
@@ -16,52 +17,35 @@ export default function TestBattle() {
     const p1Reserve = makeReserve('p1');
     const p2Reserve = makeReserve('p2');
 
-    // Debug: list available hero ids to ensure our new hero is present at runtime
     try {
       console.log('Available HEROES ids:', (HEROES || []).map(h => h.id));
     } catch (e) {
       console.error('Error listing HEROES ids', e);
     }
-    const fireGolem = HEROES.find(h => h.id === 'fireGolemID');
 
-    if (fireGolem) {
-      // Clone and set stats for p1 Fire Golems
-      const p1FireGolem1 = clone(fireGolem);
-      p1FireGolem1.currentHealth = fireGolem.health;
-      p1FireGolem1.currentEnergy = fireGolem.energy;
-      p1FireGolem1.currentSpeed = fireGolem.speed;
-      p1FireGolem1.currentArmor = fireGolem.armor;
-      p1FireGolem1.currentSpellPower = fireGolem.spellPower || 0;
+    const reaper = HEROES.find(h => h.id === 'reaperID');
+    const lancer = HEROES.find(h => h.id === 'lancerID');
 
-      const p1FireGolem2 = clone(fireGolem);
-      p1FireGolem2.currentHealth = fireGolem.health;
-      p1FireGolem2.currentEnergy = fireGolem.energy;
-      p1FireGolem2.currentSpeed = fireGolem.speed;
-      p1FireGolem2.currentArmor = fireGolem.armor;
-      p1FireGolem2.currentSpellPower = fireGolem.spellPower || 0;
+    if (reaper && lancer) {
+      const prepare = (hero) => {
+        const h = clone(hero);
+        h.currentHealth = hero.health;
+        h.currentEnergy = hero.energy;
+        h.currentSpeed = hero.speed;
+        h.currentArmor = hero.armor;
+        h.currentSpellPower = hero.spellPower || 0;
+        return h;
+      };
 
-      // Clone and set stats for p2 Fire Golems
-      const p2FireGolem1 = clone(fireGolem);
-      p2FireGolem1.currentHealth = fireGolem.health;
-      p2FireGolem1.currentEnergy = fireGolem.energy;
-      p2FireGolem1.currentSpeed = fireGolem.speed;
-      p2FireGolem1.currentArmor = fireGolem.armor;
-      p2FireGolem1.currentSpellPower = fireGolem.spellPower || 0;
+      p1Main[0].hero = prepare(reaper);
+      p1Main[1].hero = prepare(reaper);
+      p1Main[2].hero = prepare(lancer);
 
-      const p2FireGolem2 = clone(fireGolem);
-      p2FireGolem2.currentHealth = fireGolem.health;
-      p2FireGolem2.currentEnergy = fireGolem.energy;
-      p2FireGolem2.currentSpeed = fireGolem.speed;
-      p2FireGolem2.currentArmor = fireGolem.armor;
-      p2FireGolem2.currentSpellPower = fireGolem.spellPower || 0;
-
-      // Place Fire Golems on p1 board (positions 0 and 1)
-      p1Main[0].hero = p1FireGolem1;
-      p1Main[1].hero = p1FireGolem2;
-
-      // Place Fire Golems on p2 board (positions 0 and 1)
-      p2Main[0].hero = p2FireGolem1;
-      p2Main[1].hero = p2FireGolem2;
+      p2Main[0].hero = prepare(reaper);
+      p2Main[1].hero = prepare(reaper);
+      p2Main[2].hero = prepare(lancer);
+    } else {
+      console.warn('Reaper or Lancer not found; test placement skipped.', { reaper: !!reaper, lancer: !!lancer });
     }
 
     return { p1Main, p1Reserve, p2Main, p2Reserve };
@@ -74,13 +58,13 @@ export default function TestBattle() {
     // Connect to server
     const newSocket = io(SERVER_URL);
 
-    // Create initial gameState with the lancer boards
+    // Create initial gameState with mirrored Reaper + Lancer test boards
     const initialGameState = {
       p1Main,
       p1Reserve,
       p2Main,
       p2Reserve,
-      availableHeroes: HEROES,
+      availableHeroes: draftableHeroes,
       bans: [],
       step: 0,
       roundNumber: 0,
@@ -110,12 +94,13 @@ export default function TestBattle() {
 
     // Then listen to gameState
     newSocket.on('gameState', (state) => {
-      console.log('Received game state:', state);      
-      // Log hero health
+      console.log('Received game state:', state);
+      // Log hero health for Knight
       if (state.p1Main) {
         state.p1Main.forEach((tile, idx) => {
-          if (tile?.hero?.name === 'Lancer' || tile?.hero?.name === 'Fallen Angel' || tile?.hero?.name === 'Fire Golem') {
-            console.log(`[P1 ${tile.hero.name} at ${idx}] HP: ${tile.currentHealth}/${tile.hero.health}, Dead: ${tile._dead}`);
+          const name = tile?.hero?.name;
+          if (name === 'Knight') {
+            console.log(`[P1 ${name} at ${idx}] HP: ${tile.currentHealth}/${tile.hero.health}, Dead: ${tile._dead}`);
             console.log('  _passives:', tile._passives);
             console.log('  hero.passives:', tile.hero?.passives);
             if (tile._passives && tile._passives.length > 0) {
@@ -128,8 +113,9 @@ export default function TestBattle() {
       }
       if (state.p2Main) {
         state.p2Main.forEach((tile, idx) => {
-          if (tile?.hero?.name === 'Lancer' || tile?.hero?.name === 'Fallen Angel' || tile?.hero?.name === 'Fire Golem') {
-            console.log(`[P2 ${tile.hero.name} at ${idx}] HP: ${tile.currentHealth}/${tile.hero.health}, Dead: ${tile._dead}`);
+          const name = tile?.hero?.name;
+          if (name === 'Knight') {
+            console.log(`[P2 ${name} at ${idx}] HP: ${tile.currentHealth}/${tile.hero.health}, Dead: ${tile._dead}`);
             console.log('  _passives:', tile._passives);
             console.log('  hero.passives:', tile.hero?.passives);
             if (tile._passives && tile._passives.length > 0) {
@@ -140,7 +126,7 @@ export default function TestBattle() {
           }
         });
       }
-            setGameState(state);
+      setGameState(state);
     });
 
     newSocket.on('error', (msg) => {
@@ -164,7 +150,7 @@ export default function TestBattle() {
       p1Reserve,
       p2Main,
       p2Reserve,
-      availableHeroes: HEROES,
+      availableHeroes: draftableHeroes,
       bans: [],
       step: 0,
       roundNumber: 0,
@@ -181,7 +167,7 @@ export default function TestBattle() {
 
   return (
     <div style={{ padding: 12 }}>
-      <div style={{ marginBottom: 8, fontWeight: 700 }}>Test: Two Fire Golems on each side</div>
+      <div style={{ marginBottom: 8, fontWeight: 700 }}>Test: 2 Reapers + 1 Lancer per side</div>
       <button onClick={handleResetTestBattle} style={{ marginBottom: 8 }}>Reset Test Battle</button>
       {console.debug && console.debug('TestBattle boards', { p1Main, p1Reserve, p2Main, p2Reserve })}
       <BattlePhase
@@ -237,8 +223,8 @@ export function makeRandomAnimatedBoards() {
   const clone = (v) => JSON.parse(JSON.stringify(v));
   const p1Main = makeEmptyMain('p1');
   const p2Main = makeEmptyMain('p2');
-  const p1Reserve = makeEmptyReserve('p1');
-  const p2Reserve = makeEmptyReserve('p2');
+  const p1Reserve = makeReserve('p1');
+  const p2Reserve = makeReserve('p2');
 
   const animatedPool = (HEROES || []).filter(h => heroHasAnimatedSpell(h));
   if (!animatedPool.length) return { p1Main, p1Reserve, p2Main, p2Reserve, p1Ids: [], p2Ids: [] };

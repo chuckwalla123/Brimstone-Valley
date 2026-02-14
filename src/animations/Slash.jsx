@@ -3,7 +3,7 @@ import { stripBackgroundFromImageData, BG_TRANSPARENCY_TOLERANCE } from './utils
 import getAssetPath from '../utils/assetPath';
 
 // Slash animation: sprite-sheet driven, small melee swipe animation.
-export default function Slash({ from = { x: 0, y: 0 }, to = { x: 0, y: 0 }, duration = 400, onDone, size = 64, sprite = '/images/spells/Slash_2x2_4frames.png', frames = 4, cols: propCols = 2, rows: propRows = 2, mirror }) {
+export default function Slash({ from = { x: 0, y: 0 }, to = { x: 0, y: 0 }, duration = 400, onDone, size = 64, sprite = '/images/spells/Slash_2x2_4frames.png', frames = 4, cols: propCols = 2, rows: propRows = 2, mirror, rotateDeg = 0 }) {
   const resolvedSprite = getAssetPath(sprite);
   const [currentPos, setCurrentPos] = useState(from);
   const [visible, setVisible] = useState(true);
@@ -135,7 +135,7 @@ export default function Slash({ from = { x: 0, y: 0 }, to = { x: 0, y: 0 }, dura
     position: 'absolute',
     left: `${currentPos.x}px`,
     top: `${currentPos.y}px`,
-    transform: `translate(-50%,-50%) ${flipX ? 'scaleX(-1)' : ''}`,
+    transform: `translate(-50%,-50%) rotate(${Number(rotateDeg || 0)}deg) ${flipX ? 'scaleX(-1)' : ''}`,
     // Position is driven by RAF interpolation with easing; only animate opacity via CSS transition
     transition: `opacity ${Math.round(duration/3)}ms ease-out`,
     background: 'transparent',

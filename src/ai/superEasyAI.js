@@ -72,7 +72,7 @@ export const makeMovementDecision = (p2Board, p2ReserveBoard, movement, p1Board 
   };
 
   if (!movement || !movement.movementPhase) {
-    console.log('[SuperEasyAI] No movement phase, returning noop');
+    
     return getNoopMove();
   }
   
@@ -81,7 +81,7 @@ export const makeMovementDecision = (p2Board, p2ReserveBoard, movement, p1Board 
   
   // Only make decisions for P2
   if (currentMover !== 'p2') {
-    console.log('[SuperEasyAI] Not P2 turn, returning noop');
+    
     return getNoopMove();
   }
   
@@ -117,7 +117,7 @@ export const makeMovementDecision = (p2Board, p2ReserveBoard, movement, p1Board 
   });
 
   if (tilesWithHeroes.length === 0) {
-    console.log('[SuperEasyAI] No movable heroes, returning noop');
+    
     return getNoopMove();
   }
 
@@ -133,7 +133,7 @@ export const makeMovementDecision = (p2Board, p2ReserveBoard, movement, p1Board 
   // Pick a random destination
   const randomDest = allP2TileIds[Math.floor(Math.random() * allP2TileIds.length)];
   
-  console.log('[SuperEasyAI] Returning move:', randomHero.sourceId, '->', randomDest);
+  
   return {
     sourceId: randomHero.sourceId,
     destinationId: randomDest

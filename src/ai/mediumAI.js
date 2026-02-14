@@ -52,7 +52,8 @@ async function simulateOneMove(p1Board, p1Reserve, p2Board, p2Reserve) {
       p1Board: result.p1Board || state.p1Board,
       p1Reserve: result.p1Reserve || state.p1Reserve,
       p2Board: result.p2Board || state.p2Board,
-      p2Reserve: result.p2Reserve || state.p2Reserve
+      p2Reserve: result.p2Reserve || state.p2Reserve,
+      lastCastActionBySide: result.lastCastActionBySide || state.lastCastActionBySide || null
     };
   } catch (e) {
     console.error('[MediumAI] Simulation error:', e);
@@ -104,9 +105,10 @@ function evaluateBoardState(p1Board, p1Reserve, p2Board, p2Reserve) {
  */
 function generateMoves(board, reserve, isP2) {
   const moves = [{ type: 'noop' }]; // Always can do nothing
+  const countsTowardMainLimit = (tile) => tile && tile.hero && !tile._dead && !tile._revivedExtra && tile.hero.isMinion !== true;
   
   const allTiles = [...board, ...reserve];
-  const mainCount = board.filter(t => t && t.hero && !t._dead).length;
+  const mainCount = board.filter(countsTowardMainLimit).length;
   
   // For each hero, try moving to each main board position
   allTiles.forEach((sourceTile, sourceIdx) => {
@@ -376,7 +378,7 @@ export const makeMovementDecision = async (p2Board, p2ReserveBoard, movement, p1
   };
 
   if (!movement || !movement.movementPhase) {
-    console.log('[MediumAI] No movement phase, returning noop');
+    
     return getNoopMove();
   }
   
@@ -384,7 +386,7 @@ export const makeMovementDecision = async (p2Board, p2ReserveBoard, movement, p1
   const currentMover = phase.sequence[phase.index];
   
   if (currentMover !== 'p2') {
-    console.log('[MediumAI] Not P2 turn, returning noop');
+    
     return getNoopMove();
   }
   
@@ -415,7 +417,7 @@ export const makeMovementDecision = async (p2Board, p2ReserveBoard, movement, p1
   
   // Convert move to the expected format
   if (!bestMove || bestMove.type === 'noop') {
-    console.log('[MediumAI] No improving move found, returning noop');
+    
     return getNoopMove();
   }
   
@@ -424,7 +426,7 @@ export const makeMovementDecision = async (p2Board, p2ReserveBoard, movement, p1
     : `p2Reserve:${bestMove.from - (p2Board || []).length}`;
   const destinationId = `p2:${bestMove.to}`;
   
-  console.log('[MediumAI] Returning move:', sourceId, '->', destinationId);
+  
   return { sourceId, destinationId };
 };
 

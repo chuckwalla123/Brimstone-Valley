@@ -12,18 +12,19 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
   const [matchStatus, setMatchStatus] = useState('');
   const [matchInfo, setMatchInfo] = useState(null);
   const [showOnlineMenu, setShowOnlineMenu] = useState(false);
+  const [showLocalMenu, setShowLocalMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [playerStats, setPlayerStats] = useState(null);
 
   // Fetch player stats when session changes or online menu is shown
   useEffect(() => {
     const fetchStats = async () => {
-      console.log('[PlayFab] Stats fetch check:', { session: !!session, showOnlineMenu, hasTicket: !!session?.sessionTicket });
+      
       if (session && showOnlineMenu) {
         try {
-          console.log('[PlayFab] Fetching player stats...');
+          
           const stats = await getPlayerStatistics();
-          console.log('[PlayFab] Stats fetched:', stats);
+          
           setPlayerStats(stats);
         } catch (e) {
           console.error('[PlayFab] Could not fetch stats:', e.message, e);
@@ -40,7 +41,17 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
       setSession(s);
       setAuthStatus(`Logged in${s.username ? ` as ${s.username}` : ''}`);
     }
+    try {
+      const cachedEmail = localStorage.getItem('lastLoginEmail');
+      if (cachedEmail) setEmail(cachedEmail);
+    } catch (e) {}
   }, []);
+
+  useEffect(() => {
+    try {
+      if (email) localStorage.setItem('lastLoginEmail', email);
+    } catch (e) {}
+  }, [email]);
 
   useEffect(() => {
     if (!socket) return;
@@ -66,6 +77,23 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
       socket.off('matchCanceled', onCanceled);
     };
   }, [socket]);
+
+  useEffect(() => {
+    if (!socket) return;
+    const emitAuth = () => {
+      if (session?.sessionTicket) {
+        socket.emit('auth', { sessionTicket: session.sessionTicket });
+      }
+    };
+    const onConnect = () => emitAuth();
+    socket.on('connect', onConnect);
+    if (socket.connected && session?.sessionTicket && !playFabUser) {
+      emitAuth();
+    }
+    return () => {
+      socket.off('connect', onConnect);
+    };
+  }, [socket, session?.sessionTicket, playFabUser]);
   const buttonStyle = {
     width: '350px',
     height: '90px',
@@ -78,6 +106,9 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
     boxShadow: '0 6px 20px rgba(0,0,0,0.4)',
     textTransform: 'uppercase',
     letterSpacing: '1px',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   };
 
   const activeButtonStyle = {
@@ -148,83 +179,89 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
           </div>
         )}
         {authStatus && !session?.username && <div style={{ fontSize: 14, marginBottom: 8, color: '#fff', fontWeight: 600 }}>{authStatus}</div>}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
-          <input
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
-          />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
-          />
-          <input
-            placeholder="Username (required for new accounts)"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
-          />
-        </div>
-        <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
-          <button
-            style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
-            onClick={async () => {
-              try {
-                console.log('[PlayFab] Login click');
-                if (!email || !password) {
-                  setAuthStatus('Enter email and password to log in.');
-                  return;
-                }
-                setAuthStatus('Logging in...');
-                console.log('[PlayFab] Login request starting');
-                const data = await loginWithEmail({ email, password });
-                console.log('[PlayFab] Login request complete', data);
-                const s = getStoredSession();
-                setSession(s);
-                setAuthStatus(`Logged in${s?.username ? ` as ${s.username}` : ''}`);
-                onLoginSuccess && onLoginSuccess(data);
-              } catch (e) {
-                console.error('PlayFab login failed:', e);
-                setAuthStatus(`Login failed: ${e.message}`);
-              }
-            }}
-          >
-            Log In
-          </button>
-          <button
-            style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
-            onClick={async () => {
-              try {
-                console.log('[PlayFab] Register click');
-                if (!email || !password) {
-                  setAuthStatus('Enter email and password to create an account.');
-                  return;
-                }
-                if (!username || username.trim().length < 3) {
-                  setAuthStatus('Username is required (at least 3 characters).');
-                  return;
-                }
-                setAuthStatus('Creating account...');
-                console.log('[PlayFab] Register request starting');
-                const data = await registerWithEmail({ email, password, username });
-                console.log('[PlayFab] Register request complete', data);
-                const s = getStoredSession();
-                setSession(s);
-                setAuthStatus(`Account created${s?.username ? ` as ${s.username}` : ''}`);
-                onLoginSuccess && onLoginSuccess(data);
-              } catch (e) {
-                console.error('PlayFab register failed:', e);
-                setAuthStatus(`Create failed: ${e.message}`);
-              }
-            }}
-          >
-            Create Account
-          </button>
-          {session && (
+        {!session && (
+          <>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr', gap: 8 }}>
+              <input
+                placeholder="Email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
+              />
+              <input
+                type="password"
+                placeholder="Password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
+              />
+              <input
+                placeholder="Username (required for new accounts)"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid rgba(255,255,255,0.3)', background: 'rgba(0,0,0,0.3)', color: '#fff' }}
+              />
+            </div>
+            <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
+              <button
+                style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
+                onClick={async () => {
+                  try {
+                    
+                    if (!email || !password) {
+                      setAuthStatus('Enter email and password to log in.');
+                      return;
+                    }
+                    setAuthStatus('Logging in...');
+                    
+                    const data = await loginWithEmail({ email, password });
+                    
+                    const s = getStoredSession();
+                    setSession(s);
+                    setAuthStatus(`Logged in${s?.username ? ` as ${s.username}` : ''}`);
+                    onLoginSuccess && onLoginSuccess(data);
+                  } catch (e) {
+                    console.error('PlayFab login failed:', e);
+                    setAuthStatus(`Login failed: ${e.message}`);
+                  }
+                }}
+              >
+                Log In
+              </button>
+              <button
+                style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
+                onClick={async () => {
+                  try {
+                    
+                    if (!email || !password) {
+                      setAuthStatus('Enter email and password to create an account.');
+                      return;
+                    }
+                    if (!username || username.trim().length < 3) {
+                      setAuthStatus('Username is required (at least 3 characters).');
+                      return;
+                    }
+                    setAuthStatus('Creating account...');
+                    
+                    const data = await registerWithEmail({ email, password, username });
+                    
+                    const s = getStoredSession();
+                    setSession(s);
+                    setAuthStatus(`Account created${s?.username ? ` as ${s.username}` : ''}`);
+                    onLoginSuccess && onLoginSuccess(data);
+                  } catch (e) {
+                    console.error('PlayFab register failed:', e);
+                    setAuthStatus(`Create failed: ${e.message}`);
+                  }
+                }}
+              >
+                Create Account
+              </button>
+            </div>
+          </>
+        )}
+        {session && (
+          <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
             <button
               style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
               onClick={() => {
@@ -235,8 +272,8 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
             >
               Log Out
             </button>
-          )}
-        </div>
+          </div>
+        )}
         {!import.meta.env.VITE_PLAYFAB_TITLE_ID && (
           <div style={{ marginTop: 8, fontSize: 12, color: '#ffd166' }}>
             Missing VITE_PLAYFAB_TITLE_ID in .env
@@ -245,7 +282,7 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
       </div>
       )}
 
-      {!showOnlineMenu && (
+      {!showOnlineMenu && !showLocalMenu && (
         <>
           <button
             style={activeButtonStyle}
@@ -269,7 +306,7 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
             style={activeButtonStyle}
             onClick={() => {
               musicManager.tryPlay();
-              onSelectMode('multiplayerLocal');
+              onSelectMode('story');
             }}
             onMouseEnter={(e) => {
               e.currentTarget.style.transform = 'scale(1.05)';
@@ -280,7 +317,43 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
               e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
             }}
           >
-            Multiplayer Local
+            Relic Hunt (Story)
+          </button>
+
+          <button
+            style={activeButtonStyle}
+            onClick={() => {
+              musicManager.tryPlay();
+              onSelectMode('tower');
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(102, 126, 234, 0.6)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
+            }}
+          >
+            Tower of Shattered Champions
+          </button>
+
+          <button
+            style={activeButtonStyle}
+            onClick={() => {
+              musicManager.tryPlay();
+              setShowLocalMenu(true);
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(102, 126, 234, 0.6)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
+            }}
+          >
+            Local Play
           </button>
 
           <button
@@ -322,7 +395,62 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
         </>
       )}
 
-      {showOnlineMenu && (
+      {showLocalMenu && (
+        <>
+          <button
+            style={activeButtonStyle}
+            onClick={() => {
+              musicManager.tryPlay();
+              onSelectMode('multiplayerLocal');
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(102, 126, 234, 0.6)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
+            }}
+          >
+            Multiplayer Local
+          </button>
+
+          <button
+            style={activeButtonStyle}
+            onClick={() => {
+              musicManager.tryPlay();
+              onSelectMode('ffa3Local');
+            }}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(102, 126, 234, 0.6)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
+            }}
+          >
+            Local 1v1v1 (3 Players)
+          </button>
+
+          <button
+            style={activeButtonStyle}
+            onClick={() => setShowLocalMenu(false)}
+            onMouseEnter={(e) => {
+              e.currentTarget.style.transform = 'scale(1.05)';
+              e.currentTarget.style.boxShadow = '0 8px 25px rgba(102, 126, 234, 0.6)';
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.transform = 'scale(1)';
+              e.currentTarget.style.boxShadow = '0 6px 20px rgba(0,0,0,0.4)';
+            }}
+          >
+            Back
+          </button>
+        </>
+      )}
+
+      {showOnlineMenu && session && (
       <div style={{ width: '100%', maxWidth: 520, background: 'rgba(0,0,0,0.2)', padding: 16, borderRadius: 12, marginTop: 10 }}>
         <div style={{ fontWeight: 700, marginBottom: 8 }}>Online Matchmaking</div>
         <div style={{ fontSize: 12, marginBottom: 6, color: '#fff', fontWeight: 600 }}>
@@ -384,7 +512,7 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
             disabled={!session || !socket}
             onClick={() => {
               setMatchInfo(null);
-              console.log('[Matchmaking] Find Match click', { connected: socket?.connected, id: socket?.id });
+              
               if (!socket || !socket.connected) {
                 setMatchStatus('Socket not connected.');
                 return;
@@ -399,7 +527,29 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
               socket.emit('findMatch');
             }}
           >
-            Find Match
+            Find a 1v1 match
+          </button>
+          <button
+            style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
+            disabled={!session || !socket}
+            onClick={() => {
+              setMatchInfo(null);
+
+              if (!socket || !socket.connected) {
+                setMatchStatus('Socket not connected.');
+                return;
+              }
+              if (!playFabUser) {
+                setMatchStatus('Waiting for server auth...');
+                const s = getStoredSession();
+                if (s && s.sessionTicket) socket.emit('auth', { sessionTicket: s.sessionTicket });
+                return;
+              }
+              setMatchStatus('Searching for 1v1v1 match...');
+              socket.emit('findMatch', { gameMode: 'ffa3' });
+            }}
+          >
+            Find a 1v1v1 match
           </button>
           <button
             style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
@@ -409,7 +559,6 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
             Cancel
           </button>
         </div>
-        {!session && <div style={{ fontSize: 12, marginTop: 6, color: '#fff' }}>Log in to use matchmaking.</div>}
       </div>
       )}
 

@@ -5,7 +5,7 @@ const apiRequest = async (path, body, sessionTicket = null) => {
     throw new Error('Missing VITE_PLAYFAB_TITLE_ID');
   }
   const url = `https://${PLAYFAB_TITLE_ID}.playfabapi.com/Client/${path}`;
-  console.log('[PlayFab] Request:', path, body);
+  
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10000);
   const headers = { 'Content-Type': 'application/json' };
@@ -23,7 +23,7 @@ const apiRequest = async (path, body, sessionTicket = null) => {
   });
   clearTimeout(timeout);
   const data = await res.json();
-  console.log('[PlayFab] Response:', path, data);
+  
   if (!res.ok || data.error) {
     const msg = data?.errorMessage || data?.error || 'PlayFab request failed';
     const details = data?.errorDetails ? JSON.stringify(data.errorDetails) : '';

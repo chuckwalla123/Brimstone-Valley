@@ -125,7 +125,7 @@ export async function runTrainingLoop(config = {}) {
   
   // Training iterations
   for (let iteration = 1; iteration <= cfg.iterations; iteration++) {
-    console.log(`Iteration ${iteration}/${cfg.iterations}`);
+    
     
     // 1. Generate self-play games
     const newExamples = await generateSelfPlayBatch(

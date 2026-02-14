@@ -14,6 +14,10 @@ const MUSIC_TRACKS = {
     modern: '/images/sounds/Battle.mp3',
     retro: '/images/sounds/Battle_8bit.mp3',
   },
+  bossBattle: {
+    modern: '/images/sounds/Boss.mp3',
+    retro: '/images/sounds/Boss_8bit.mp3',
+  },
 };
 
 // Storage keys
@@ -136,7 +140,7 @@ class MusicManager {
         })
         .catch((error) => {
           // Auto-play was prevented, will need user interaction
-          console.log('[MusicManager] Autoplay prevented, waiting for user interaction');
+          
           this.isPlaying = false;
         });
     }

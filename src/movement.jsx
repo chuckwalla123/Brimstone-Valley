@@ -10,8 +10,8 @@ import React, { useState, useCallback, useEffect } from 'react';
 // Render movement.UI where you prefer: {movement.UI && <movement.UI />}
 
 export function useMovement({
-  p1Board, p2Board, p1Reserve, p2Reserve,
-  setP1Board, setP2Board, setP1ReserveBoard, setP2ReserveBoard,
+  p1Board, p2Board, p3Board, p1Reserve, p2Reserve, p3Reserve,
+  setP1Board, setP2Board, setP3Board, setP1ReserveBoard, setP2ReserveBoard, setP3ReserveBoard,
   priorityPlayer, setPriorityPlayer, addLog, setGameState,
   aiDifficulty,
   localSide,
@@ -43,8 +43,10 @@ export function useMovement({
           const plow = String(p || '').toLowerCase();
           if (plow === 'p1') return { boardName: 'p1Board', index: idx, tile: (p1Board || [])[idx] };
           if (plow === 'p2') return { boardName: 'p2Board', index: idx, tile: (p2Board || [])[idx] };
+          if (plow === 'p3') return { boardName: 'p3Board', index: idx, tile: (p3Board || [])[idx] };
           if (plow === 'p1reserve' || plow === 'p1_reserve') return { boardName: 'p1Reserve', index: idx, tile: (p1Reserve || [])[idx] };
           if (plow === 'p2reserve' || plow === 'p2_reserve') return { boardName: 'p2Reserve', index: idx, tile: (p2Reserve || [])[idx] };
+          if (plow === 'p3reserve' || plow === 'p3_reserve') return { boardName: 'p3Reserve', index: idx, tile: (p3Reserve || [])[idx] };
         }
       } else if (parts.length === 3) {
         const [p, kind, i] = parts;
@@ -52,6 +54,7 @@ export function useMovement({
         if (!isNaN(idx) && kind === 'reserve') {
           if (p === 'p1') return { boardName: 'p1Reserve', index: idx, tile: (p1Reserve || [])[idx] };
           if (p === 'p2') return { boardName: 'p2Reserve', index: idx, tile: (p2Reserve || [])[idx] };
+          if (p === 'p3') return { boardName: 'p3Reserve', index: idx, tile: (p3Reserve || [])[idx] };
         }
       }
     }
@@ -59,26 +62,34 @@ export function useMovement({
     if (idx !== -1) return { boardName: 'p1Board', index: idx, tile: p1Board[idx] };
     idx = (p2Board || []).findIndex(t => t && t.id === tileId);
     if (idx !== -1) return { boardName: 'p2Board', index: idx, tile: p2Board[idx] };
+    idx = (p3Board || []).findIndex(t => t && t.id === tileId);
+    if (idx !== -1) return { boardName: 'p3Board', index: idx, tile: p3Board[idx] };
     idx = (p1Reserve || []).findIndex(t => t && t.id === tileId);
     if (idx !== -1) return { boardName: 'p1Reserve', index: idx, tile: p1Reserve[idx] };
     idx = (p2Reserve || []).findIndex(t => t && t.id === tileId);
     if (idx !== -1) return { boardName: 'p2Reserve', index: idx, tile: p2Reserve[idx] };
+    idx = (p3Reserve || []).findIndex(t => t && t.id === tileId);
+    if (idx !== -1) return { boardName: 'p3Reserve', index: idx, tile: p3Reserve[idx] };
     return null;
-  }, [p1Board, p2Board, p1Reserve, p2Reserve]);
+  }, [p1Board, p2Board, p3Board, p1Reserve, p2Reserve, p3Reserve]);
 
   // swap "contents" of two tile positions (hero + dynamic fields)
   const swapTileContents = useCallback((boardA, idxA, boardB, idxB) => {
     // create copies
     const copyP1 = [...(p1Board || [])];
     const copyP2 = [...(p2Board || [])];
+    const copyP3 = [...(p3Board || [])];
     const copyR1 = [...(p1Reserve || [])];
     const copyR2 = [...(p2Reserve || [])];
+    const copyR3 = [...(p3Reserve || [])];
 
     const getBoardRef = (name) => {
       if (name === 'p1Board') return copyP1;
       if (name === 'p2Board') return copyP2;
+      if (name === 'p3Board') return copyP3;
       if (name === 'p1Reserve') return copyR1;
-      return copyR2;
+      if (name === 'p2Reserve') return copyR2;
+      return copyR3;
     };
 
     const Aboard = getBoardRef(boardA);
@@ -90,9 +101,11 @@ export function useMovement({
 
     setP1Board(copyP1);
     setP2Board(copyP2);
+    if (setP3Board) setP3Board(copyP3);
     setP1ReserveBoard(copyR1);
     setP2ReserveBoard(copyR2);
-  }, [p1Board, p2Board, p1Reserve, p2Reserve, setP1Board, setP2Board, setP1ReserveBoard, setP2ReserveBoard]);
+    if (setP3ReserveBoard) setP3ReserveBoard(copyR3);
+  }, [p1Board, p2Board, p3Board, p1Reserve, p2Reserve, p3Reserve, setP1Board, setP2Board, setP3Board, setP1ReserveBoard, setP2ReserveBoard, setP3ReserveBoard]);
 
   // high-level swap by tile ids - always send to server when in online mode
   const handleSwapById = useCallback((sourceId, targetId) => {
@@ -152,13 +165,14 @@ export function useMovement({
       }
     }
     
-    const mover = movementPhase.sequence[movementPhase.index]; // 'p1' or 'p2'
+    const mover = movementPhase.sequence[movementPhase.index]; // 'p1' or 'p2' or 'p3'
     const p = tile.player;
     const ps = String(p).toLowerCase();
     let owner;
     if (ps === 'p1' || ps === 'player1' || ps === '1') owner = 'p1';
     else if (ps === 'p2' || ps === 'player2' || ps === '2') owner = 'p2';
-    else owner = ps.includes('1') ? 'p1' : 'p2';
+    else if (ps === 'p3' || ps === 'player3' || ps === '3') owner = 'p3';
+    else owner = ps.includes('1') ? 'p1' : (ps.includes('2') ? 'p2' : 'p3');
     
     // Block dragging P2 pieces when playing against AI
     if (aiDifficulty && owner === 'p2') {
@@ -221,7 +235,8 @@ export function useMovement({
   // Small UI panel (bound to this hook's state)
   const UI = useCallback(() => {
     if (!movementPhase) return null;
-    const moverLabel = movementPhase.sequence[movementPhase.index] === 'p1' ? 'Player 1' : 'Player 2';
+    const moverCode = movementPhase.sequence[movementPhase.index];
+    const moverLabel = moverCode === 'p1' ? 'Player 1' : (moverCode === 'p2' ? 'Player 2' : 'Player 3');
     return (
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
         <div style={{ width: 800, maxWidth: '100%', background: '#fff', borderRadius: 8, padding: 10, boxShadow: '0 1px 0 rgba(0,0,0,0.06)', color: '#111' }}>

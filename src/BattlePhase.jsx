@@ -36,12 +36,20 @@ import { getEffectByName } from './effects.js';
 import useAnimations from './animations/useAnimations';
 import { getAI } from './ai';
 import getAssetPath from './utils/assetPath';
+import sfxManager from './SfxManager';
 
 // Helper to get current UI scale from CSS variable
 function getUiScale() {
   if (typeof document === 'undefined') return 1;
   const value = getComputedStyle(document.documentElement).getPropertyValue('--ui-scale');
   return parseFloat(value) || 1;
+}
+
+function boardNameToSide(boardName) {
+  const name = String(boardName || '').toLowerCase();
+  if (name.startsWith('p1')) return 'p1';
+  if (name.startsWith('p2')) return 'p2';
+  return 'p3';
 }
 
 /* --- Icons (copied from DraftBoard.jsx for visual parity) --- */
@@ -112,13 +120,14 @@ function BookIcon() {
 function PriorityArrow({ direction = 'left' }) {
   // direction: 'left' points to P1, 'right' points to P2
   const isLeft = direction === 'left';
+  const transform = direction === 'left' ? 'scaleX(-1)' : (direction === 'down' ? 'rotate(90deg)' : 'none');
   return (
     <svg
       width="40"
       height="24"
       viewBox="0 0 40 24"
       style={{
-        transform: isLeft ? 'scaleX(-1)' : 'none',
+        transform,
         transition: 'transform 0.3s ease',
       }}
     >
@@ -135,10 +144,11 @@ function PriorityArrow({ direction = 'left' }) {
 }
 
 function EffectsColumn({ tileId, effects = [], effectPrecast = null, onEffectHover = null, onEffectOut = null }) {
+  const visibleEffects = Array.isArray(effects) ? effects.filter(e => e && !e._hidden) : [];
   return (
     <div className="db-effects-column">
       {Array.from({ length: 4 }).map((_, i) => {
-        const ef = effects[i];
+        const ef = visibleEffects[i];
         const highlight = effectPrecast && (effectPrecast.effectIndex === i || (ef && effectPrecast.effectName && ef.name === effectPrecast.effectName));
         // Prefer explicit image path on the effect object; otherwise try a .png
         // derived from the effect name (keep casing as provided).
@@ -265,6 +275,7 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
   const token = tile && tile.id ? tile.id : (isReserve ? `${player}:reserve:${index}` : `${player}:${index}`);
   const boardToken = isReserve ? `${player}:reserve:${index}` : `${player}:${index}`;
   const draggable = movement?.canDrag ? movement.canDrag({ ...tile, player }) : false;
+  const canDragHero = !!(draggable && tile && tile.hero && !tile._dead);
   const [hover, setHover] = useState(false);
   const effectPrecast = effectPrecastMap ? effectPrecastMap[boardToken] : null;
 
@@ -348,7 +359,7 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
     return (
     <div className="bp-tile-row">
       <div
-        className={`db-tile db-tile-occupied ${hover ? 'db-tile-highlight-over' : ''} ${((events||[]).some(ev=>ev.kind==='cast' || ev.kind==='precast')) ? 'bp-cast-glow' : ''} ${((events||[]).some(ev=>ev.kind==='damage')) ? 'bp-damage-shake' : ''} ${((events||[]).some(ev=>ev.kind==='heal')) ? 'bp-heal-glow' : ''} ${((events||[]).some(ev=>ev.kind==='effect-glow')) ? 'bp-effect-glow' : ''}`}
+        className={`db-tile db-tile-occupied ${canDragHero ? 'db-tile-can-drag' : ''} ${hover ? 'db-tile-highlight-over' : ''} ${((events||[]).some(ev=>ev.kind==='cast' || ev.kind==='precast')) ? 'bp-cast-glow' : ''} ${((events||[]).some(ev=>ev.kind==='damage')) ? 'bp-damage-shake' : ''} ${((events||[]).some(ev=>ev.kind==='heal')) ? 'bp-heal-glow' : ''} ${((events||[]).some(ev=>ev.kind==='effect-glow')) ? 'bp-effect-glow' : ''} ${((events||[]).some(ev=>ev.kind==='augment-glow')) ? 'bp-augment-glow' : ''}`}
         data-token={token}
         data-board-token={boardToken}
         draggable={draggable}
@@ -446,7 +457,7 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
               return <div key={key} className="bp-float" style={{ color: '#e53935', left: pos.left, top: pos.top }}>{`-${ev.amount}`}</div>;
             }
             if (ev.kind === 'heal') {
-              console.log('Rendering heal float for', key, ev.amount);
+            
               const pos = (typeof ev.effectIndex === 'number') ? computePos(ev.effectIndex) : computePos(ei % 4);
               return <div key={key} className="bp-float" style={{ color: '#43a047', left: pos.left, top: pos.top }}>{`+${ev.amount}`}</div>;
             }
@@ -475,10 +486,11 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
   );
 }
 
-function BoardGrid({ label, tiles = [], movement, player, isReserve = false, eventsMap = {}, effectPrecastMap = {}, onHoverTile = null, onUnhoverTile = null, onEffectHover = null, onEffectOut = null }){
+function BoardGrid({ label, tiles = [], movement, player, isReserve = false, isEliminated = false, eventsMap = {}, effectPrecastMap = {}, onHoverTile = null, onUnhoverTile = null, onEffectHover = null, onEffectOut = null }){
   const playerClass = player === 'p2' ? 'db-player2' : 'db-player1';
+  const order = null;
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
+    <div className={isEliminated ? 'db-board-eliminated' : ''} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
       <div className={`db-player-label ${playerClass}`}>{label}{isReserve ? ' (Reserve)' : ''}</div>
       {isReserve ? (
         <div className="db-reserve-column">
@@ -491,7 +503,8 @@ function BoardGrid({ label, tiles = [], movement, player, isReserve = false, eve
         </div>
       ) : (
         <div className="db-main-grid">
-          {tiles.map((t, i) => {
+          {(order || tiles.map((_, i) => i)).map((i) => {
+            const t = tiles[i];
             const key = `${player}:${i}`;
             const ev = eventsMap && eventsMap[key];
             return <SmallTile key={t && t.id ? t.id : key} tile={t} movement={movement} player={player} index={i} isReserve={isReserve} events={ev} effectPrecastMap={effectPrecastMap} onHoverTile={onHoverTile} onUnhoverTile={onUnhoverTile} onEffectHover={onEffectHover} onEffectOut={onEffectOut} />
@@ -505,16 +518,21 @@ function BoardGrid({ label, tiles = [], movement, player, isReserve = false, eve
 import { executeRound } from './battleEngine';
 import { indexToColumn, indexToRow, columnIndicesForBoard } from './targeting';
 
-export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty = null, autoPlay: autoPlayProp, localSide = null, matchPlayers = null }){
+export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty = null, autoPlay: autoPlayProp, localSide = null, matchPlayers = null, showReturnToMenu = true }){
   const autoPlay = (typeof autoPlayProp === 'boolean') ? autoPlayProp : !!aiDifficulty;
+  const gameMode = gameState?.gameMode || 'classic';
   const p1Main = gameState?.p1Main || [];
   const p2Main = gameState?.p2Main || [];
+  const p3Main = gameState?.p3Main || [];
   const p1Reserve = gameState?.p1Reserve || [];
   const p2Reserve = gameState?.p2Reserve || [];
+  const p3Reserve = gameState?.p3Reserve || [];
   const [p1Board, setP1Board] = useState(p1Main);
   const [p2Board, setP2Board] = useState(p2Main);
+  const [p3Board, setP3Board] = useState(p3Main);
   const [p1ReserveBoard, setP1ReserveBoard] = useState(p1Reserve);
   const [p2ReserveBoard, setP2ReserveBoard] = useState(p2Reserve);
+  const [p3ReserveBoard, setP3ReserveBoard] = useState(p3Reserve);
   const emoteDelayRef = useRef(0);
   const lastEmoteTimeRef = useRef(0);
   const lastAnimationDelayRef = useRef(0);
@@ -531,7 +549,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   const [effectPrecastMap, setEffectPrecastMap] = useState({});
   const prayerEmoteRef = useRef({});
   const [gameOver, setGameOver] = useState(null);
-  const gameOverShownRef = useRef(false);
+  const [victoryOverlayVisible, setVictoryOverlayVisible] = useState(false);
   // Dice roll animation state
   const [diceRoll, setDiceRoll] = useState(null); // { die, base, roll, total }
 
@@ -544,20 +562,17 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     const winner = lastAction && (lastAction.winner || (lastAction.type === 'gameEnd' ? lastAction.winner : null));
     if (winner && !gameOver) {
       setGameOver(winner);
-      if (!gameOverShownRef.current) {
-        gameOverShownRef.current = true;
-        const label = winner === 'player1' ? (matchPlayers?.p1 || 'Player 1') : (winner === 'player2' ? (matchPlayers?.p2 || 'Player 2') : 'Draw');
-        try { window.alert(`${label} wins!`); } catch (e) {}
-      }
     }
     const applyState = () => {
       setP1Board(gameState.p1Main || []);
       setP2Board(gameState.p2Main || []);
+      if (Object.prototype.hasOwnProperty.call(gameState, 'p3Main')) setP3Board(gameState.p3Main || []);
       setP1ReserveBoard(gameState.p1Reserve || []);
       setP2ReserveBoard(gameState.p2Reserve || []);
+      if (Object.prototype.hasOwnProperty.call(gameState, 'p3Reserve')) setP3ReserveBoard(gameState.p3Reserve || []);
       setPriorityPlayer(gameState.priorityPlayer || 'player1');
       if (gameState.phase) {
-        console.log('[BattlePhase] Setting phase to:', gameState.phase, 'movementPhase:', gameState.movementPhase);
+        
         setPhase(gameState.phase);
       } else if (gameState.lastAction && (gameState.lastAction.type === 'roundComplete' || gameState.lastAction.type === 'gameEnd')) {
         setPhase('ready');
@@ -584,7 +599,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     
     if (isPhaseTransition || isRoundComplete) {
       // Apply phase transitions and round completion immediately - no delay
-      console.log('[useEffect] Applying state immediately for:', lastType, 'phase:', gameState.phase);
+      
       applyState();
       return;
     }
@@ -605,6 +620,17 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [gameState]);
+
+  useEffect(() => {
+    if (!gameOver) {
+      setVictoryOverlayVisible(false);
+      return;
+    }
+    const t = setTimeout(() => {
+      setVictoryOverlayVisible(true);
+    }, 60);
+    return () => clearTimeout(t);
+  }, [gameOver]);
 
   // Listen for step events from server (ACK-based sequencing)
   useEffect(() => {
@@ -646,6 +672,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     };
     applyReserveBonusesTo(p1ReserveBoard, setP1ReserveBoard);
     applyReserveBonusesTo(p2ReserveBoard, setP2ReserveBoard);
+    if (gameMode === 'ffa3') applyReserveBonusesTo(p3ReserveBoard, setP3ReserveBoard);
     // run once on mount
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -663,8 +690,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   const handleEffectOut = useCallback(() => setHoverInfo(null), []);
 
   const movement = useMovement({
-    p1Board, p2Board, p1Reserve: p1ReserveBoard, p2Reserve: p2ReserveBoard,
-    setP1Board, setP2Board, setP1ReserveBoard, setP2ReserveBoard,
+    p1Board, p2Board, p3Board, p1Reserve: p1ReserveBoard, p2Reserve: p2ReserveBoard, p3Reserve: p3ReserveBoard,
+    setP1Board, setP2Board, setP3Board, setP1ReserveBoard, setP2ReserveBoard, setP3ReserveBoard,
     priorityPlayer, setPriorityPlayer, addLog, setGameState: setPhase,
     aiDifficulty,
     localSide,
@@ -685,12 +712,14 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       socket.emit('movementComplete', {
         p1Main: p1Board,
         p2Main: p2Board,
+        ...(gameMode === 'ffa3' ? { p3Main: p3Board } : {}),
         p1Reserve: p1ReserveBoard,
         p2Reserve: p2ReserveBoard,
+        ...(gameMode === 'ffa3' ? { p3Reserve: p3ReserveBoard } : {}),
         priorityPlayer
       });
     }
-  }, [gameState?.movementPhase, movement?.movementPhase, phase, socket, p1Board, p2Board, p1ReserveBoard, p2ReserveBoard, priorityPlayer]);
+  }, [gameState?.movementPhase, movement?.movementPhase, phase, socket, p1Board, p2Board, p3Board, p1ReserveBoard, p2ReserveBoard, p3ReserveBoard, priorityPlayer, gameMode]);
 
   // Fallback: if we receive a full gameState update with roundComplete,
   // ensure movement starts even if animation events were missed.
@@ -698,6 +727,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     if (!autoPlay) return;
     if (!gameState || !gameState.lastAction) return;
     if (gameState.lastAction.type !== 'roundComplete') return;
+    if (gameState.lastAction.winner) return;
+    if (gameOver) return;
     if (!movement || movement.movementPhase) return;
 
     const t = setTimeout(() => {
@@ -719,11 +750,13 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
 
   const applyStateSnapshot = (snapshot) => {
     if (!snapshot) return;
-    console.log('[applyStateSnapshot] Applying state snapshot, phase:', snapshot.phase);
+    
     setP1Board(snapshot.p1Main || []);
     setP2Board(snapshot.p2Main || []);
+    if (Object.prototype.hasOwnProperty.call(snapshot, 'p3Main')) setP3Board(snapshot.p3Main || []);
     setP1ReserveBoard(snapshot.p1Reserve || []);
     setP2ReserveBoard(snapshot.p2Reserve || []);
+    if (Object.prototype.hasOwnProperty.call(snapshot, 'p3Reserve')) setP3ReserveBoard(snapshot.p3Reserve || []);
     setPriorityPlayer(snapshot.priorityPlayer || 'player1');
     // Use server's phase if available, otherwise default to 'ready'
     if (snapshot.phase) {
@@ -734,7 +767,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   };
 
   const handleAnimationAction = async (lastAction) => {
-    console.log('Processing animation action:', lastAction);
+    
 
     if (!lastAction || !lastAction.type) return;
 
@@ -772,10 +805,10 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     if (['effectPulse', 'energyIncrement'].includes(lastAction.type)) {
       const pulseKey = getPulseKey(lastAction);
       if (lastPulseSeenRef.current[pulseKey]) {
-        console.log('[effectPulse] Skipping duplicate pulse (already processed):', pulseKey);
+        
         return;
       }
-      console.log('[effectPulse] Processing new pulse:', pulseKey);
+      
       lastPulseSeenRef.current[pulseKey] = Date.now();
     }
 
@@ -785,11 +818,6 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       const winner = lastAction.winner;
       if (winner && !gameOver) {
         setGameOver(winner);
-        if (!gameOverShownRef.current) {
-          gameOverShownRef.current = true;
-          const label = winner === 'player1' ? (matchPlayers?.p1 || 'Player 1') : (winner === 'player2' ? (matchPlayers?.p2 || 'Player 2') : 'Draw');
-          try { window.alert(`${label} wins!`); } catch (e) {}
-        }
       }
       
       if (lastAction.type === 'roundComplete' && autoPlay && !lastAction.winner && movement && movement.startMovementPhase) {
@@ -806,11 +834,13 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       await sleep(300);
     } else if (lastAction.type === 'effectPreCast') {
       if (lastAction.target && lastAction.target.boardName) {
-        const tside = String(lastAction.target.boardName).startsWith('p1') ? 'p1' : 'p2';
+        const tside = boardNameToSide(lastAction.target.boardName);
         const tkey = `${tside}:${lastAction.target.index}`;
-        const isReactionPrecast = lastAction.reactionIndex != null || lastAction.effectName === 'Prayer';
-        if (isReactionPrecast && lastAction.ownerBoardName && typeof lastAction.ownerIndex === 'number') {
-          const oSide = String(lastAction.ownerBoardName).startsWith('p1') ? 'p1' : 'p2';
+        const isReactionPrecast = lastAction.reactionIndex != null || lastAction.effectName === 'Prayer'
+          || (lastAction.ownerBoardName && typeof lastAction.ownerIndex === 'number');
+        const isAugmentProc = lastAction.effectName === 'Thorns';
+        if (isReactionPrecast && lastAction.ownerBoardName && typeof lastAction.ownerIndex === 'number' && !isAugmentProc) {
+          const oSide = boardNameToSide(lastAction.ownerBoardName);
           const ownerKey = `${oSide}:${lastAction.ownerIndex}`;
           setEffectPrecastMap(prev => ({
             ...prev,
@@ -823,7 +853,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               return next;
             });
           }, 250);
-        } else {
+        } else if (!isAugmentProc) {
           setEventsMap(prev => {
             const next = { ...prev };
             next[tkey] = next[tkey] || [];
@@ -845,7 +875,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       }
     } else if (lastAction.type === 'preCast' || lastAction.type === 'precast') {
       if (lastAction.caster && lastAction.caster.boardName) {
-        const casterSide = String(lastAction.caster.boardName).startsWith('p1') ? 'p1' : 'p2';
+        const casterSide = boardNameToSide(lastAction.caster.boardName);
         const casterKey = `${casterSide}:${lastAction.caster.index}`;
         setEventsMap(prev => {
           const next = { ...prev };
@@ -868,9 +898,10 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         await sleep(500);
       }
     } else if (lastAction.type === 'cast') {
-      const casterSide = String(lastAction.caster && lastAction.caster.boardName || '').startsWith('p1') ? 'p1' : 'p2';
+      const casterSide = boardNameToSide(lastAction.caster && lastAction.caster.boardName || '');
       const spellId = lastAction.spellId;
-      const spellDef = getSpellById(spellId) || {};
+      const animationSpellId = lastAction.copiedSpellId || spellId;
+      const spellDef = getSpellById(animationSpellId) || {};
       pendingSecondaryRef.current = null;
 
       // Show dice roll animation if this spell has roll info
@@ -890,7 +921,10 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             if (!v) return;
             try {
               const r = el.getBoundingClientRect();
-              tokenCenterMap[v] = { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+              tokenCenterMap[v] = {
+                x: Math.round(r.left + r.width / 2 + window.scrollX),
+                y: Math.round(r.top + r.height / 2 + window.scrollY)
+              };
             } catch (e) {}
           });
         } catch (e) {}
@@ -905,8 +939,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         const primaryResults = results.filter(r => r && r.phase === 'primary' && r.target);
         const firstTarget = (primaryResults.length > 0 ? primaryResults[0].target : null);
         const descSide = (targetDescriptors[0] && targetDescriptors[0].side) ? targetDescriptors[0].side : 'enemy';
-        const inferredSide = descSide === 'ally' ? casterSide : (casterSide === 'p1' ? 'p2' : 'p1');
-        const targetSide = firstTarget ? (String(firstTarget.boardName).startsWith('p1') ? 'p1' : 'p2') : inferredSide;
+        const inferredSide = descSide === 'ally' ? casterSide : (gameMode === 'ffa3' ? null : (casterSide === 'p1' ? 'p2' : 'p1'));
+        const targetSide = firstTarget ? boardNameToSide(firstTarget.boardName) : inferredSide;
         const animName = spellDef.animation;
         const config = SPELL_CONFIG[animName];
         const uiScale = getUiScale();
@@ -921,8 +955,9 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         const targetTypes = targetDescriptors.map(t => t && t.type).filter(Boolean);
         const isBoardSpell = targetTypes.includes('board');
         const isColumnSpell = targetTypes.includes('column');
+        const secondaryAnimationMode = spellDef && spellDef.secondaryAnimationMode ? spellDef.secondaryAnimationMode : null;
         // Include rowContainingLowestArmor so spells targeting the lowest-armor row behave like other row spells
-        const isRowSpell = targetTypes.some(t => t === 'rowContainingHighestArmor' || t === 'rowContainingLowestArmor' || t === 'frontmostRowWithHero' || t === 'frontTwoRows' || t === 'backRow' || t === 'rowWithHighestSumArmor');
+        const isRowSpell = targetTypes.some(t => t === 'rowContainingHighestArmor' || t === 'rowContainingLowestArmor' || t === 'frontmostRowWithHero' || t === 'backmostRowWithHero' || t === 'frontTwoRows' || t === 'backRow' || t === 'rowWithHighestSumArmor');
         const isHealSpell = (spellDef && spellDef.spec && spellDef.spec.formula && spellDef.spec.formula.type === 'heal') || results.some(r => r && r.applied && r.applied.type === 'heal');
         const placement = isHealSpell ? 'inplace' : (spellDef.animationPlacement || 'travel');
 
@@ -930,38 +965,40 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         if (spellDef && spellDef.sound) {
           try {
             const audio = new Audio(getAssetPath(spellDef.sound));
-            audio.volume = spellDef.soundVolume != null ? spellDef.soundVolume : 0.5;
-            audio.play().catch(e => console.log('Audio play failed:', e));
+            const baseVolume = spellDef.soundVolume != null ? spellDef.soundVolume : 0.5;
+            const sfxVolume = sfxManager.getVolume();
+            audio.volume = Math.max(0, Math.min(1, baseVolume * sfxVolume));
+            audio.play().catch(() => {});
           } catch (e) {
-            console.log('Could not load spell sound:', e);
           }
         }
 
         if (animName && firstTarget) {
           if (isBoardSpell && targetSide) {
-            // For board-wide spells, cover the entire 9-tile board with a single scaled animation
-            // Get top-left (index 0) and bottom-right (index 8) positions to calculate board bounds
-            const topLeftKey = `${targetSide}:0`;
-            const bottomRightKey = `${targetSide}:8`;
-            const topLeft = tokenCenterMap[topLeftKey];
-            const bottomRight = tokenCenterMap[bottomRightKey];
-            if (topLeft && bottomRight) {
-              // Calculate the center of the board and the size needed to cover it
+            // For board-wide spells, cover each targeted board with a single scaled animation
+            const tokenSides = Array.from(
+              new Set(allTargetTokens.map(t => boardNameToSide(t.boardName)).filter(Boolean))
+            );
+            const sidesToAnimate = tokenSides.length > 0 ? tokenSides : [targetSide];
+            for (const side of sidesToAnimate) {
+              const topLeftKey = `${side}:0`;
+              const bottomRightKey = `${side}:8`;
+              const topLeft = tokenCenterMap[topLeftKey];
+              const bottomRight = tokenCenterMap[bottomRightKey];
+              if (!topLeft || !bottomRight) continue;
               const boardCenterX = (topLeft.x + bottomRight.x) / 2;
               const boardCenterY = (topLeft.y + bottomRight.y) / 2;
               const boardCenter = { x: boardCenterX, y: boardCenterY };
-              // Calculate the board size (width/height) to scale the animation
-              const boardWidth = Math.abs(bottomRight.x - topLeft.x) + 100; // Add padding to cover edges
+              const boardWidth = Math.abs(bottomRight.x - topLeft.x) + 100;
               const boardHeight = Math.abs(bottomRight.y - topLeft.y) + 100;
               const boardSize = Math.max(boardWidth, boardHeight);
-              // Play inplace at center with scaled size
               const boardProps = { ...props, size: boardSize };
               play({ name: animName, from: boardCenter, to: boardCenter, duration: lastAction.animationMs || 1200, props: boardProps });
               await sleep(Number(lastAction.animationMs || 1200));
             }
           } else if (spellId === 'multishot' && casterCenter && allTargetTokens.length > 0) {
             for (const tgt of allTargetTokens) {
-              const tside = String(tgt.boardName).startsWith('p1') ? 'p1' : 'p2';
+              const tside = boardNameToSide(tgt.boardName);
               const tkey = `${tside}:${tgt.index}`;
               const tcenter = tokenCenterMap[tkey];
               if (!tcenter) continue;
@@ -971,7 +1008,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
           } else if (placement === 'inplace' && !isRowSpell && !isColumnSpell && !isBoardSpell) {
             // Play in-place animation at each target (heal spells use this)
             for (const tgt of allTargetTokens) {
-              const tside = String(tgt.boardName).startsWith('p1') ? 'p1' : 'p2';
+              const tside = boardNameToSide(tgt.boardName);
               const tkey = `${tside}:${tgt.index}`;
               const tcenter = tokenCenterMap[tkey];
               if (!tcenter) continue;
@@ -979,39 +1016,215 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               await sleep(Number(lastAction.animationMs || 1200));
             }
           } else if (isRowSpell && targetSide && firstTarget) {
-            const row = indexToRow(firstTarget.index, targetSide);
-            const rowIndices = [];
-            for (let i = 0; i < 9; i++) {
-              if (indexToRow(i, targetSide) === row) rowIndices.push(i);
-            }
-            rowIndices.sort((a, b) => indexToColumn(a, targetSide) - indexToColumn(b, targetSide));
-            const startIdx = rowIndices[0];
-            const endIdx = rowIndices[rowIndices.length - 1];
-            const startKey = `${targetSide}:${startIdx}`;
-            const endKey = `${targetSide}:${endIdx}`;
-            const startCenter = tokenCenterMap[startKey];
-            const endCenter = tokenCenterMap[endKey];
-            if (startCenter && endCenter) {
-              play({ name: animName, from: startCenter, to: endCenter, duration: lastAction.animationMs || 1200, props });
-              await sleep(Number(lastAction.animationMs || 1200));
+            const sortByX = (indices, side) => {
+              indices.sort((a, b) => {
+                const aPos = tokenCenterMap[`${side}:${a}`];
+                const bPos = tokenCenterMap[`${side}:${b}`];
+                const ax = aPos ? aPos.x : 0;
+                const bx = bPos ? bPos.x : 0;
+                if (ax !== bx) return ax - bx;
+                return indexToColumn(a, side) - indexToColumn(b, side);
+              });
+            };
+            const secondaryTargets = new Set(
+              results
+                .filter(r => r && r.phase === 'secondary' && r.target)
+                .map(r => `${boardNameToSide(r.target.boardName)}:${r.target.index}`)
+            );
+            const hasSelfTarget = targetDescriptors.some(t => t && t.type === 'self');
+            const excludeCasterFromPrimary = !!(spellDef.animationSecondary && hasSelfTarget && casterSide && lastAction.caster && typeof lastAction.caster.index === 'number');
+            const primaryTargets = (spellDef.animationSecondary
+              ? allTargetTokens.filter(tgt => !secondaryTargets.has(`${boardNameToSide(tgt.boardName)}:${tgt.index}`))
+              : allTargetTokens
+            ).filter(tgt => !(excludeCasterFromPrimary && boardNameToSide(tgt.boardName) === casterSide && tgt.index === lastAction.caster.index));
+            const tokenSides = Array.from(
+              new Set(primaryTargets.map(t => boardNameToSide(t.boardName)).filter(Boolean))
+            );
+            const sidesToAnimate = tokenSides.length > 0 ? tokenSides : [targetSide];
+            for (const side of sidesToAnimate) {
+              const sideTargets = primaryTargets.filter(t => boardNameToSide(t.boardName) === side);
+              if (spellId === 'coneOfCold') {
+                const frontRowIndices = [];
+                const middleRowIndices = [];
+                for (let i = 0; i < 9; i++) {
+                  const r = indexToRow(i, side);
+                  if (r === 0) frontRowIndices.push(i);
+                  if (r === 1) middleRowIndices.push(i);
+                }
+                sortByX(frontRowIndices, side);
+                sortByX(middleRowIndices, side);
+                const startIdx = frontRowIndices[0];
+                const endIdx = frontRowIndices[frontRowIndices.length - 1];
+                const startKey = `${side}:${startIdx}`;
+                const endKey = `${side}:${endIdx}`;
+                const startCenter = tokenCenterMap[startKey];
+                const endCenter = tokenCenterMap[endKey];
+                const findIndexByRowCol = (row, col) => {
+                  for (let i = 0; i < 9; i++) {
+                    if (indexToRow(i, side) === row && indexToColumn(i, side) === col) return i;
+                  }
+                  return null;
+                };
+                const frontMidIdx = findIndexByRowCol(0, 1);
+                const middleMidIdx = findIndexByRowCol(1, 1);
+                const frontMidCenter = frontMidIdx != null ? tokenCenterMap[`${side}:${frontMidIdx}`] : null;
+                const middleMidCenter = middleMidIdx != null ? tokenCenterMap[`${side}:${middleMidIdx}`] : null;
+                if (startCenter && endCenter) {
+                  const rowSpacing = (frontMidCenter && middleMidCenter)
+                    ? Math.abs(middleMidCenter.y - frontMidCenter.y)
+                    : 0;
+                  const yOffset = (frontMidCenter && middleMidCenter)
+                    ? (middleMidCenter.y - frontMidCenter.y) / 2
+                    : 0;
+                  const rowWidth = Math.abs(endCenter.x - startCenter.x) + 100;
+                  const rowHeight = Math.abs(endCenter.y - startCenter.y) + rowSpacing + 100;
+                  const coneProps = { ...props, size: Math.max(rowWidth, rowHeight, Number(props?.size || 0)) };
+                  play({
+                    name: animName,
+                    from: { x: startCenter.x, y: startCenter.y + yOffset },
+                    to: { x: endCenter.x, y: endCenter.y + yOffset },
+                    duration: lastAction.animationMs || 1200,
+                    props: coneProps
+                  });
+                  await sleep(Number(lastAction.animationMs || 1200));
+                }
+              } else {
+                const sideFirst = sideTargets[0];
+                if (!sideFirst) continue;
+                const row = indexToRow(sideFirst.index, side);
+                const rowIndices = [];
+                for (let i = 0; i < 9; i++) {
+                  if (indexToRow(i, side) === row) rowIndices.push(i);
+                }
+                sortByX(rowIndices, side);
+                const startIdx = rowIndices[0];
+                const endIdx = rowIndices[rowIndices.length - 1];
+                const startKey = `${side}:${startIdx}`;
+                const endKey = `${side}:${endIdx}`;
+                const startCenter = tokenCenterMap[startKey];
+                const endCenter = tokenCenterMap[endKey];
+                if (startCenter && endCenter) {
+                  play({ name: animName, from: startCenter, to: endCenter, duration: lastAction.animationMs || 1200, props });
+                  await sleep(Number(lastAction.animationMs || 1200));
+                }
+              }
             }
           } else if (isColumnSpell && targetSide) {
             const casterCol = indexToColumn(lastAction.caster.index, casterSide);
-            const targetCol = (targetSide !== casterSide) ? (2 - casterCol) : casterCol;
-            const colIndices = columnIndicesForBoard(targetCol, targetSide);
-            const endIdx = colIndices[colIndices.length - 1];
-            const endKey = `${targetSide}:${endIdx}`;
-            const endCenter = tokenCenterMap[endKey];
-            if (casterCenter && endCenter) {
-              play({ name: animName, from: casterCenter, to: endCenter, duration: lastAction.animationMs || 1200, props });
+            const secondaryTargets = new Set(
+              results
+                .filter(r => r && r.phase === 'secondary' && r.target)
+                .map(r => `${boardNameToSide(r.target.boardName)}:${r.target.index}`)
+            );
+            const hasSelfTarget = targetDescriptors.some(t => t && t.type === 'self');
+            const excludeCasterFromPrimary = !!(spellDef.animationSecondary && hasSelfTarget && casterSide && lastAction.caster && typeof lastAction.caster.index === 'number');
+            const primaryTargets = (spellDef.animationSecondary
+              ? allTargetTokens.filter(tgt => !secondaryTargets.has(`${boardNameToSide(tgt.boardName)}:${tgt.index}`))
+              : allTargetTokens
+            ).filter(tgt => !(excludeCasterFromPrimary && boardNameToSide(tgt.boardName) === casterSide && tgt.index === lastAction.caster.index));
+            const tokenSides = Array.from(
+              new Set(primaryTargets.map(t => boardNameToSide(t.boardName)).filter(Boolean))
+            );
+            const sidesToAnimate = tokenSides.length > 0 ? tokenSides : [targetSide];
+            const findIndexByRowCol = (row, col, side) => {
+              for (let i = 0; i < 9; i++) {
+                if (indexToRow(i, side) === row && indexToColumn(i, side) === col) return i;
+              }
+              return null;
+            };
+            const getRowSpacing = (side) => {
+              const frontMidIdx = findIndexByRowCol(0, 1, side);
+              const middleMidIdx = findIndexByRowCol(1, 1, side);
+              const frontMidCenter = frontMidIdx != null ? tokenCenterMap[`${side}:${frontMidIdx}`] : null;
+              const middleMidCenter = middleMidIdx != null ? tokenCenterMap[`${side}:${middleMidIdx}`] : null;
+              if (!frontMidCenter || !middleMidCenter) return null;
+              return Math.abs(middleMidCenter.y - frontMidCenter.y);
+            };
+            for (const side of sidesToAnimate) {
+              const sideTargets = primaryTargets.filter(t => boardNameToSide(t.boardName) === side);
+              const sideFirst = sideTargets[0];
+              const sideCol = (sideFirst && typeof sideFirst.index === 'number')
+                ? indexToColumn(sideFirst.index, side)
+                : ((side !== casterSide) ? (2 - casterCol) : casterCol);
+              const colIndices = columnIndicesForBoard(sideCol, side);
+              const frontIdx = colIndices[0];
+              const backIdx = colIndices[colIndices.length - 1];
+              const p3CastingToOther = casterSide === 'p3' && side !== 'p3';
+              const startIdx = frontIdx;
+              const endIdx = backIdx;
+              const startKey = `${side}:${startIdx}`;
+              const endKey = `${side}:${endIdx}`;
+              const startBase = tokenCenterMap[startKey];
+              const endBase = tokenCenterMap[endKey];
+              if (!startBase || !endBase) continue;
+              let startCenter = { ...startBase };
+              const baseOffset = 120;
+              const forceAboveTarget = side === 'p3' && casterSide !== 'p3';
+              const rotateForP3Target = side === 'p3' && (casterSide === 'p1' || casterSide === 'p2') && side !== casterSide;
+              const travelProps = rotateForP3Target ? { ...props, rotateDeg: 270 } : props;
+              const rowSpacing = (forceAboveTarget && getRowSpacing(side)) ? getRowSpacing(side) : null;
+              const offset = (forceAboveTarget && rowSpacing)
+                ? Math.max(40, Math.min(baseOffset, rowSpacing * 0.6))
+                : baseOffset;
+              if (forceAboveTarget) {
+                startCenter = { x: startBase.x, y: startBase.y - offset };
+              } else if (p3CastingToOther) {
+                const dx = startBase.x - endBase.x;
+                const dy = startBase.y - endBase.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist > 0) {
+                  startCenter = {
+                    x: startBase.x + (dx / dist) * offset,
+                    y: startBase.y + (dy / dist) * offset
+                  };
+                } else {
+                  startCenter = { x: startBase.x, y: startBase.y - offset };
+                }
+              } else if (casterCenter) {
+                const dx = casterCenter.x - startBase.x;
+                const dy = casterCenter.y - startBase.y;
+                const dist = Math.hypot(dx, dy);
+                if (dist > 0) {
+                  startCenter = {
+                    x: startBase.x + (dx / dist) * offset,
+                    y: startBase.y + (dy / dist) * offset
+                  };
+                } else {
+                  startCenter = { x: startBase.x, y: startBase.y - offset };
+                }
+              } else {
+                startCenter = { x: startBase.x, y: startBase.y - offset };
+              }
+              play({ name: animName, from: startCenter, to: endBase, duration: lastAction.animationMs || 1200, props: travelProps });
               await sleep(Number(lastAction.animationMs || 1200));
             }
           } else {
-            const targetKey = `${targetSide}:${firstTarget.index}`;
-            const targetCenter = tokenCenterMap[targetKey];
-            if (casterCenter && targetCenter) {
-              play({ name: animName, from: casterCenter, to: targetCenter, duration: lastAction.animationMs || 1200, props });
-              await sleep(Number(lastAction.animationMs || 1200));
+            if (allTargetTokens.length > 1) {
+              const secondaryTargets = new Set(
+                results
+                  .filter(r => r && r.phase === 'secondary' && r.target)
+                  .map(r => `${boardNameToSide(r.target.boardName)}:${r.target.index}`)
+              );
+              const primaryTargets = spellDef.animationSecondary
+                ? allTargetTokens.filter(tgt => !secondaryTargets.has(`${boardNameToSide(tgt.boardName)}:${tgt.index}`))
+                : allTargetTokens;
+
+              for (const tgt of primaryTargets) {
+                const tside = boardNameToSide(tgt.boardName);
+                const tkey = `${tside}:${tgt.index}`;
+                const tcenter = tokenCenterMap[tkey];
+                if (casterCenter && tcenter) {
+                  play({ name: animName, from: casterCenter, to: tcenter, duration: lastAction.animationMs || 1200, props });
+                  await sleep(Number(lastAction.animationMs || 1200));
+                }
+              }
+            } else {
+              const targetKey = `${targetSide}:${firstTarget.index}`;
+              const targetCenter = tokenCenterMap[targetKey];
+              if (casterCenter && targetCenter) {
+                play({ name: animName, from: casterCenter, to: targetCenter, duration: lastAction.animationMs || 1200, props });
+                await sleep(Number(lastAction.animationMs || 1200));
+              }
             }
           }
 
@@ -1034,6 +1247,15 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               casterKey,
               casterCenter,
               targets: Array.isArray(lastAction.secondaryTargets) ? lastAction.secondaryTargets : [],
+              mode: secondaryAnimationMode,
+              expectedPlays: (secondaryAnimationMode === 'rowSweep' && Array.isArray(lastAction.secondaryTargets))
+                ? Array.from(new Set((lastAction.secondaryTargets || []).map(t => {
+                    const side = boardNameToSide(t && t.boardName);
+                    const idx = Number(t && t.index);
+                    if (!side || Number.isNaN(idx)) return null;
+                    return `${side}:${indexToRow(idx, side)}`;
+                  }).filter(Boolean)))
+                : null,
               played: new Set()
             };
           }
@@ -1059,6 +1281,15 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             casterKey,
             casterCenter,
             targets: Array.isArray(lastAction.secondaryTargets) ? lastAction.secondaryTargets : [],
+            mode: secondaryAnimationMode,
+            expectedPlays: (secondaryAnimationMode === 'rowSweep' && Array.isArray(lastAction.secondaryTargets))
+              ? Array.from(new Set((lastAction.secondaryTargets || []).map(t => {
+                  const side = boardNameToSide(t && t.boardName);
+                  const idx = Number(t && t.index);
+                  if (!side || Number.isNaN(idx)) return null;
+                  return `${side}:${indexToRow(idx, side)}`;
+                }).filter(Boolean)))
+              : null,
             played: new Set()
           };
         }
@@ -1073,7 +1304,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       await sleep(dur);
     } else if (lastAction.type === 'effectPulse') {
       if (lastAction.target && lastAction.target.boardName) {
-        const tside = String(lastAction.target.boardName).startsWith('p1') ? 'p1' : 'p2';
+        const tside = boardNameToSide(lastAction.target.boardName);
         const mainKey = `${tside}:${lastAction.target.index}`;
 
         let evPayload = null;
@@ -1084,24 +1315,47 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         if (lastAction.phase === 'secondary' && pendingSecondaryRef.current) {
           const pending = pendingSecondaryRef.current;
           const targetKey = `${tside}:${lastAction.target.index}`;
+          const targetRowKey = `${tside}:${indexToRow(lastAction.target.index, tside)}`;
           const matches = Array.isArray(pending.targets) && pending.targets.length > 0
             ? pending.targets.some(t => t && String(t.boardName).startsWith(tside) && Number(t.index) === Number(lastAction.target.index))
             : true;
-          if (matches && !pending.played.has(targetKey)) {
-            const casterCenter = pending.casterCenter || getTileCenter(pending.casterKey);
-            const targetCenter = getTileCenter(targetKey);
-            if (play && targetCenter) {
-              play({ name: pending.name, from: targetCenter, to: targetCenter, duration: pending.duration, props: pending.props || {} });
-              await sleep(Number(pending.duration || 1200));
+          if (matches && (pending.mode === 'rowSweep' ? !pending.played.has(targetRowKey) : !pending.played.has(targetKey))) {
+            if (pending.mode === 'rowSweep') {
+              const row = indexToRow(lastAction.target.index, tside);
+              const rowIndices = [];
+              for (let i = 0; i < 9; i++) {
+                if (indexToRow(i, tside) === row) rowIndices.push(i);
+              }
+              rowIndices.sort((a, b) => indexToColumn(a, tside) - indexToColumn(b, tside));
+              const startIdx = rowIndices[0];
+              const endIdx = rowIndices[rowIndices.length - 1];
+              const startCenter = getTileCenter(`${tside}:${startIdx}`);
+              const endCenter = getTileCenter(`${tside}:${endIdx}`);
+              if (play && startCenter && endCenter) {
+                play({ name: pending.name, from: startCenter, to: endCenter, duration: pending.duration, props: pending.props || {} });
+                await sleep(Number(pending.duration || 1200));
+              }
+              pending.played.add(targetRowKey);
+            } else {
+              const targetCenter = getTileCenter(targetKey);
+              if (play && targetCenter) {
+                play({ name: pending.name, from: targetCenter, to: targetCenter, duration: pending.duration, props: pending.props || {} });
+                await sleep(Number(pending.duration || 1200));
+              }
+              pending.played.add(targetKey);
             }
-            pending.played.add(targetKey);
-            if (pending.targets && pending.played.size >= pending.targets.length) {
+            if (Array.isArray(pending.expectedPlays) && pending.expectedPlays.length > 0) {
+              if (pending.played.size >= pending.expectedPlays.length) pendingSecondaryRef.current = null;
+            } else if (pending.targets && pending.played.size >= pending.targets.length) {
               pendingSecondaryRef.current = null;
             }
           }
         }
 
         if (evPayload) {
+          if (evPayload.kind === 'energy' && shouldSkipEnergyEmote(tside, lastAction.target.index, evPayload.amount)) {
+            return;
+          }
           const eventId = typeof lastAction.seq === 'number' ? `seq:${lastAction.seq}` : `ts:${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
           evPayload.id = eventId;
           const emoteKey = `${mainKey}:${evPayload.kind}:${evPayload.amount}`;
@@ -1109,14 +1363,14 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             const prayerKey = `${mainKey}:${evPayload.amount}`;
             const lastPrayer = prayerEmoteRef.current[prayerKey];
             if (lastPrayer && (Date.now() - lastPrayer) < 800) {
-              console.log(`[effectPulse] Skipping duplicate Prayer heal emote for ${mainKey}`);
+              
               return;
             }
             prayerEmoteRef.current[prayerKey] = Date.now();
           }
           const lastSeen = recentEmoteRef.current[emoteKey];
           if (lastSeen && (Date.now() - lastSeen) < 300) {
-            console.log(`[effectPulse] Skipping near-duplicate ${evPayload.kind} emote for ${mainKey}`);
+            
           } else {
             recentEmoteRef.current[emoteKey] = Date.now();
           // Add the emote to eventsMap
@@ -1125,32 +1379,33 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             next[mainKey] = next[mainKey] || [];
             // Only add if not already present (deduplication at render level)
             if (!next[mainKey].some(ev => ev.id === evPayload.id)) {
-              console.log(`[effectPulse] Adding ${evPayload.kind} emote: ${evPayload.amount} to ${mainKey}`);
+              
               next[mainKey].push(evPayload);
             } else {
-              console.log(`[effectPulse] Skipping duplicate ${evPayload.kind} emote at render level for ${mainKey}`);
+              
             }
             return next;
           });
           }
           
-          // Add effect glow animation (blue glow for 800ms)
+          const isAugmentProc = lastAction.effectName === 'Thorns';
+          // Add effect glow animation (blue glow for 800ms) or augment proc glow
           setEventsMap(prev => {
             const next = { ...prev };
             next[mainKey] = next[mainKey] || [];
-            // Add effect-glow event
-            if (!next[mainKey].some(ev => ev.kind === 'effect-glow')) {
-              next[mainKey].push({ kind: 'effect-glow', effectName: lastAction.effectName });
+            const glowKind = isAugmentProc ? 'augment-glow' : 'effect-glow';
+            if (!next[mainKey].some(ev => ev.kind === glowKind)) {
+              next[mainKey].push({ kind: glowKind, effectName: lastAction.effectName });
             }
             return next;
           });
           
-          // Remove effect glow after 800ms
+          // Remove glow after 800ms
           setTimeout(() => {
             setEventsMap(prev => {
               const n = { ...prev };
               if (n[mainKey]) {
-                n[mainKey] = n[mainKey].filter(ev => ev.kind !== 'effect-glow');
+                n[mainKey] = n[mainKey].filter(ev => ev.kind !== (isAugmentProc ? 'augment-glow' : 'effect-glow'));
                 if (n[mainKey].length === 0) delete n[mainKey];
               }
               return n;
@@ -1173,8 +1428,11 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       }
     } else if (lastAction.type === 'energyIncrement') {
       if (lastAction.target && lastAction.target.boardName) {
-        const tside = String(lastAction.target.boardName).startsWith('p1') ? 'p1' : 'p2';
+        const tside = boardNameToSide(lastAction.target.boardName);
         const mainKey = `${tside}:${lastAction.target.index}`;
+        if (shouldSkipEnergyEmote(tside, lastAction.target.index, lastAction.amount)) {
+          return;
+        }
         setEventsMap(prev => {
           const next = { ...prev };
           // Only add if not already present (deduplication)
@@ -1198,7 +1456,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       }
     } else if (lastAction.type === 'onRoundStartTriggered') {
       // no-op or log for now
-      console.log('onRoundStartTriggered:', lastAction);
+      
     }
     // other types are intentionally non-blocking
   };
@@ -1281,12 +1539,24 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       }
       if (!el) return null;
       const r = el.getBoundingClientRect();
-      return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) };
+      return {
+        x: Math.round(r.left + r.width / 2 + window.scrollX),
+        y: Math.round(r.top + r.height / 2 + window.scrollY)
+      };
     } catch (e) { console.warn('getTileCenter error', e); return null; }
   };
 
+  const shouldSkipEnergyEmote = (side, index, amount) => {
+    const key = `${side}:${index}:${amount}`;
+    const now = Date.now();
+    const last = lastEnergyPulseRef.current[key];
+    if (last && (now - last) < 300) return true;
+    lastEnergyPulseRef.current[key] = now;
+    return false;
+  };
+
   const runRound = async () => {
-    const prioritySide = (priorityPlayer === 'player1' || priorityPlayer === 'p1') ? 'p1' : 'p2';
+    const prioritySide = (priorityPlayer === 'player1' || priorityPlayer === 'p1') ? 'p1' : (priorityPlayer === 'player2' || priorityPlayer === 'p2') ? 'p2' : 'p3';
     if (localSide && !aiDifficulty && localSide !== prioritySide) {
       return;
     }
@@ -1314,8 +1584,10 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         type: 'syncBattleState',
         p1Main: p1Board,
         p2Main: p2Board,
+        ...(gameMode === 'ffa3' ? { p3Main: p3Board } : {}),
         p1Reserve: p1ReserveBoard,
         p2Reserve: p2ReserveBoard,
+        ...(gameMode === 'ffa3' ? { p3Reserve: p3ReserveBoard } : {}),
         priorityPlayer,
         phase: 'battle',
         requestId
@@ -1335,7 +1607,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   // Reset hasStartedRef when a new game/battle starts (detect by checking if step is 0 and phase is battle)
   useEffect(() => {
     if (gameState?.step === 0 && gameState?.phase === 'battle' && hasStartedRef.current) {
-      console.log('[BattlePhase] Resetting hasStartedRef for new battle');
+      
       hasStartedRef.current = false;
     }
   }, [gameState?.step, gameState?.phase]);
@@ -1402,7 +1674,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     
     // Only log when we have a real phase to avoid console spam
     if (phaseState) {
-      console.log('[AI Movement] Effect triggered. aiDifficulty:', aiDifficulty, 'phase:', phase, 'index:', phaseIndex);
+      
     }
     
     if (!aiDifficulty) return;
@@ -1410,7 +1682,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     if (!phaseState) return;
 
     const currentMover = phaseState.sequence[phaseIndex];
-    console.log('[AI Movement] Current mover:', currentMover, 'sequence:', phaseState.sequence);
+    
     
     // Only automate P2's moves
     if (currentMover !== 'p2') return;
@@ -1419,7 +1691,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     // Use a unique key combining phase index and sequence length
     const moveKey = `${phaseIndex}-${phaseState.sequence.length}`;
     if (aiMoveInProgressRef.current === moveKey) {
-      console.log('[AI Movement] Already processing move for index', phaseIndex, '- skipping');
+      
       return;
     }
     aiMoveInProgressRef.current = moveKey;
@@ -1427,7 +1699,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     const ai = getAI(aiDifficulty);
     const delay = ai.getThinkingDelay();
     
-    console.log('[AI Movement] P2\'s turn, will move after', delay, 'ms');
+    
     
     // Wait a bit then make a move using AI
     const timer = setTimeout(async () => {
@@ -1435,17 +1707,17 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       const currentMovement = movementRef.current;
       const currentPhase = currentMovement?.movementPhase;
       if (!currentPhase || currentPhase.index !== phaseIndex) {
-        console.log('[AI Movement] Phase changed before execution, aborting');
+        
         aiMoveInProgressRef.current = null;
         return;
       }
       
-      console.log('[AI Movement] Executing AI move decision');
+      
       // Pass p1 boards for Easy AI and above to evaluate positioning
       const decision = await ai.makeMovementDecision(p2Board, p2ReserveBoard, currentMovement, p1Board, p1ReserveBoard);
       
       if (!decision) {
-        console.log('[AI Movement] AI chose not to move, sending skip');
+      
         // AI chose not to move - advance to next turn by making a no-op swap (swap tile with itself)
         // Find any P2 hero and swap with itself to advance the phase
         let anyP2TileId = null;
@@ -1469,7 +1741,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         return;
       }
       
-      console.log('[AI Movement] AI move decision:', decision);
+      
       if (currentMovement?.handleSwapById) {
         currentMovement.handleSwapById(decision.sourceId, decision.destinationId);
       }
@@ -1487,12 +1759,18 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   // spell queuing removed (auto-cast handled by engine)
 
   const startMovement = () => {
-    const prioritySide = (priorityPlayer === 'player1' || priorityPlayer === 'p1') ? 'p1' : 'p2';
+    const prioritySide = (priorityPlayer === 'player1' || priorityPlayer === 'p1') ? 'p1' : (priorityPlayer === 'player2' || priorityPlayer === 'p2') ? 'p2' : 'p3';
     if (localSide && localSide !== prioritySide) return;
     if (movement && movement.startMovementPhase) movement.startMovementPhase();
   };
 
-  const prioritySide = (priorityPlayer === 'player1' || priorityPlayer === 'p1') ? 'p1' : 'p2';
+  const hasAliveOnMain = (boardArr) => (boardArr || []).some(t => t && t.hero && !t._dead);
+  const p1Eliminated = gameMode === 'ffa3' && !hasAliveOnMain(p1Board);
+  const p2Eliminated = gameMode === 'ffa3' && !hasAliveOnMain(p2Board);
+  const p3Eliminated = gameMode === 'ffa3' && !hasAliveOnMain(p3Board);
+  const prioritySide = (priorityPlayer === 'player1' || priorityPlayer === 'p1') ? 'p1' : (priorityPlayer === 'player2' || priorityPlayer === 'p2') ? 'p2' : 'p3';
+  const movementSide = movement?.movementPhase?.sequence?.[movement?.movementPhase?.index];
+  const arrowSide = (phase === 'movement' && movementSide) ? movementSide : prioritySide;
   const canControlRound = !localSide || localSide === prioritySide;
   const hideBattleControls = !!localSide && !aiDifficulty;
 
@@ -1501,7 +1779,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-            <BoardGrid label="P1 Reserve" tiles={p1ReserveBoard} movement={movement} player="p1" isReserve={true} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
+            <BoardGrid label="P1 Reserve" tiles={p1ReserveBoard} movement={movement} player="p1" isReserve={true} isEliminated={p1Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
             {!autoPlay && !hideBattleControls && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', padding: 8 }}>
                 <button onClick={() => runRound()} disabled={!canControlRound || gameState === 'running'}>Run Round</button>
@@ -1509,11 +1787,11 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             )}
           </div>
 
-          <BoardGrid label={matchPlayers?.p1 || 'Player 1'} tiles={p1Board} movement={movement} player="p1" eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
+          <BoardGrid label={matchPlayers?.p1 || 'Player 1'} tiles={p1Board} movement={movement} player="p1" isEliminated={p1Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
         </div>
 
         <div style={{ width: 48, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-          <PriorityArrow direction={prioritySide === 'p1' ? 'left' : 'right'} />
+          <PriorityArrow direction={arrowSide === 'p1' ? 'left' : (arrowSide === 'p2' ? 'right' : 'down')} />
           {/* Dice Roll Animation Overlay */}
           {diceRoll && (
             <div style={{
@@ -1578,32 +1856,69 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
-          <BoardGrid label={matchPlayers?.p2 || 'Player 2'} tiles={p2Board} movement={movement} player="p2" eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
-          <BoardGrid label="P2 Reserve" tiles={p2ReserveBoard} movement={movement} player="p2" isReserve={true} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
+          <BoardGrid label={matchPlayers?.p2 || 'Player 2'} tiles={p2Board} movement={movement} player="p2" isEliminated={p2Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
+          <BoardGrid label="P2 Reserve" tiles={p2ReserveBoard} movement={movement} player="p2" isReserve={true} isEliminated={p2Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
         </div>
       </div>
 
       {/* Movement Phase UI */}
-      {phase === 'movement' && movement && movement.UI && <movement.UI />}
+      {phase === 'movement' && movement && movement.UI && !gameOver && <movement.UI />}
 
       <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
-        <div style={{ width: 760, minHeight: 140, background: '#f7f3ff', border: '1px solid #decfff', padding: 10, borderRadius: 8, fontSize: 13, lineHeight: 1.15, color: '#111' }}>
+        <div style={{
+          width: 760,
+          minHeight: 'calc(100px * var(--ui-scale, 1))',
+          background: '#1a1a2e',
+          border: '1px solid #3a3a5a',
+          padding: 'calc(6px * var(--ui-scale, 1))',
+          borderRadius: 'var(--tile-border-radius, 6px)',
+          fontSize: 'calc(11px * var(--ui-scale, 1))',
+          lineHeight: 1.2,
+          color: '#e0e0e0'
+        }}>
           {hoverInfo ? (
             hoverInfo.type === 'tile' && hoverInfo.tile && hoverInfo.tile.hero ? (
               <div>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{hoverInfo.tile.hero.name}</div>
-                <div style={{ marginTop: 4 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{(() => { const s = hoverInfo.tile.hero?.spells?.front; const sd = s ? getSpellById(s.id) : null; return s ? `Front - ${sd?.name || s.id} [${s.cost || '?'}]` : 'Front:'; })()}</div>
-                    <div style={{ marginLeft: 6, fontSize: 13 }}>{(() => { const s = hoverInfo.tile.hero?.spells?.front; const sd = s ? getSpellById(s.id) : null; return sd && (sd.description || (sd.spec && sd.spec.description)) ? (sd.description || (sd.spec && sd.spec.description)) : '—'; })()}</div>
+                <div style={{ fontWeight: 700, fontSize: 'calc(12px * var(--ui-scale, 1))', marginBottom: 2 }}>{hoverInfo.tile.hero.name}</div>
+                {hoverInfo.tile.hero?.isBoss && (
+                  <div style={{ marginTop: 2, fontSize: 'calc(10px * var(--ui-scale, 1))', color: '#b0b0c8' }}>
+                    {(() => {
+                      const h = hoverInfo.tile.hero;
+                      const sp = (h && typeof h.currentSpellPower === 'number') ? h.currentSpellPower : (typeof h?.spellPower === 'number' ? h.spellPower : 0);
+                      return `Spell Power: ${sp}`;
+                    })()}
+                  </div>
+                )}
+                <div style={{ marginTop: 2 }}>
+                  <span style={{ fontWeight: 600 }}>{(() => { const s = hoverInfo.tile.hero?.spells?.front; const sd = s ? getSpellById(s.id) : null; return s ? `Front - ${sd?.name || s.id} [${s.cost || '?'}]: ` : 'Front: '; })()}</span>
+                  <span>{(() => { const s = hoverInfo.tile.hero?.spells?.front; const sd = s ? getSpellById(s.id) : null; return sd && (sd.description || (sd.spec && sd.spec.description)) ? (sd.description || (sd.spec && sd.spec.description)) : '—'; })()}</span>
                 </div>
-                <div style={{ marginTop: 4 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{(() => { const s = hoverInfo.tile.hero?.spells?.middle; const sd = s ? getSpellById(s.id) : null; return s ? `Middle - ${sd?.name || s.id} [${s.cost || '?'}]` : 'Middle:'; })()}</div>
-                    <div style={{ marginLeft: 6, fontSize: 13 }}>{(() => { const s = hoverInfo.tile.hero?.spells?.middle; const sd = s ? getSpellById(s.id) : null; return sd && (sd.description || (sd.spec && sd.spec.description)) ? (sd.description || (sd.spec && sd.spec.description)) : '—'; })()}</div>
+                <div style={{ marginTop: 2 }}>
+                  <span style={{ fontWeight: 600 }}>{(() => { const s = hoverInfo.tile.hero?.spells?.middle; const sd = s ? getSpellById(s.id) : null; return s ? `Middle - ${sd?.name || s.id} [${s.cost || '?'}]: ` : 'Middle: '; })()}</span>
+                  <span>{(() => { const s = hoverInfo.tile.hero?.spells?.middle; const sd = s ? getSpellById(s.id) : null; return sd && (sd.description || (sd.spec && sd.spec.description)) ? (sd.description || (sd.spec && sd.spec.description)) : '—'; })()}</span>
                 </div>
-                <div style={{ marginTop: 4 }}>
-                  <div style={{ fontWeight: 600, fontSize: 13 }}>{(() => { const s = hoverInfo.tile.hero?.spells?.back; const sd = s ? getSpellById(s.id) : null; return s ? `Back - ${sd?.name || s.id} [${s.cost || '?'}]` : 'Back:'; })()}</div>
-                    <div style={{ marginLeft: 6, fontSize: 13 }}>{(() => { const s = hoverInfo.tile.hero?.spells?.back; const sd = s ? getSpellById(s.id) : null; return sd && (sd.description || (sd.spec && sd.spec.description)) ? (sd.description || (sd.spec && sd.spec.description)) : '—'; })()}</div>
+                <div style={{ marginTop: 2 }}>
+                  <span style={{ fontWeight: 600 }}>{(() => { const s = hoverInfo.tile.hero?.spells?.back; const sd = s ? getSpellById(s.id) : null; return s ? `Back - ${sd?.name || s.id} [${s.cost || '?'}]: ` : 'Back: '; })()}</span>
+                  <span>{(() => { const s = hoverInfo.tile.hero?.spells?.back; const sd = s ? getSpellById(s.id) : null; return sd && (sd.description || (sd.spec && sd.spec.description)) ? (sd.description || (sd.spec && sd.spec.description)) : '—'; })()}</span>
                 </div>
+                {/* Tower Augments (if present) */}
+                {(() => {
+                  const towerAugments = hoverInfo.tile.hero?._towerAugments || [];
+                  if (!Array.isArray(towerAugments) || towerAugments.length === 0) return null;
+                  return (
+                    <div style={{ marginTop: 2 }}>
+                      <div style={{ fontWeight: 600 }}>Augments:</div>
+                      <div style={{ marginLeft: 6 }}>
+                        {towerAugments.map((aug, ai) => (
+                          <div key={`aug-${ai}`}>
+                            <span style={{ fontWeight: 700 }}>{aug?.name || 'Augment'}:</span> {aug?.description || '—'}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Passive (if present) */}
                 {(() => {
                   const passives = hoverInfo.tile.hero?.passives || [];
@@ -1627,9 +1942,9 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
                   };
 
                   return (
-                    <div style={{ marginTop: 6 }}>
-                      <div style={{ fontWeight: 600, fontSize: 13 }}>Passive:</div>
-                      <div style={{ marginLeft: 6, fontSize: 13 }}>
+                    <div style={{ marginTop: 2 }}>
+                      <div style={{ fontWeight: 600 }}>Passive:</div>
+                      <div style={{ marginLeft: 6 }}>
                         {renderPositional()}
                         {passives.map((p, pi) => {
                           let eff = null;
@@ -1648,24 +1963,80 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               </div>
             ) : hoverInfo.type === 'effect' && hoverInfo.effect ? (
               <div>
-                <div style={{ fontWeight: 700, fontSize: 14 }}>{hoverInfo.effect.name || 'Effect'}</div>
-                <div style={{ marginTop: 4, fontSize: 13 }}>{hoverInfo.effect && hoverInfo.effect.description ? hoverInfo.effect.description : (hoverInfo.effect && hoverInfo.effect.name) || '—'}</div>
+                <div style={{ fontWeight: 700, fontSize: 'calc(12px * var(--ui-scale, 1))', marginBottom: 2 }}>{hoverInfo.effect.name || 'Effect'}</div>
+                <div style={{ marginTop: 2 }}>{hoverInfo.effect && hoverInfo.effect.description ? hoverInfo.effect.description : (hoverInfo.effect && hoverInfo.effect.name) || '—'}</div>
               </div>
             ) : (<div style={{ fontSize: 13 }}>No data</div>)
           ) : (
-            <div style={{ color: '#666', fontSize: 13 }}>Hover over a hero or an effect to see details.</div>
+            <div style={{ color: '#888' }}>Hover over a hero or an effect to see details.</div>
           )}
 
           {/* log moved outside the hover panel to render below the box */}
         </div>
       </div>
+
+      {gameMode === 'ffa3' && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
+          <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
+            <BoardGrid label={matchPlayers?.p3 || 'Player 3'} tiles={p3Board} movement={movement} player="p3" isEliminated={p3Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
+            <BoardGrid label="P3 Reserve" tiles={p3ReserveBoard} movement={movement} player="p3" isReserve={true} isEliminated={p3Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
+          </div>
+        </div>
+      )}
       {gameOver && (
-        <div style={{ display: 'flex', justifyContent: 'center', padding: 8 }}>
-          <div style={{ width: 760, background: '#fff3f3', border: '1px solid #f1b7b7', padding: 10, borderRadius: 8, fontSize: 14, textAlign: 'center', color: '#111' }}>
-            <div style={{ fontWeight: 700, marginBottom: 8, color: '#111' }}>
-              {gameOver === 'player1' ? `${matchPlayers?.p1 || 'Player 1'} wins!` : (gameOver === 'player2' ? `${matchPlayers?.p2 || 'Player 2'} wins!` : 'Draw!')}
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(7, 7, 10, 0.92)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 5000,
+            opacity: victoryOverlayVisible ? 1 : 0,
+            transition: 'opacity 1400ms ease',
+            pointerEvents: victoryOverlayVisible ? 'auto' : 'none'
+          }}
+        >
+          <div
+            style={{
+              textAlign: 'center',
+              color: '#f8fafc',
+              padding: '24px 32px',
+              borderRadius: 16,
+              background: 'linear-gradient(145deg, rgba(30, 18, 48, 0.9), rgba(10, 8, 20, 0.9))',
+              boxShadow: '0 12px 48px rgba(0, 0, 0, 0.45)',
+              border: '1px solid rgba(139, 92, 246, 0.4)',
+              minWidth: 320
+            }}
+          >
+            <div style={{ fontSize: 28, fontWeight: 800, letterSpacing: 0.5, marginBottom: 10 }}>
+              {gameOver === 'draw'
+                ? 'Battle ends in a draw.'
+                : `${gameOver === 'player1' ? (matchPlayers?.p1 || 'Player 1') : (gameOver === 'player2' ? (matchPlayers?.p2 || 'Player 2') : (matchPlayers?.p3 || 'Player 3'))} is Victorious.`}
             </div>
-            <button onClick={() => onGameEnd && onGameEnd(gameOver)} style={{ padding: '8px 16px', fontSize: 14 }}>Return to Lobby</button>
+            <div style={{ fontSize: 14, color: '#cbd5f5', marginBottom: showReturnToMenu && onGameEnd ? 18 : 0 }}>
+              {gameOver === 'draw' ? 'No champion stands above the rest.' : 'The clash is settled.'}
+            </div>
+            {showReturnToMenu && onGameEnd && (
+              <button
+                onClick={() => onGameEnd(gameOver)}
+                style={{
+                  padding: '10px 18px',
+                  fontSize: 14,
+                  fontWeight: 700,
+                  background: 'linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%)',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.6
+                }}
+              >
+                Back to Menu
+              </button>
+            )}
           </div>
         </div>
       )}

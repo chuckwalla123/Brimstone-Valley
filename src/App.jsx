@@ -9,6 +9,8 @@ import TestBattle from "./TestBattle";
 import musicManager from "./MusicManager";
 import { createOfflineSocket } from "./offline/LocalGameEngine";
 import getAssetPath from "./utils/assetPath";
+import { TowerMode } from "./tower";
+import { StoryMode } from "./story";
 
 const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
 
@@ -57,9 +59,11 @@ function App() {
   const [forceDraft, setForceDraft] = useState(false);
   const [playFabUser, setPlayFabUser] = useState(null);
   const [localSide, setLocalSide] = useState(null);
-  const [matchPlayers, setMatchPlayers] = useState(null); // { p1: username, p2: username }
+  const [matchPlayers, setMatchPlayers] = useState(null); // { p1: username, p2: username, p3?: username }
   const [offlineMode, setOfflineMode] = useState(forceOffline);
   const [connectionStatus, setConnectionStatus] = useState('connecting');
+  const [gameMode, setGameMode] = useState('classic');
+  const [autoPlayLocal, setAutoPlayLocal] = useState(false);
   
   // Separate sockets for online (multiplayer) and local (single-player) modes
   const [onlineSocket, setOnlineSocket] = useState(null);
@@ -69,6 +73,8 @@ function App() {
 
   // Music phase management
   useEffect(() => {
+    if (currentScreen === 'tower') return;
+
     // Determine current music phase based on screen/game state
     let musicPhase = 'menu';
     
@@ -93,13 +99,13 @@ function App() {
 
     // If forcing offline mode, use local engine
     if (forceOffline || offlineMode) {
-      console.log('[App] Using offline mode with LocalGameEngine');
+      
       const localSocket = createOfflineSocket();
       setSocket(localSocket);
       setConnectionStatus('offline');
       
       localSocket.on('gameState', (state) => {
-        console.log('[Offline] Received game state:', state);
+        
         setGameState(state);
         if (state && state.phase === 'draft') {
           setForceDraft(false);
@@ -133,7 +139,7 @@ function App() {
     setOnlineSocket(newSocket); // Keep reference to online socket
 
     newSocket.on('connect', () => {
-      console.log('[App] Connected to server');
+      
       setConnectionStatus('online');
       setOfflineMode(false);
       const session = getStoredSession();
@@ -149,7 +155,7 @@ function App() {
     newSocket.on('gameState', (state) => {
       // Only apply game state from online socket if we're not in single-player mode
       // (single-player uses its own localSocket)
-      console.log('Received game state:', state);
+      
       if (!isSinglePlayerRef.current) {
         setGameState(state);
         if (state && state.phase === 'draft') {
@@ -161,7 +167,7 @@ function App() {
     newSocket.on('authResult', (payload) => {
       if (payload && payload.ok) {
         setPlayFabUser(payload.user || null);
-        console.log('[PlayFab] Server auth ok', payload.user);
+        
         // Update stored session with username from server (login response doesn't include it)
         if (payload.user?.username) {
           import('./playfabClient.js').then(m => m.updateSessionUsername(payload.user.username));
@@ -183,7 +189,7 @@ function App() {
 
     // After max reconnection attempts, switch to offline mode
     newSocket.io.on('reconnect_failed', () => {
-      console.log('[App] Server unreachable, switching to offline mode');
+      
       newSocket.close();
       setOfflineMode(true);
       setConnectionStatus('offline');
@@ -204,7 +210,7 @@ function App() {
 
     // Handle opponent disconnecting or leaving during a match
     newSocket.on('opponentDisconnected', (payload) => {
-      console.log('[Match] Opponent disconnected:', payload);
+      
       alert('Your opponent disconnected. Returning to main menu.');
       setCurrentScreen('start');
       setLocalSide(null);
@@ -212,7 +218,7 @@ function App() {
     });
 
     newSocket.on('opponentLeft', (payload) => {
-      console.log('[Match] Opponent left:', payload);
+      
       alert('Your opponent left the match. Returning to main menu.');
       setCurrentScreen('start');
       setLocalSide(null);
@@ -235,10 +241,54 @@ function App() {
 
   const handleSelectMode = (mode) => {
     setForceDraft(true);
+    if (mode === 'ffa3Local') {
+      setGameMode('ffa3');
+      setIsSinglePlayer(true);
+      isSinglePlayerRef.current = true;
+      setAiDifficulty(null);
+      setLocalSide(null);
+      setGameState(null);
+      setAutoPlayLocal(true);
+
+      if (localSocket) {
+        localSocket.close();
+      }
+      const newLocalSocket = createOfflineSocket();
+      setLocalSocket(newLocalSocket);
+      setSocket(newLocalSocket);
+
+      newLocalSocket.on('gameState', (state) => {
+        setGameState(state);
+        if (state && state.phase === 'draft') {
+          setForceDraft(false);
+        }
+      });
+
+      newLocalSocket._emit('connect');
+      newLocalSocket.emit('resetGame', { gameMode: 'ffa3' });
+
+      setCurrentScreen('draft');
+      return;
+    }
+    if (mode === 'tower') {
+      // Tower of Shattered Champions mode
+      setIsSinglePlayer(true);
+      isSinglePlayerRef.current = true;
+      setCurrentScreen('tower');
+      return;
+    }
+    if (mode === 'story') {
+      setIsSinglePlayer(true);
+      isSinglePlayerRef.current = true;
+      setCurrentScreen('story');
+      return;
+    }
     if (mode === 'multiplayerLocal') {
       // Local multiplayer uses the shared server
       setIsSinglePlayer(false);
       isSinglePlayerRef.current = false;
+      setGameMode('classic');
+      setAutoPlayLocal(true);
       if (onlineSocket) {
         setSocket(onlineSocket);
         onlineSocket.emit('resetGame');
@@ -250,6 +300,7 @@ function App() {
       // Single player will use a local socket (set in handleSelectDifficulty)
       setIsSinglePlayer(true);
       isSinglePlayerRef.current = true;
+      setAutoPlayLocal(false);
       setCurrentScreen('difficulty');
     }
   };
@@ -257,16 +308,25 @@ function App() {
   const handleMatchFound = (payload) => {
     setForceDraft(true);
     setAiDifficulty(null);
+    setGameMode(payload?.gameMode || 'classic');
     setLocalSide(payload?.side || null);
-    // Store player names for display - use stored session as primary source
+    // Store player names for display - use stored session as fallback
     const session = getStoredSession();
     const myUsername = session?.username || playFabUser?.username || 'You';
-    const opponentUsername = payload?.opponent?.username || 'Opponent';
-    console.log('[Match] Players:', { side: payload?.side, myUsername, opponentUsername });
-    if (payload?.side === 'p1') {
-      setMatchPlayers({ p1: myUsername, p2: opponentUsername });
+
+    if (payload?.players) {
+      setMatchPlayers({
+        p1: payload.players.p1 || 'Player 1',
+        p2: payload.players.p2 || 'Player 2',
+        p3: payload.players.p3 || 'Player 3'
+      });
     } else {
-      setMatchPlayers({ p1: opponentUsername, p2: myUsername });
+      const opponentUsername = payload?.opponent?.username || 'Opponent';
+      if (payload?.side === 'p1') {
+        setMatchPlayers({ p1: myUsername, p2: opponentUsername });
+      } else {
+        setMatchPlayers({ p1: opponentUsername, p2: myUsername });
+      }
     }
     setCurrentScreen('draft');
   };
@@ -274,8 +334,10 @@ function App() {
   const handleSelectDifficulty = (difficulty) => {
     setForceDraft(true);
     setAiDifficulty(difficulty);
+    setGameMode('classic');
     setLocalSide(null);
     setGameState(null);
+    setAutoPlayLocal(true);
     
     // Create a fresh local socket for single-player games
     // This prevents interfering with other players on the shared server
@@ -363,8 +425,20 @@ function App() {
             onBack={handleBackToMenu}
           />
         )}
+        {currentScreen === 'tower' && <TowerMode onExit={handleBackToMenu} />}
+        {currentScreen === 'story' && <StoryMode onExit={handleBackToMenu} />}
         {currentScreen === 'draft' && !inBattle && <DraftBoard aiDifficulty={aiDifficulty} socket={socket} gameState={gameState} localSide={localSide} matchPlayers={matchPlayers} />}
-        {currentScreen === 'draft' && inBattle && <BattlePhase gameState={gameState} socket={socket} onGameEnd={handleBackToMenu} aiDifficulty={aiDifficulty} autoPlay={!!aiDifficulty || !!localSide} localSide={localSide} matchPlayers={matchPlayers} />}
+        {currentScreen === 'draft' && inBattle && (
+          <BattlePhase
+            gameState={gameState}
+            socket={socket}
+            onGameEnd={handleBackToMenu}
+            aiDifficulty={aiDifficulty}
+            autoPlay={autoPlayLocal || !!aiDifficulty || !!localSide}
+            localSide={localSide}
+            matchPlayers={matchPlayers}
+          />
+        )}
       </div>
     </div>
   );
