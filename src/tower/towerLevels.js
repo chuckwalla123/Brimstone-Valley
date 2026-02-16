@@ -328,6 +328,45 @@ export const BOSS_SPELLS = {
     }
   },
 
+  // Level 30 Cleric Boss
+  level30SanctifiedPurify: {
+    ...SPELLS.purify,
+    id: 'level30SanctifiedPurify',
+    name: 'Sanctified Purify',
+    description: 'Targets the enemy with the most positive effects, dealing 5 Attack Power plus 1 per augment on the target, then removes the top positive effect.',
+    spec: {
+      ...SPELLS.purify.spec,
+      formula: { type: 'attackPower', value: 5, addTargetAugmentCount: true, addTargetAugmentMultiplier: 1 },
+      post: { removeTopPositiveEffect: true }
+    }
+  },
+
+  level30CenserStorm: {
+    ...SPELLS.holyFervor,
+    id: 'level30CenserStorm',
+    name: 'Censer Storm',
+    description: 'Targets the enemy row with the most heroes, dealing 6 Attack Power and applying Curse (-1 Spell Power).',
+    spec: {
+      targets: [{ type: 'rowWithMostHeroes', side: 'enemy' }],
+      formula: { type: 'attackPower', value: 6 },
+      effects: [EFFECTS.Curse],
+      animationMs: 1200
+    }
+  },
+
+  level30FinalAbsolution: {
+    ...SPELLS.holyFervor,
+    id: 'level30FinalAbsolution',
+    name: 'Null Rite',
+    description: 'Targets the enemy with the highest Energy, dealing 8 Attack Power and draining 3 Energy.',
+    spec: {
+      targets: [{ type: 'highestEnergy', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 8 },
+      post: { deltaEnergy: { amount: -3, side: 'enemy', target: 'target' } },
+      animationMs: 1200
+    }
+  },
+
   // Level 30 Necromancer Boss
   level30GraveCurse: {
     ...SPELLS.curse,
@@ -413,7 +452,7 @@ export const BOSSES = {
       title: 'The Corruptor',
       description: 'A demon empowered by dark rituals. His curses are twice as potent.',
       stats: {
-        health: 40,
+        health: 45,
         armor: 2,
         speed: 3,
         energy: 2,
@@ -425,7 +464,7 @@ export const BOSSES = {
         back: { id: 'acidPool', cost: 3, casts: 5 }
       },
       passives: [],
-      augments: ['healthBoostMedium', 'regenAugment', 'bleedSpellsMiddle', 'thornsStrong', 'randomAugment']
+      augments: ['thornsStrong', 'randomAugment']
     },
     {
       id: 'boss_flame_lord',
@@ -446,7 +485,7 @@ export const BOSSES = {
         back: { id: 'level5ConsumedByFlames', cost: 2, casts: 12 }
       },
       passives: [],
-      augments: ['healthBoostSmall', 'burningSpellsAll', 'randomAugment']
+      augments: ['burningSpellsAll', 'randomAugment']
     },
     {
       id: 'boss_shadow_blade',
@@ -457,7 +496,7 @@ export const BOSSES = {
       stats: {
         health: 32,
         armor: 2,
-        speed: 4,
+        speed: 5,
         energy: 2,
         spellPower: 2
       },
@@ -467,7 +506,7 @@ export const BOSSES = {
         back: { id: 'priorityTarget', cost: 3, casts: 2 }
       },
       passives: [],
-      augments: ['lieInWaitLevel5Augment', 'speedBoostMedium', 'poisonSpellsAll', 'firstStrike', 'randomAugment']
+      augments: ['lieInWaitLevel5Augment', 'poisonSpellsAll', 'firstStrike', 'randomAugment']
     }
   ],
 
@@ -486,7 +525,7 @@ export const BOSSES = {
         armor: 2,
         speed: 4,
         energy: 2,
-        spellPower: 1
+        spellPower: 2
       },
       spells: {
         front: { id: 'forkedLightning', cost: 5, casts: 5 },
@@ -494,7 +533,7 @@ export const BOSSES = {
         back: { id: 'zeusWrath', cost: 12, casts: 1 }
       },
       passives: [],
-      augments: ['healthBoostLarge', 'spellPowerBoostMedium', 'speedBoostSmall', 'randomAugment', 'randomAugment']
+      augments: ['randomAugment', 'randomAugment']
     },
     {
       id: 'boss_blood_lord',
@@ -504,7 +543,7 @@ export const BOSSES = {
       description: 'Drains life from enemies to fuel his dark power.',
       stats: {
         health: 64,
-        armor: 3,
+        armor: 4,
         speed: 3,
         energy: 1,
         spellPower: 2
@@ -515,7 +554,7 @@ export const BOSSES = {
         back: { id: 'leech', cost: 2, casts: 6 }
       },
       passives: [EFFECTS.Frenzy],
-      augments: ['healthBoostMedium', 'armorBoostMedium', 'vampiric', 'bleedSpellsAll', 'randomAugment', 'randomAugment']
+      augments: ['vampiric', 'bleedSpellsAll', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_ice_king',
@@ -524,11 +563,11 @@ export const BOSSES = {
       title: 'The Frozen Heart',
       description: 'Her cold magic slows all who oppose her to a crawl.',
       stats: {
-        health: 46,
-        armor: 2,
+        health: 56,
+        armor: 4,
         speed: 3,
         energy: 2,
-        spellPower: 2
+        spellPower: 3
       },
       spells: {
         front: { id: 'coneOfCold', cost: 2, casts: 3 },
@@ -536,7 +575,7 @@ export const BOSSES = {
         back: { id: 'blizzard', cost: 5, casts: 3 }
       },
       passives: [],
-      augments: ['healthBoostLarge', 'armorBoostLarge', 'slowSpellsAll', 'spellPowerBoostSmall', 'randomAugment', 'randomAugment']
+      augments: ['slowSpellsAll', 'randomAugment', 'randomAugment']
     }
   ],
 
@@ -552,10 +591,10 @@ export const BOSSES = {
       description: 'A colossal beast that crushes all in its path.',
       stats: {
         health: 82,
-        armor: 5,
-        speed: 2,
+        armor: 6,
+        speed: 3,
         energy: 1,
-        spellPower: 2
+        spellPower: 3
       },
       spells: {
         front: { id: 'brutalSmash', cost: 2, casts: 5 },
@@ -563,7 +602,7 @@ export const BOSSES = {
         back: { id: 'roar', cost: 2, casts: 3 }
       },
       passives: [EFFECTS.Regen],
-      augments: ['healthBoostHuge', 'armorBoostLarge', 'thornsStrong', 'spellPowerBoostMedium', 'regenAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['thornsStrong', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_dragon_elder',
@@ -576,7 +615,7 @@ export const BOSSES = {
         armor: 3,
         speed: 3,
         energy: 2,
-        spellPower: 2
+        spellPower: 3
       },
       spells: {
         front: { id: 'viciousBite', cost: 2, casts: 5 },
@@ -584,7 +623,7 @@ export const BOSSES = {
         back: { id: 'gale', cost: 3, casts: 3 }
       },
       passives: [EFFECTS.Poison],
-      augments: ['healthBoostLarge', 'armorBoostMedium', 'poisonSpellsAll', 'spellPowerBoostLarge', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['poisonSpellsAll', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_fallen_champion',
@@ -604,8 +643,8 @@ export const BOSSES = {
         middle: { id: 'darkPillar', cost: 2, casts: 5 },
         back: { id: 'retribution', cost: 2, casts: 3 }
       },
-      passives: [EFFECTS.Retribution, EFFECTS.Prayer],
-      augments: ['healthBoostHuge', 'armorBoostMedium', 'curseSpellsAll', 'deathPactAugment', 'spellPowerBoostMedium', 'randomAugment', 'randomAugment', 'randomAugment']
+      passives: [EFFECTS.Retribution],
+      augments: ['curseSpellsAll', 'deathPactAugment',  'randomAugment', 'randomAugment', 'randomAugment']
     }
   ],
 
@@ -620,10 +659,10 @@ export const BOSSES = {
       title: 'Master of Magic',
       description: 'Commands arcane forces beyond mortal comprehension.',
       stats: {
-        health: 55,
+        health: 62,
         armor: 3,
-        speed: 5,
-        energy: 1,
+        speed: 6,
+        energy: 0,
         spellPower: 3
       },
       spells: {
@@ -631,8 +670,8 @@ export const BOSSES = {
         middle: { id: 'arcaneBolt', cost: 2, casts: 6 },
         back: { id: 'level20ArcaneBlast', cost: 4, casts: 3 }
       },
-      passives: [EFFECTS.Power],
-      augments: ['healthBoostHuge', 'doubleStrike', 'energyBoostMedium', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      passives: [],
+      augments: ['doubleStrike', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_death_knight',
@@ -652,8 +691,8 @@ export const BOSSES = {
         middle: { id: 'soulCrush', cost: 2, casts: 5 },
         back: { id: 'treachery', cost: 2, casts: 3 }
       },
-      passives: [EFFECTS.Frenzy, EFFECTS.Regen],
-      augments: ['healthBoostHuge', 'vampiric', 'thornsStrong', 'phoenixRebirth', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      passives: [EFFECTS.Frenzy],
+      augments: ['phoenixRebirth', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_elemental_fury',
@@ -663,7 +702,7 @@ export const BOSSES = {
       description: 'A being of pure elemental destruction.',
       imageOverride: '/images/heroes/Elemental Wizard Cropped.png',
       stats: {
-        health: 55,
+        health: 71,
         armor: 2,
         speed: 6,
         energy: 0,
@@ -674,8 +713,8 @@ export const BOSSES = {
         middle: { id: 'blizzard', cost: 4, casts: 4 },
         back: { id: 'meteor', cost: 4, casts: 3 }
       },
-      passives: [EFFECTS.HeatingUp],
-      augments: ['healthBoostLarge', 'burningSpellsAll', 'slowSpellsAll', 'allCastsMedium', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      passives: [],
+      augments: ['burningSpellsAll', 'randomAugment', 'randomAugment', 'randomAugment']
     }
   ],
 
@@ -690,19 +729,19 @@ export const BOSSES = {
       title: 'The Annihilator',
       description: 'Wields the power of the void itself.',
       stats: {
-        health: 75,
+        health: 81,
         armor: 4,
         speed: 5,
         energy: 1,
-        spellPower: 0
+        spellPower: 2
       },
       spells: {
-        front: { id: 'drain', cost: 2, casts: 6 },
-        middle: { id: 'darkBolt', cost: 2, casts: 6 },
+        front: { id: 'drain', cost: 2, casts: 4 },
+        middle: { id: 'darkBolt', cost: 2, casts: 4 },
         back: { id: 'gravity', cost: 4, casts: 4 }
       },
       passives: [],
-      augments: ['healthBoostHuge', 'spellPowerBoostMassive', 'vampiric', 'curseSpellsAll', 'allCastsLarge', 'executioner', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['vampiric', 'curseSpellsAll', 'executioner', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_blood_golem_alpha',
@@ -712,8 +751,8 @@ export const BOSSES = {
       description: 'An ancient golem that cannot be destroyed.',
       stats: {
         health: 130,
-        armor: 3,
-        speed: 2,
+        armor: 4,
+        speed: 3,
         energy: 1,
         spellPower: 4
       },
@@ -722,8 +761,8 @@ export const BOSSES = {
         middle: { id: 'curse', cost: 2, casts: 4 },
         back: { id: 'soulDrain', cost: 2, casts: 5 }
       },
-      passives: [EFFECTS.Regen],
-      augments: ['healthBoostMassive', 'armorBoostHuge', 'vampiric', 'phoenixRebirth', 'thornsStrong', 'regenAugment', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      passives: [],
+      augments: ['vampiric', 'thornsStrong', 'regenAugment',  'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_celestial_judge',
@@ -733,7 +772,7 @@ export const BOSSES = {
       description: 'Passes divine judgment on all who oppose.',
       stats: {
         health: 70,
-        armor: 3,
+        armor: 4,
         speed: 5,
         energy: 1,
         spellPower: 4
@@ -743,8 +782,8 @@ export const BOSSES = {
         middle: { id: 'humility', cost: 2, casts: 5 },
         back: { id: 'truth', cost: 3, casts: 4 }
       },
-      passives: [EFFECTS.Prayer],
-      augments: ['healthBoostHuge', 'armorBoostLarge', 'curseSpellsAll', 'bleedSpellsAll', 'retributionAugment', 'thornsStrong', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      passives: [],
+      augments: ['curseSpellsAll', 'bleedSpellsAll', 'randomAugment', 'randomAugment', 'randomAugment']
     }
   ],
 
@@ -753,25 +792,25 @@ export const BOSSES = {
   // ============================================
   level30: [
     {
-      id: 'boss_bile_overlord',
-      name: 'Bile Overlord',
-      baseHeroId: 'bileCreatureID',
-      title: 'The Corrosive',
-      description: 'An apex abomination that dissolves armor and flesh alike.',
+      id: 'boss_sanctified_hierophant',
+      name: 'Sanctified Hierophant',
+      baseHeroId: 'clericID',
+      title: 'The Unyielding Light',
+      description: 'A high cleric whose rites purge corruption and punish augmented champions.',
       stats: {
-        health: 115,
+        health: 100,
         armor: 4,
-        speed: 3,
-        energy: 3,
-        spellPower: 0
+        speed: 4,
+        energy: 2,
+        spellPower: 2
       },
       spells: {
-        front: { id: 'acid', cost: 2, casts: 7 },
-        middle: { id: 'armorMelt', cost: 2, casts: 5 },
-        back: { id: 'acidPool', cost: 4, casts: 4 }
+        front: { id: 'level30SanctifiedPurify', cost: 2, casts: 7 },
+        middle: { id: 'level30CenserStorm', cost: 3, casts: 5 },
+        back: { id: 'level30FinalAbsolution', cost: 3, casts: 4 }
       },
       passives: [],
-      augments: ['healthBoostMassive', 'armorBoostHuge',  'burningSpellsAll', 'poisonSpellsAll', 'phoenixRebirth', 'allCastsLarge', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['absolvingGrace', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_necromancer_king',
@@ -784,7 +823,7 @@ export const BOSSES = {
         armor: 3,
         speed: 5,
         energy: 1,
-        spellPower: 1
+        spellPower: 0
       },
       spells: {
         front: { id: 'level30GraveCurse', cost: 3, casts: 5 },
@@ -792,7 +831,7 @@ export const BOSSES = {
         back: { id: 'soulDrain', cost: 3, casts: 3 }
       },
       passives: [EFFECTS.Regen],
-      augments: ['healthBoostMassive', 'armorBoostHuge', 'spellPowerBoostMassive', 'vampiric', 'regenAugment', 'allCastsLarge', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['spellPowerBoostMassive', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_primordial_dragon',
@@ -805,7 +844,7 @@ export const BOSSES = {
         armor: 3,
         speed: 4,
         energy: 3,
-        spellPower: 1
+        spellPower: 0
       },
       spells: {
         front: { id: 'level30DragonFangs', cost: 2, casts: 6 },

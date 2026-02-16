@@ -106,6 +106,7 @@
  * - column: All heroes in the same column
  * - adjacent: Heroes adjacent to the target
  * - nearestToLastTarget: Closest living hero to the last resolved target
+ * - lastResolvedTarget: Reuses the exact last resolved target token
  * - self: The casting hero
  * - random: Random target(s)
  * - projectilePlus1: Projectile target + 1 adjacent
@@ -113,6 +114,7 @@
  * - nearestDeadEnemy: Nearest enemy corpse
  * - rowWithHighestSumArmor: Targets entire row with highest total armor
  * - backmostRowWithHero: Targets the backmost row that has at least one hero
+ * - rowWithMostHeroes: Targets the row with the highest count of living heroes
  * - mostPoisonEffects: Enemy with the most Poison effects
  * - middleRow: Targets the middle row (supports optional excludeColumn)
  * - cornerTiles: Targets the four corner tiles on the target board (occupied tiles only)
@@ -411,6 +413,47 @@ export const SPELLS = {
     animation: 'Counter_2x2_4frames',
     animationPlacement: 'inplace'
   },
+
+  shieldMaidenSkirmish: {
+    id: 'shieldMaidenSkirmish',
+    name: 'Skirmish',
+    description: 'Targets the enemy with the highest Health, dealing 4 Attack Power.',
+    spec: {
+      targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 4 },
+      animationMs: 1200
+    },
+    animation: 'Skirmish_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
+  shieldMaidenShieldBash: {
+    id: 'shieldMaidenShieldBash',
+    name: 'Shield Bash',
+    description: 'Targets the enemy with the highest Energy, dealing 5 Attack Power and decreasing Energy by 2.',
+    spec: {
+      targets: [{ type: 'highestEnergy', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 5 },
+      post: { deltaEnergy: -2 },
+      animationMs: 1200
+    },
+    animation: 'Shield Bash_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
+  shieldMaidenLoyalty: {
+    id: 'shieldMaidenLoyalty',
+    name: 'Loyalty',
+    description: 'Targets the ally with the lowest Energy and applies Loyalty. If an enemy single-target spell would target that ally, it targets Shield Maiden instead (if able).',
+    spec: {
+      targets: [{ type: 'lowestEnergy', side: 'ally', max: 1, excludeSelf: true }],
+      effects: [EFFECTS.Loyalty],
+      animationMs: 1200
+    },
+    animation: 'Elixir_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+
     boulder: {
       id: 'boulder', name: 'Boulder',
       description: 'Targets the enemy with the highest Health, dealing 6 Attack Power.',
@@ -515,6 +558,28 @@ export const SPELLS = {
 
 
   // Lancer (new)
+  blackArrows: {
+    id: 'blackArrows', name: 'Black Arrows',
+    description: 'Projectile dealing 5 Attack Power.',
+    spec: { targets: [{ type: 'projectile', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 5 }, animationMs: 1200 },
+    animation: 'Black Arrow_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  engage: {
+    id: 'engage', name: 'Engage',
+    description: 'Column attack dealing 4 Attack Power.',
+    spec: { targets: [{ type: 'column', side: 'enemy' }], formula: { type: 'attackPower', value: 4 }, animationMs: 1200 },
+    animation: 'Engage_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  flank: {
+    id: 'flank', name: 'Flank',
+    description: 'Targets the enemy row with the most Heroes dealing 5 Attack Power.',
+    spec: { targets: [{ type: 'rowWithMostHeroes', side: 'enemy' }], formula: { type: 'attackPower', value: 5 }, animationMs: 1200 },
+    animation: 'Flank_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+
   slash: {
     id: 'slash', name: 'Slash',
     description: 'Targets the enemy with the highest Health, dealing 5 Attack Power.',
@@ -552,6 +617,52 @@ export const SPELLS = {
     description: "Targets the enemy with the lowest Speed and deals Attack Power equal to 2 + the caster's Armor.",
     spec: { targets: [{ type: 'lowestSpeed', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 2, addCasterArmor: true, ignoreSpellPower: true }, animationMs: 1200 },
     animation: 'Body Slam_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  // Samurai (new)
+  masamune: {
+    id: 'masamune', name: 'Masamune',
+    description: 'Targets the nearest enemy, dealing 4 Attack Power.',
+    spec: {
+      targets: [{ type: 'nearest', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 4 },
+      animationMs: 1200
+    },
+    animation: 'Masamune_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  harakiri: {
+    id: 'harakiri', name: 'Harakiri',
+    description: 'Deals 14 damage to the caster. Also targets all allies and applies an effect: Speed up which increases Speed by 1.',
+    spec: {
+      targets: [
+        { type: 'self' },                    // Primary target: caster for Harakiri animation
+        { type: 'board', side: 'ally' }      // Secondary target: all allies for Elixir animation
+      ],
+      formula: { type: 'fixed', value: 0 },  // Default: no damage/heal
+      perTargetExtras: [
+        { action: 'damage', value: 14, effects: [] },     // Target 0 (self): 14 damage, no effects
+        { action: null, effects: [EFFECTS.SpeedUp] }      // Target 1 (board): no damage, apply Speed up
+      ],
+      animationMs: 1200
+    },
+    animation: 'Harakiri_2x2_4frames',
+    animationSecondary: 'Elixir_2x2_4frames',  // Secondary animation for allies
+    animationPlacement: 'inplace'
+  },
+  honor: {
+    id: 'honor', name: 'Honor',
+    description: 'Targets the enemy with the highest Health, dealing 4 Attack Power 3 times.',
+    spec: {
+      targets: [
+        { type: 'highestHealth', side: 'enemy', max: 1 },
+        { type: 'lastResolvedTarget', side: 'enemy', max: 1 },
+        { type: 'lastResolvedTarget', side: 'enemy', max: 1 }
+      ],
+      formula: { type: 'attackPower', value: 4 },
+      animationMs: 1200
+    },
+    animation: 'Honor_2x2_4frames',
     animationPlacement: 'travel'
   },
   // King (new)
@@ -869,6 +980,34 @@ export const SPELLS = {
   },
 
   // Giant
+  stomp: {
+    id: 'stomp', name: 'Stomp',
+    description: 'Targets the enemy with the lowest Speed, dealing 6 Attack Power.',
+    spec: { targets: [{ type: 'lowestSpeed', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6 }, animationMs: 1200 },
+    animation: 'Stomp_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  throwBoulder: {
+    id: 'throwBoulder', name: 'Throw Boulder',
+    description: 'Projectile dealing 5 Attack Power. Also targets the caster and applies Taunt, forcing single-target enemy spells to target this Hero.',
+    spec: {
+      targets: [{ type: 'projectile', side: 'enemy', max: 1 }, { type: 'self' }],
+      formula: { type: 'attackPower', value: 5 },
+      perTargetExtras: [null, { action: null, effects: [EFFECTS.Taunt] }],
+      animationMs: 1200
+    },
+    animation: 'Throw Boulder_2x2_4frames',
+    animationSecondary: 'Elixir_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  rockSmash: {
+    id: 'rockSmash', name: 'Rock Smash',
+    description: 'Targets the enemy with the highest Health, dealing 5 Attack Power.',
+    spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 5 }, animationMs: 1200 },
+    animation: 'Rock Smash_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+
   trample: {
     id: 'trample', name: 'Trample',
     description: 'Column attack dealing 2 Attack Power ignoring Armor and applying Slowed (-1 Speed).',
@@ -1150,6 +1289,45 @@ export const SPELLS = {
     id: 'lieInWait', name: 'Lie In Wait',
     description: 'Grants an ally +2 Spell Power and makes them untargetable by single-target spells for 5 rounds.',
     spec: { targets: [{ type: 'self', side: 'ally' }], effects: [EFFECTS.LieInWait], animationMs: 1200 }, animation: 'Elixir_2x2_4frames', animationPlacement: 'inplace'
+  },
+  shadowStrike: {
+    id: 'shadowStrike', name: 'Shadow Strike',
+    description: 'Targets the enemy first encountered according to a reverse book reading, dealing 7 Attack Power.',
+    spec: { targets: [{ type: 'reverseBook', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 7 }, animationMs: 1200 },
+    animation: 'Shadow Strike_2x2_4frames',
+    animationPlacement: 'travel'
+  },
+  fade: {
+    id: 'fade', name: 'Fade',
+    description: 'Targets the caster and applies Fade (+1 Spell Power, untargetable by single-target spells for 5 rounds).',
+    spec: { targets: [{ type: 'self', side: 'ally' }], effects: [EFFECTS.Fade], animationMs: 1200 },
+    animation: 'Elixir_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+  combo: {
+    id: 'combo', name: 'Combo',
+    description: '(1) Targets the enemy with the lowest Health, dealing 3 Attack Power twice. (2) If Combo kills an enemy, target the enemy with the highest Health, dealing 5 Attack Power.',
+    spec: {
+      targets: [
+        { type: 'lowestHealth', side: 'enemy', max: 1 },
+        { type: 'lastResolvedTarget', side: 'enemy', max: 1 }
+      ],
+      formula: { type: 'attackPower', value: 3 },
+      post: {
+        conditionalSecondaryOnWouldKill: {
+          deferConditionalSecondaryUntilAllTargets: true,
+          secondarySpec: {
+            targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
+            formula: { type: 'attackPower', value: 5 }
+          }
+        }
+      },
+      animationMs: 1200
+    },
+    animation: 'Combo_2x2_4frames',
+    animationSecondary: 'Combo Secondary_2x2_4frames',
+    secondaryAnimationOnPhaseOnly: true,
+    animationPlacement: 'travel'
   },
   spear: {
     id: 'spear', name: 'Spear',

@@ -109,6 +109,36 @@ export const HEROES = [
     },
   },
   {
+    id: 'samuraiID',
+    name: 'Samurai',
+    image: '/images/heroes/Samurai cropped.jpg',
+    health: 10,
+    armor: 2,
+    speed: 3,
+    energy: 1,
+    spells: {
+      front: { id: 'masamune', cost: 2, casts: 5 },
+      middle: { id: 'harakiri', cost: 3, casts: 1 },
+      back: { id: 'honor', cost: 5, casts: 3 },
+    },
+    description: 'Samurai: Masamune [2] targets nearest enemy for 4 Attack Power; Harakiri [3] deals 14 damage to the caster and applies Speed up (+1 Speed) to all allies; Honor [5] hits the highest-health enemy for 4 Attack Power 3 times.'
+  },
+  {
+    id: 'riderID',
+    name: 'Rider',
+    image: '/images/heroes/Rider Cropped.jpg',
+    health: 8,
+    armor: 2,
+    speed: 3,
+    energy: 0,
+    spells: {
+      front: { id: 'blackArrows', cost: 3, casts: 3 },
+      middle: { id: 'engage', cost: 3, casts: 4 },
+      back: { id: 'flank', cost: 6, casts: 3 },
+    },
+    description: 'Rider: Black Arrows [3] projectile for 5 Attack Power; Engage [3] column attack for 4 Attack Power; Flank [6] targets enemy row with the most Heroes for 5 Attack Power.'
+  },
+  {
     id: 'elementalistID',
     name: 'Elementalist',
     image: '/images/heroes/Elementalist Cropped.jpg',
@@ -730,6 +760,22 @@ export const HEROES = [
   },
 
   {
+    id: 'rogueID',
+    name: 'Rogue',
+    image: '/images/heroes/Rogue Cropped.jpg',
+    health: 8,
+    armor: 0,
+    speed: 4,
+    energy: 3,
+    spells: {
+      front: { id: 'shadowStrike', cost: 4, casts: 5 },
+      middle: { id: 'fade', cost: 4, casts: 1 },
+      back: { id: 'combo', cost: 4, casts: 3 },
+    },
+    description: 'Rogue: Shadow Strike [4] reverse-book single target for 7; Fade [4] grants +1 Spell Power and single-target immunity for 5 rounds; Combo [4] hits lowest Health twice for 3 and, on kill, hits highest Health for 5.'
+  },
+
+  {
     id: 'elderID',
     name: 'Elder',
     image: '/images/heroes/Elder Cropped.jpg',
@@ -936,6 +982,23 @@ export const HEROES = [
     description: 'Fire Golem: Consumed By Flames [2] scales with Burn stacks, Heating Up [2] grants a Burn-on-cast buff, Consume Burn [2] removes a Burn for burst damage and self-heal. Passive: Smolder (targeting the golem applies Burn to the attacker).'
   },
   {
+    id: 'rockGolemID',
+    name: 'Rock Golem',
+    image: '/images/heroes/Rock Golem Cropped.jpg',
+    health: 10,
+    armor: 4,
+    speed: 2,
+    energy: 0,
+    monster: true,
+    passives: [EFFECTS.Crumble],
+    spells: {
+      front: { id: 'stomp', cost: 3, casts: 3 },
+      middle: { id: 'throwBoulder', cost: 4, casts: 2 },
+      back: { id: 'rockSmash', cost: 2, casts: 4 },
+    },
+    description: 'Rock Golem: Stomp [3] targets the enemy with the lowest Speed for 6 Attack Power; Throw Boulder [4] projectile for 5 and applies Taunt to self; Rock Smash [2] targets highest Health for 5. Passive: Crumble (first time Health drops below 7, loses 1 base Armor).'
+  },
+  {
     id: 'giantID',
     name: 'Giant',
     image: '/images/heroes/Giant Cropped.jpg',
@@ -1040,6 +1103,21 @@ export const HEROES = [
       back: { id: 'retribution', cost: 3, casts: 2 },
     },
     description: 'Fallen Angel: slash deals 5 Attack Power to highest Health; darkPillar is a column attack applying Curse (-1 Spell Power); retribution grants retaliation buff (3 damage when targeted).'
+  },
+  {
+    id: 'shieldMaidenID',
+    name: 'Shield Maiden',
+    image: '/images/heroes/Shield Maiden Cropped.jpg',
+    health: 13,
+    armor: 3,
+    speed: 3,
+    energy: 0,
+    spells: {
+      front: { id: 'shieldMaidenSkirmish', cost: 2, casts: 6 },
+      middle: { id: 'shieldMaidenShieldBash', cost: 6, casts: 3 },
+      back: { id: 'shieldMaidenLoyalty', cost: 3, casts: 2 },
+    },
+    description: 'Shield Maiden: Skirmish [2] targets highest Health for 4 Attack Power; Shield Bash [6] targets highest Energy for 5 Attack Power and reduces Energy by 2; Loyalty [3] applies a redirect effect to the lowest-Energy ally so enemy single-target spells hit Shield Maiden instead (if able).'
   },
   {
     id: 'pyroID',

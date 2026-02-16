@@ -346,7 +346,7 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
         bossId: bossData?.bossConfig?.id || null
       });
     } else {
-      const teamData = generateEnemyTeam(level);
+      const teamData = generateEnemyTeam(level, { playerMainBoard: p1Main });
       // Convert to board format: { hero, boardName, index }
       const p2Main = makeEmptyMain('p2');
       teamData.mainBoard.forEach(entry => {

@@ -874,6 +874,49 @@ export function getStoryArc(kingdomId) {
 }
 
 /*
+STORY MODE RESOURCE CHECKLIST (BRAVE KINGDOM OUTLINE)
+
+Use this checklist before converting this long-form draft into playable story nodes.
+
+Current status notes:
+- Already present in `heroes.js`: Dark Mage, Lightning Mage, Blood Golem, Palace Guard.
+- Confirmed missing (or not clearly defined as heroes): Shield Maiden, Stonecased King, Queen Aralyn, Prince Rowan, Halbrecht, Varric.
+
+1) Character portraits / speaker art (high priority)
+- Core cast portraits: Queen Aralyn, Prince Rowan, Stonecased King, Halbrecht, Varric.
+- Battle/support portraits: Shield Maiden, Outcast Assassin, Rogue Mage, Werewolf, Specter, Tethered Spirit, Garruk the Red (if used as named miniboss).
+- Export format for dialogue compatibility: `/images/heroes/<Name> Cropped.jpg`.
+
+2) Playable/enemy unit definitions (high priority)
+- Create hero entries (or enemy-only unit records) for all missing battle participants above.
+- Add/loadout definitions so chapter battles can be assembled without placeholders.
+- Ensure each new unit has image path, role tags/faction tags, and 3 abilities wired.
+
+3) Story battle environments / backgrounds (high priority)
+- Dawnfall Bridge (mist bridge ambush).
+- Halbrecht Fortress exterior (courtyard/walls under siege).
+- Relic Vault interior / Vault of Echoes.
+- Ruined Vault variant.
+- Lightning Road mountain pass (storm variant).
+- Capital Eastern Gate siege wall.
+- Throne Room final battle (with petrified king visual).
+
+4) VFX / encounter-specific animation needs (medium priority)
+- Illusion fog / phantom silhouettes (Dark Mage encounters).
+- Relic lightning storm effects (Lightning Mage + finale).
+- Spectral chain/echo effects (Specter + Tethered Spirit).
+- Vault instability/collapse pulses and debris.
+
+5) Audio pass (medium priority)
+- Scene stingers: betrayal reveal, vault collapse, gate breach, final strike.
+- Ambient loops: fortress siege, vault hum, storm pass, throne room instability.
+
+6) Integration tasks to make assets appear in story mode (high priority)
+- Add new speaker-image mappings in `StoryBattle.jsx` for all new named speakers.
+- If a speaker is not in defaults, provide explicit `leftPortraits/rightPortraits` per dialogue beat.
+- Replace the single hardcoded scene background with per-node background references when ready.
+- Build enemy team presets for each chapter battle node before enabling these parts in progression.
+
 STORYLINE OUTLINE (CONNECTED ARCS)
 
 BRAVE KINGDOM — PART I: “ASHES OF HONOR”

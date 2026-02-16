@@ -84,12 +84,37 @@ function getAliveSidesMain(p1Board, p2Board, p3Board) {
   if (isSideAliveMain(p3Board)) alive.push('p3');
   return alive;
 }
+
+function maybeTriggerCrumblePassive(tile, previousHealth, nextHealth, addLog) {
+  if (!tile || !tile.hero) return;
+  if (!(Number(previousHealth) >= 7 && Number(nextHealth) < 7)) return;
+
+  if (!tile._passives && tile.hero && Array.isArray(tile.hero.passives)) {
+    tile._passives = tile.hero.passives.map(e => ({ ...e }));
+  }
+
+  const crumble = Array.isArray(tile._passives)
+    ? tile._passives.find(p => p && p.name === 'Crumble' && !p._used)
+    : null;
+  if (!crumble) return;
+
+  crumble._used = true;
+  const currentBaseArmor = Number((tile.hero && tile.hero.armor) || 0);
+  tile.hero.armor = Math.max(0, currentBaseArmor - 1);
+  try { recomputeModifiers(tile); } catch (e) {}
+  addLog && addLog(`  > ${tile.hero.name || 'Rock Golem'} Crumble triggered: base Armor reduced by 1.`);
+}
+
 function applyHealthDelta(tile, delta) {
   if (!tile) return;
   ensureTileHealthInitialized(tile);
+  if (!tile._passives && tile.hero && Array.isArray(tile.hero.passives)) {
+    tile._passives = tile.hero.passives.map(e => ({ ...e }));
+  }
   const cur = Number(tile.currentHealth || 0);
   const next = cur + Number(delta || 0);
   tile.currentHealth = capHealthForTile(tile, next);
+  maybeTriggerCrumblePassive(tile, cur, tile.currentHealth, null);
 }
 
 function clampEnergy(tile) {
@@ -108,6 +133,11 @@ function applyVoidShieldReduction(tile, damage) {
   if (vs <= 0 || raw <= 0) return { damage: raw, reducedBy: 0 };
   const reduced = Math.max(0, raw - vs);
   return { damage: reduced, reducedBy: raw - reduced };
+}
+
+function getPeriodicPulseBonus(tile) {
+  if (!tile || !tile.hero) return 0;
+  return Math.max(0, Number(tile.hero._towerPeriodicPulseBonus || 0));
 }
 
 function cloneArr(arr) { 
@@ -552,6 +582,11 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
             if (pulse.derivedFrom === 'roundNumber') {
               try { v = Number(roundNumber || 1); } catch (e) { v = Number(pulse.value || 0); }
             }
+            const applierRef = resolveEffectApplierForPulse(effect);
+            const periodicBonus = getPeriodicPulseBonus((applierRef && applierRef.tile) ? applierRef.tile : tile);
+            if (periodicBonus > 0) {
+              v = Math.max(0, v + periodicBonus);
+            }
             const vsResult = applyVoidShieldReduction(tile, v);
             if (vsResult.reducedBy > 0) {
               addLog && addLog(`  > Void Shield reduced effect damage by ${vsResult.reducedBy} on ${boardName}[${idx}]`);
@@ -672,7 +707,9 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
               });
             } catch (e) {}
           } else if (pulse.type === 'heal') {
-            const v = Number(pulse.value || 0);
+            const applierRef = resolveEffectApplierForPulse(effect);
+            const periodicBonus = getPeriodicPulseBonus((applierRef && applierRef.tile) ? applierRef.tile : tile);
+            const v = Math.max(0, Number(pulse.value || 0) + periodicBonus);
             addLog && addLog(`  > ${effect.name || 'Effect'} pulse will heal ${v} to ${boardName}[${idx}]`);
             
             // Emit UI step BEFORE applying heal
@@ -1731,6 +1768,23 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
     } catch (e) {}
     const actionResults = [];
     const pendingCastChanges = [];
+    let conditionalSecondaryQueued = false;
+    let deferredConditionalSecondarySpec = null;
+    let deferredConditionalSecondaryShouldQueue = false;
+    const hasPendingDeathPrevention = (tile) => {
+      try {
+        if (!tile || !tile.hero) return false;
+        const passives = (tile._passives && Array.isArray(tile._passives))
+          ? tile._passives
+          : ((tile.hero && Array.isArray(tile.hero.passives)) ? tile.hero.passives : []);
+        const hasUndying = (passives || []).some(p => p && (p.name === 'Undying Rage' || p.name === 'UndyingRage') && !p._used);
+        if (hasUndying) return true;
+        const regeloop = (passives || []).find(p => p && (p.name === 'Regeloop' || p.name === 'RegelOOP' || p.name === 'REGLOOP'));
+        if (regeloop && (regeloop._uses == null || Number(regeloop._uses || 0) < 3)) return true;
+        if (tile.hero && tile.hero._towerPhoenix === true && !tile.hero._towerPhoenixUsed) return true;
+      } catch (e) {}
+      return false;
+    };
     let lifestealDamagedEnemyCount = 0;
     const moveAllBackApplied = new Set();
     let swapWithReserveApplied = false;
@@ -1803,7 +1857,8 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         projectilePlus1Secondary = seen > 0;
         projectilePlus1SeenByBoard.set(boardKey, seen + 1);
       }
-      const isSecondaryTarget = !!(spellDef && spellDef.animationSecondary) && (
+      const secondaryAnimationOnPhaseOnly = !!(spellDef && spellDef.secondaryAnimationOnPhaseOnly);
+      const isSecondaryTarget = !!(spellDef && spellDef.animationSecondary) && !secondaryAnimationOnPhaseOnly && (
         (typeof descriptorIndex === 'number' && descriptorIndex > 0)
           || projectilePlus1Secondary
       );
@@ -2029,7 +2084,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                   : (Array.isArray(applyIfRemoved) ? applyIfRemoved : []);
                 const toApply = list.map(e => (typeof e === 'string' ? EFFECTS[e] : e)).filter(Boolean);
                 if (toApply.length > 0) {
-                  pendingEffects.push({ target: tref, effects: toApply, applier: src });
+                  pendingEffects.push({ target: tref, effects: toApply, applier: src, phase: phaseTag });
                   addLog && addLog(`  > post.removeTopDebuff queued effects ${toApply.map(e => e && e.name).filter(Boolean).join(', ')} on ${tref.boardName}[${tref.index}]`);
                 }
               }
@@ -2238,7 +2293,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
           });
         }
         if (effectsToApply.length > 0) {
-          pendingEffects.push({ target: tref, effects: effectsToApply, applier: src });
+          pendingEffects.push({ target: tref, effects: effectsToApply, applier: src, phase: phaseTag });
         }
         effectsApplied = (effectsToApply || []).map(e => e && e.name).filter(Boolean);
       }
@@ -2312,7 +2367,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             if ((side === 'enemy' && !isEnemy) || (side === 'ally' && isEnemy)) continue;
             const eff = EFFECTS[effectName] || null;
             if (eff) {
-              pendingEffects.push({ target: tref, effects: [eff], applier: src });
+              pendingEffects.push({ target: tref, effects: [eff], applier: src, phase: phaseTag });
               effectsApplied.push(eff.name);
             }
           }
@@ -2331,26 +2386,27 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             const targetSide = (tref && tref.boardName && String(tref.boardName).startsWith('p1'))
               ? 'p1'
               : ((tref && tref.boardName && String(tref.boardName).startsWith('p2')) ? 'p2' : 'p3');
-            if (casterSide && targetSide && casterSide === targetSide) return;
-            let slotKey = (cast && cast.payload && cast.payload.slot) || null;
-            if (!slotKey) {
-              const sid = (cast && cast.payload && cast.payload.spellId) || (runtimePayload && runtimePayload.spellId) || null;
-              const hs = casterHero && casterHero.spells ? casterHero.spells : null;
-              if (sid && hs) {
-                if (hs.front && hs.front.id === sid) slotKey = 'front';
-                else if (hs.middle && hs.middle.id === sid) slotKey = 'middle';
-                else if (hs.back && hs.back.id === sid) slotKey = 'back';
-              }
-            }
-            const debuffsForSlot = slotKey ? (debuffAugments[slotKey] || []) : [];
-            if (Array.isArray(debuffsForSlot) && debuffsForSlot.length > 0) {
-              debuffsForSlot.forEach((effectName) => {
-                const eff = effectName && (EFFECTS[effectName] || null);
-                if (eff) {
-                  pendingEffects.push({ target: tref, effects: [eff], applier: src });
-                  effectsApplied.push(eff.name);
+            if (!(casterSide && targetSide && casterSide === targetSide)) {
+              let slotKey = (cast && cast.payload && cast.payload.slot) || null;
+              if (!slotKey) {
+                const sid = (cast && cast.payload && cast.payload.spellId) || (runtimePayload && runtimePayload.spellId) || null;
+                const hs = casterHero && casterHero.spells ? casterHero.spells : null;
+                if (sid && hs) {
+                  if (hs.front && hs.front.id === sid) slotKey = 'front';
+                  else if (hs.middle && hs.middle.id === sid) slotKey = 'middle';
+                  else if (hs.back && hs.back.id === sid) slotKey = 'back';
                 }
-              });
+              }
+              const debuffsForSlot = slotKey ? (debuffAugments[slotKey] || []) : [];
+              if (Array.isArray(debuffsForSlot) && debuffsForSlot.length > 0) {
+                debuffsForSlot.forEach((effectName) => {
+                  const eff = effectName && (EFFECTS[effectName] || null);
+                  if (eff) {
+                    pendingEffects.push({ target: tref, effects: [eff], applier: src, phase: phaseTag });
+                    effectsApplied.push(eff.name);
+                  }
+                });
+              }
             }
           }
         }
@@ -2368,7 +2424,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               const eff = effectName && (EFFECTS[effectName] || null);
                 if (eff && Math.random() < chance) {
                   addLog && addLog(`  > applyEffectWithChance: queued ${eff.name} on ${tref && tref.boardName}[${tref && tref.index}] (chance ${chance})`);
-                  pendingEffects.push({ target: tref, effects: [eff], applier: src });
+                  pendingEffects.push({ target: tref, effects: [eff], applier: src, phase: phaseTag });
                   effectsApplied.push(eff.name);
                 } else {
                 addLog && addLog(`  > applyEffectWithChance: roll failed for ${effectName} (chance ${chance})`);
@@ -2399,7 +2455,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         }
       } catch (e) {}
 
-      actionResults.push({ target: tref, applied: appliedResult, effectsApplied, phase: phaseTag });
+      actionResults.push({ target: tref, applied: appliedResult, effectsApplied, phase: phaseTag, descriptorIndex: (typeof descriptorIndex === 'number') ? descriptorIndex : null });
 
       // Arcane Exchange: when you heal an ally, gain +1 Energy and charge next-round damage bonus
       try {
@@ -2461,12 +2517,16 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         if (cond && cond.secondarySpec && applied && applied.type === 'damage') {
           try {
             // find the pending deferred change we just queued for this target
-            const matchPending = pendingCastChanges.find(ch => ch && ch.boardName === (tref && tref.boardName) && Number(ch.index) === Number(tref && tref.index) && typeof ch.deltaHealth === 'number');
+            const matchPending = [...pendingCastChanges].reverse().find(ch => ch && ch.boardName === (tref && tref.boardName) && Number(ch.index) === Number(tref && tref.index) && typeof ch.deltaHealth === 'number');
             if (matchPending) {
-              const arr = (matchPending.boardName || '').startsWith('p1') ? cP1 : cP2;
+              const arr = (matchPending.boardName || '').startsWith('p1') ? cP1 : ((matchPending.boardName || '').startsWith('p2') ? cP2 : cP3);
               const tile = (arr || [])[matchPending.index];
               const newHealth = (tile && typeof tile.currentHealth === 'number' ? tile.currentHealth : (tile && tile.hero && tile.hero.health) || 0) + Number(matchPending.deltaHealth || 0);
-              if (newHealth <= 0) {
+              const preventedByDeathPassive = hasPendingDeathPrevention(tile);
+              if (newHealth <= 0 && !preventedByDeathPassive && cond.deferConditionalSecondaryUntilAllTargets) {
+                deferredConditionalSecondarySpec = cond.secondarySpec;
+                deferredConditionalSecondaryShouldQueue = true;
+              } else if (newHealth <= 0 && !preventedByDeathPassive && !conditionalSecondaryQueued) {
                 addLog && addLog(`  > conditionalSecondaryOnWouldKill: target ${matchPending.boardName}[${matchPending.index}] would die — queuing secondary`);
                 const bonusOptions = (runtimePayload && runtimePayload._bonusOptions) ? runtimePayload._bonusOptions : {};
                 const secRuntime = buildPayloadFromSpec(cond.secondarySpec, src, { p1Board: cP1, p2Board: cP2, p3Board: cP3, p1Reserve: cR1, p2Reserve: cR2, p3Reserve: cR3 }, null, bonusOptions);
@@ -2483,6 +2543,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                     actionResults.push({ target: stRef, applied: applied2, effectsApplied: [], phase: 'secondary' });
                   }
                 }
+                conditionalSecondaryQueued = true;
               }
             }
           } catch (e) {}
@@ -2530,6 +2591,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             };
 
             mainSlot.hero = reserveSnapshot.hero;
+            mainSlot._dead = false;
             mainSlot.effects = reserveSnapshot.effects || [];
             mainSlot._passives = reserveSnapshot._passives || [];
             mainSlot._castsRemaining = reserveSnapshot._castsRemaining ? { ...reserveSnapshot._castsRemaining } : undefined;
@@ -2542,6 +2604,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             mainSlot.spellCasts = reserveSnapshot.spellCasts || [];
 
             reserveSlot.hero = mainSnapshot.hero;
+            reserveSlot._dead = false;
             reserveSlot.effects = mainSnapshot.effects || [];
             reserveSlot._passives = mainSnapshot._passives || [];
             reserveSlot._castsRemaining = mainSnapshot._castsRemaining ? { ...mainSnapshot._castsRemaining } : undefined;
@@ -2713,6 +2776,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                       addLog && addLog(`  > Recursively moving blocking hero from ${boardName}[${toIdx}] to ${boardName}[${blockingToIdx}] first`);
                       // Move the blocking hero (code duplicated for simplicity)
                       blockingToSlot.hero = toSlot.hero;
+                      blockingToSlot._dead = false;
                       blockingToSlot.effects = toSlot.effects || [];
                       blockingToSlot._castsRemaining = toSlot._castsRemaining ? { ...toSlot._castsRemaining } : undefined;
                       // Reset _lastAutoCastEnergy so auto-cast will re-evaluate the moved hero
@@ -2753,6 +2817,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                         }
                       } catch (e) {}
                       toSlot.hero = null;
+                      toSlot._dead = false;
                       toSlot.effects = [];
                       toSlot._castsRemaining = undefined;
                       toSlot._lastAutoCastEnergy = undefined;
@@ -2800,6 +2865,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                 // move hero and runtime fields - access board directly to ensure slot exists
                 const toSlot = boardArr[toIdx];
                 toSlot.hero = fromSlot.hero;
+                toSlot._dead = false;
                 toSlot.effects = fromSlot.effects || [];
                 toSlot._castsRemaining = fromSlot._castsRemaining ? { ...fromSlot._castsRemaining } : undefined;
                 // Reset _lastAutoCastEnergy so auto-cast will re-evaluate the moved hero
@@ -2875,6 +2941,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                 // clear source slot - access board directly in case reference was invalidated
                 if (boardArr[fromIdx]) {
                   boardArr[fromIdx].hero = null;
+                  boardArr[fromIdx]._dead = false;
                   boardArr[fromIdx].effects = [];
                   boardArr[fromIdx]._castsRemaining = undefined;
                   boardArr[fromIdx]._lastAutoCastEnergy = undefined;
@@ -2950,6 +3017,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               addLog && addLog(`  > post.moveToFrontmostAvailable moving hero from ${boardName}[${fromIdx}] to ${boardName}[${toIdx}]`);
 
               toSlot.hero = fromSlot.hero;
+              toSlot._dead = false;
               toSlot.effects = fromSlot.effects || [];
               toSlot._castsRemaining = fromSlot._castsRemaining ? { ...fromSlot._castsRemaining } : undefined;
               toSlot._lastAutoCastEnergy = Number.NEGATIVE_INFINITY;
@@ -2999,6 +3067,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               } catch (e) {}
 
               fromSlot.hero = null;
+              fromSlot._dead = false;
               fromSlot.effects = [];
               fromSlot._castsRemaining = undefined;
               fromSlot._lastAutoCastEnergy = undefined;
@@ -3062,7 +3131,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
           addLog && addLog(`  > post.moveAllBack triggered on ${tref.boardName}[${tref.index}]`);
           for (let col = 0; col < 3; col++) {
             const indices = columnIndicesForBoard(col, boardName); // front->middle->back
-            const heroIndices = indices.filter(i => boardArr[i] && boardArr[i].hero);
+            const heroIndices = indices.filter(i => boardArr[i] && boardArr[i].hero && !boardArr[i]._dead);
             const n = heroIndices.length;
             if (n === 0) continue;
             const dest = indices.slice(indices.length - n);
@@ -3089,7 +3158,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             for (const e of entries) {
               try {
                 const fs = boardArr[e.fromIdx];
-                fs.hero = null; fs.effects = []; fs._castsRemaining = undefined; fs._lastAutoCastEnergy = undefined;
+                fs.hero = null; fs._dead = false; fs.effects = []; fs._castsRemaining = undefined; fs._lastAutoCastEnergy = undefined;
                 fs.currentEnergy = undefined; fs.currentHealth = undefined; fs.currentArmor = undefined; fs.currentSpeed = undefined; fs.currentSpellPower = undefined;
                 try { fs.spellCasts = []; } catch (ee) {}
                 try { recomputeModifiers(fs); } catch (ee) {}
@@ -3102,6 +3171,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               const toSlot = boardArr[toIdx];
               const d = ent.data;
               toSlot.hero = d.hero;
+              toSlot._dead = false;
               toSlot.effects = d.effects || [];
               toSlot._castsRemaining = d._castsRemaining ? { ...d._castsRemaining } : undefined;
               // Reset _lastAutoCastEnergy so auto-cast will re-evaluate the moved hero
@@ -3231,6 +3301,28 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       } catch (e) {}
     });
 
+    // Optional deferred conditional secondary: queue after all primary targets resolve.
+    try {
+      if (!conditionalSecondaryQueued && deferredConditionalSecondaryShouldQueue && deferredConditionalSecondarySpec && src) {
+        addLog && addLog('  > conditionalSecondaryOnWouldKill (deferred): queuing secondary after primary sequence');
+        const bonusOptions = (runtimePayload && runtimePayload._bonusOptions) ? runtimePayload._bonusOptions : {};
+        const secRuntime = buildPayloadFromSpec(deferredConditionalSecondarySpec, src, { p1Board: cP1, p2Board: cP2, p3Board: cP3, p1Reserve: cR1, p2Reserve: cR2, p3Reserve: cR3 }, null, bonusOptions);
+        secRuntime.source = `${src.boardName}[${src.index}]`;
+        for (let si = 0; si < (secRuntime.targets || []).length; si++) {
+          const st = secRuntime.targets[si];
+          const stRef = findTileInBoards(st, cP1, cP2, cP3, cR1, cR2, cR3);
+          const sper = (secRuntime && Array.isArray(secRuntime.perTargetPayloads) && secRuntime.perTargetPayloads[si]) ? { ...secRuntime, ...secRuntime.perTargetPayloads[si] } : secRuntime;
+          if (sper && sper.action) {
+            const applied2 = applyPayloadToTarget({ ...sper, source: sper.source || secRuntime.source }, stRef, addLog, { p1Board: cP1, p2Board: cP2, p3Board: cP3, p1Reserve: cR1, p2Reserve: cR2, p3Reserve: cR3 }, onStep, false);
+            if (applied2 && applied2.type === 'damage') pendingCastChanges.push({ boardName: stRef && stRef.boardName, index: stRef && stRef.index, deltaHealth: -Number(applied2.amount || 0), amount: Number(applied2.amount || 0), deltaEnergy: Number(applied2.deltaEnergy || 0), source: sper && sper.source || secRuntime.source, phase: 'secondary', voidShieldApplied: !!(applied2 && applied2.voidShieldApplied) });
+            if (applied2 && applied2.type === 'heal') pendingCastChanges.push({ boardName: stRef && stRef.boardName, index: stRef && stRef.index, deltaHealth: Number(applied2.amount || 0), amount: Number(applied2.amount || 0), deltaEnergy: Number(applied2.deltaEnergy || 0), phase: 'secondary' });
+            actionResults.push({ target: stRef, applied: applied2, effectsApplied: [], phase: 'secondary' });
+          }
+        }
+        conditionalSecondaryQueued = true;
+      }
+    } catch (e) {}
+
     try {
       const passiveList = (src && src.tile && Array.isArray(src.tile._passives))
         ? src.tile._passives
@@ -3343,8 +3435,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         const echoSlot = src.tile.hero._towerSpellEcho;
         const hasEcho = echoSlot && resolvedSlot === echoSlot;
         if (hasEcho) {
-          const remaining = src.tile._castsRemaining ? Number(src.tile._castsRemaining[resolvedSlot] || 0) : 0;
-          if (remaining > 0) shouldEcho = true;
+          shouldEcho = true;
         }
 
         let shouldDoubleStrike = false;
@@ -3569,7 +3660,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       type: 'cast',
       caster: { boardName: src.boardName, index: src.index },
       spellId: cast.payload && cast.payload.spellId ? cast.payload.spellId : (runtimePayload && runtimePayload.spellId ? runtimePayload.spellId : null),
-      results: actionResults.map(r => ({ target: r.target, applied: (r.applied && r.applied.deferred) ? null : r.applied, effectsApplied: r.effectsApplied, phase: r.phase }))
+      results: actionResults.map(r => ({ target: r.target, applied: (r.applied && r.applied.deferred) ? null : r.applied, effectsApplied: r.effectsApplied, phase: r.phase, descriptorIndex: (typeof r.descriptorIndex === 'number') ? r.descriptorIndex : null }))
     };
     if (runtimePayload && runtimePayload._copiedSpellId) {
       lastAction.copiedSpellId = runtimePayload._copiedSpellId;
@@ -3587,23 +3678,53 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
     try {
       const animationSpellId = (runtimePayload && runtimePayload._copiedSpellId) ? runtimePayload._copiedSpellId : lastAction.spellId;
       const spellDef = getSpellById(animationSpellId) || {};
-      if (spellDef.animationSecondary) {
+      // Prefer pendingCastChanges (authoritative for secondary pulses) to determine secondary targets.
+      const primaryFromChanges = (pendingCastChanges || [])
+        .filter(ch => ch && ch.phase === 'primary' && ch.boardName && typeof ch.index === 'number')
+        .map(ch => ({ boardName: ch.boardName, index: ch.index }));
+      const primaryFromResults = (actionResults || [])
+        .filter(r => r && r.phase === 'primary' && r.target && r.target.boardName && typeof r.target.index === 'number')
+        .map(r => ({ boardName: r.target.boardName, index: r.target.index }));
+      const allPrimary = [...primaryFromChanges, ...primaryFromResults];
+      const primaryDedup = new Map();
+      allPrimary.forEach(t => {
+        const key = `${t.boardName}:${t.index}`;
+        if (!primaryDedup.has(key)) primaryDedup.set(key, t);
+      });
+      const primaryTargets = Array.from(primaryDedup.values());
+      lastAction.primaryTargets = primaryTargets;
+
+      const primaryDescriptorIndices = Array.from(new Set((actionResults || [])
+        .filter(r => r && r.phase === 'primary' && typeof r.descriptorIndex === 'number')
+        .map(r => Number(r.descriptorIndex))));
+      if (primaryDescriptorIndices.length > 0) {
+        lastAction.primaryDescriptorIndices = primaryDescriptorIndices;
+      }
+
+      const secondaryFromChanges = (pendingCastChanges || [])
+        .filter(ch => ch && ch.phase === 'secondary' && ch.boardName && typeof ch.index === 'number')
+        .map(ch => ({ boardName: ch.boardName, index: ch.index }));
+      const secondaryFromResults = (actionResults || [])
+        .filter(r => r && r.phase === 'secondary' && r.target && r.target.boardName && typeof r.target.index === 'number')
+        .map(r => ({ boardName: r.target.boardName, index: r.target.index }));
+      const allSecondary = [...secondaryFromChanges, ...secondaryFromResults];
+      const dedup = new Map();
+      allSecondary.forEach(t => {
+        const key = `${t.boardName}:${t.index}`;
+        if (!dedup.has(key)) dedup.set(key, t);
+      });
+      const secondaryTargets = Array.from(dedup.values());
+      const secondaryDescriptorIndices = Array.from(new Set((actionResults || [])
+        .filter(r => r && r.phase === 'secondary' && typeof r.descriptorIndex === 'number')
+        .map(r => Number(r.descriptorIndex))));
+      if (secondaryDescriptorIndices.length > 0) {
+        lastAction.secondaryDescriptorIndices = secondaryDescriptorIndices;
+      }
+
+      if (spellDef.animationSecondary && (!spellDef.secondaryAnimationOnPhaseOnly || secondaryTargets.length > 0)) {
         lastAction.secondaryAnimation = spellDef.animationSecondary;
         lastAction.secondaryAnimationMs = (typeof runtimePayload.animationMs === 'number') ? Number(runtimePayload.animationMs || 0) : 0;
-        // Prefer pendingCastChanges (authoritative for secondary pulses) to determine secondary targets.
-        const secondaryFromChanges = (pendingCastChanges || [])
-          .filter(ch => ch && ch.phase === 'secondary' && ch.boardName && typeof ch.index === 'number')
-          .map(ch => ({ boardName: ch.boardName, index: ch.index }));
-        const secondaryFromResults = (actionResults || [])
-          .filter(r => r && r.phase === 'secondary' && r.target && r.target.boardName && typeof r.target.index === 'number')
-          .map(r => ({ boardName: r.target.boardName, index: r.target.index }));
-        const allSecondary = [...secondaryFromChanges, ...secondaryFromResults];
-        const dedup = new Map();
-        allSecondary.forEach(t => {
-          const key = `${t.boardName}:${t.index}`;
-          if (!dedup.has(key)) dedup.set(key, t);
-        });
-        lastAction.secondaryTargets = Array.from(dedup.values());
+        lastAction.secondaryTargets = secondaryTargets;
       }
     } catch (e) {}
 
@@ -3777,7 +3898,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               const names = (pe.effects || []).map(e => e && e.name).filter(Boolean);
               names.forEach(name => {
                 if (typeof onStep === 'function') {
-                  const lastAction = { type: 'effectApplied', target: { boardName: pe.target.boardName, index: pe.target.index }, effectName: name };
+                  const lastAction = { type: 'effectApplied', target: { boardName: pe.target.boardName, index: pe.target.index }, effectName: name, phase: pe && pe.phase ? pe.phase : 'primary' };
                   try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction }); } catch (e) {}
                 }
               });
@@ -4241,6 +4362,48 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       });
       // After removing expired effects, recompute modifiers so stats update
       try { recomputeModifiers(t); } catch (e) {}
+    });
+  });
+
+  // End-of-round tower augment hook: cleanse debuffs and heal per removed debuff.
+  [
+    { arr: cP1, boardName: 'p1Board' },
+    { arr: cP2, boardName: 'p2Board' },
+    { arr: cP3, boardName: 'p3Board' }
+  ].forEach(({ arr, boardName }) => {
+    (arr || []).forEach((tile, index) => {
+      if (!tile || !tile.hero || tile._dead) return;
+      const healPerDebuff = Number(tile.hero._towerRoundCleanseHealPerDebuff || 0);
+      if (healPerDebuff <= 0) return;
+
+      const effectList = Array.isArray(tile.effects) ? tile.effects : [];
+      const debuffCount = effectList.filter(e => e && e.kind === 'debuff').length;
+      if (debuffCount <= 0) return;
+
+      tile.effects = effectList.filter(e => !(e && e.kind === 'debuff'));
+      const totalHeal = Math.max(0, debuffCount * healPerDebuff);
+      if (totalHeal > 0) {
+        try {
+          if (typeof onStep === 'function') {
+            onStep({
+              p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3),
+              p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3),
+              priorityPlayer,
+              lastAction: {
+                type: 'effectPulse',
+                target: { boardName, index },
+                effectName: 'Absolving Grace',
+                action: 'heal',
+                amount: totalHeal,
+                phase: 'endRound'
+              }
+            });
+          }
+        } catch (e) {}
+        applyHealthDelta(tile, totalHeal);
+      }
+      addLog && addLog(`  > Absolving Grace cleansed ${debuffCount} debuff(s) and healed ${totalHeal} on ${boardName}[${index}]`);
+      try { recomputeModifiers(tile); } catch (e) {}
     });
   });
 

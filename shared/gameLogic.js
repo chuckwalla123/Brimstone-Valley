@@ -346,9 +346,23 @@ export function applyPayloadToTarget(payload, targetRef, addLog, boards = {}, on
       }
     } catch (e) {
       // If Soul Link logic fails, continue with original damage
-    }    // By default, attackPower is reduced by target armor. If payload.ignoreArmor is set,
-    // armor is ignored. Otherwise apply armorMultiplier (default 1).
-    if (!payload.ignoreArmor) {
+    }
+    let sourceIgnoresArmor = false;
+    try {
+      if (payload && payload.source && typeof payload.source === 'string') {
+        const m = payload.source.match(/p([123])Board\[(\d+)\]/);
+        if (m) {
+          const side = m[1] === '1' ? 'p1' : (m[1] === '2' ? 'p2' : 'p3');
+          const idx = Number(m[2]);
+          const sourceBoard = side === 'p1' ? (boards.p1Board || []) : (side === 'p2' ? (boards.p2Board || []) : (boards.p3Board || []));
+          const sourceTile = sourceBoard[idx];
+          sourceIgnoresArmor = !!(sourceTile && sourceTile.hero && sourceTile.hero._towerIgnoreArmor);
+        }
+      }
+    } catch (e) {}
+    // By default, attackPower is reduced by target armor. If payload.ignoreArmor is set,
+    // or the caster has a tower ignore-armor flag, armor is ignored.
+    if (!payload.ignoreArmor && !sourceIgnoresArmor) {
       const armorMul = Number(payload.armorMultiplier != null ? payload.armorMultiplier : 1) || 1;
       const armor = Math.max(0, Number((tile.currentArmor != null ? tile.currentArmor : (tile.hero && tile.hero.armor) || 0) || 0));
       const reduced = Math.max(0, Math.round(v - (armor * armorMul)));
@@ -571,6 +585,22 @@ export function applyHealthDelta(tile, delta) {
   
   const cur = Number(tile.currentHealth || 0);
   const next = cur + Number(delta || 0);
+  const crossedCrumbleThreshold = Number(cur) >= 7 && Number(next) < 7;
+  const maybeTriggerCrumble = () => {
+    try {
+      if (!crossedCrumbleThreshold) return;
+      if (!tile._passives && tile.hero && tile.hero.passives) {
+        tile._passives = tile.hero.passives.map(e => ({ ...e }));
+      }
+      if (!tile._passives || !Array.isArray(tile._passives)) return;
+      const crumble = tile._passives.find(p => p && p.name === 'Crumble' && !p._used);
+      if (!crumble) return;
+      crumble._used = true;
+      const currentBaseArmor = Number((tile.hero && tile.hero.armor) || 0);
+      tile.hero.armor = Math.max(0, currentBaseArmor - 1);
+      try { recomputeModifiers(tile); } catch (e) {}
+    } catch (e) {}
+  };
   
   // Intercept lethal damage for one-time passives like Undying Rage
   if (next <= 0) {
@@ -580,6 +610,7 @@ export function applyHealthDelta(tile, delta) {
         if (ur) {
           ur._used = true; // consume the passive
           tile.currentHealth = 1;
+          maybeTriggerCrumble();
           return;
         }
       }
@@ -587,6 +618,7 @@ export function applyHealthDelta(tile, delta) {
     }
   }
   tile.currentHealth = capHealthForTile(tile, next);
+  maybeTriggerCrumble();
 }
 
 export function makeEmptyMain(playerId) {

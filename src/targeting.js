@@ -193,6 +193,67 @@ function getMultiTargetRedirectTargets(boardArr = [], boardSide = 'p1') {
   return out;
 }
 
+function getSingleTargetRedirectTarget(slot, boardArr = [], boardSide = 'p1') {
+  try {
+    if (!slot) return null;
+    const effects = Array.isArray(slot.effects) ? slot.effects : [];
+    const passives = Array.isArray(slot._passives) ? slot._passives : (slot.hero && Array.isArray(slot.hero.passives) ? slot.hero.passives : []);
+    const all = [...effects, ...passives];
+
+    for (const effect of all) {
+      if (!effect) continue;
+      if (!(effect.redirectSingleTargetToEffectApplier || effect.name === 'Loyalty')) continue;
+
+      const normalizedAppliedBoard = (effect.appliedByBoardName && String(effect.appliedByBoardName).startsWith('p1'))
+        ? 'p1'
+        : (effect.appliedByBoardName && String(effect.appliedByBoardName).startsWith('p2'))
+          ? 'p2'
+          : (effect.appliedByBoardName && String(effect.appliedByBoardName).startsWith('p3'))
+            ? 'p3'
+            : null;
+
+      let redirectIdx = null;
+
+      // Prefer the exact applier hero instance id since board indices can change
+      // after movement/swaps between rounds.
+      if (effect.appliedByHeroInstanceId) {
+        const foundByInstance = (boardArr || []).findIndex(t =>
+          isOccupiedAndAlive(t) && t.hero && t.hero._instanceId === effect.appliedByHeroInstanceId
+        );
+        if (foundByInstance >= 0) redirectIdx = foundByInstance;
+      }
+
+      // Next best: only trust appliedByIndex if it still points to the same applier
+      // (matching instance id or hero id when available).
+      if (redirectIdx == null && normalizedAppliedBoard === boardSide && typeof effect.appliedByIndex === 'number') {
+        const idx = Number(effect.appliedByIndex);
+        const indexedSlot = (boardArr || [])[idx];
+        const matchesInstance = !!(effect.appliedByHeroInstanceId && indexedSlot && indexedSlot.hero && indexedSlot.hero._instanceId === effect.appliedByHeroInstanceId);
+        const matchesHeroId = !!(effect.appliedByHeroId && indexedSlot && indexedSlot.hero && indexedSlot.hero.id === effect.appliedByHeroId);
+        const hasNoIdentityHints = !effect.appliedByHeroInstanceId && !effect.appliedByHeroId;
+        if (isOccupiedAndAlive(indexedSlot) && (matchesInstance || matchesHeroId || hasNoIdentityHints)) {
+          redirectIdx = idx;
+        }
+      }
+
+      if (redirectIdx == null && effect.appliedByHeroId) {
+        const foundByHeroId = (boardArr || []).findIndex(t =>
+          isOccupiedAndAlive(t) && t.hero && t.hero.id === effect.appliedByHeroId
+        );
+        if (foundByHeroId >= 0) redirectIdx = foundByHeroId;
+      }
+
+      if (typeof redirectIdx === 'number' && redirectIdx >= 0) {
+        const redirectSlot = (boardArr || [])[redirectIdx];
+        if (!isOccupiedAndAlive(redirectSlot)) return null;
+        if (isProtectedFromSingleTarget(redirectSlot)) return null;
+        return { board: boardSide, index: redirectIdx };
+      }
+    }
+  } catch (e) {}
+  return null;
+}
+
 // boards: { p1Board, p2Board, p1Reserve, p2Reserve }
 // options: { bypassTriggers: boolean } - if true, skip preventSingleTarget checks (e.g., basicAttack)
 export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = {}, ownerRef = null, options = {}) {
@@ -226,13 +287,14 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
   // Determine whether this spell can potentially hit multiple ENEMY targets based on its descriptors.
   // Ally/self targets (e.g., Siphon's self-heal) should not make the spell bypass preventSingleTarget.
   const enemyDescriptorsForMulti = (targetDescriptors || []).filter(d => d && d.type !== 'self' && (d.side || 'enemy') === 'enemy');
-  const isPotentiallyMultiTarget = (enemyDescriptorsForMulti && Array.isArray(enemyDescriptorsForMulti)) ? (
-    enemyDescriptorsForMulti.length > 1 || enemyDescriptorsForMulti.some(d => ['board','column','adjacent','nearestToLastTarget','projectilePlus1','frontTwoRows','nearest','middleRow','backmostRowWithHero','cornerTiles'].includes(d.type))
+  const enemyIndependentDescriptors = (enemyDescriptorsForMulti || []).filter(d => d && d.type !== 'lastResolvedTarget');
+  const isPotentiallyMultiTarget = (enemyIndependentDescriptors && Array.isArray(enemyIndependentDescriptors)) ? (
+    enemyIndependentDescriptors.length > 1 || enemyIndependentDescriptors.some(d => ['board','column','adjacent','nearestToLastTarget','projectilePlus1','frontTwoRows','nearest','middleRow','backRow','frontmostRowWithHero','backmostRowWithHero','rowWithHighestSumArmor','rowContainingHighestArmor','rowContainingLowestArmor','rowWithMostHeroes','cornerTiles'].includes(d.type))
   ) : false;
 
   const enemyDescriptors = (targetDescriptors || []).filter(d => d && (d.side || 'enemy') === 'enemy' && d.type !== 'self');
   const enemyHasMulti = enemyDescriptors.some(d =>
-    ['board','column','adjacent','nearestToLastTarget','projectilePlus1','frontTwoRows','backRow','rowWithHighestSumArmor','rowContainingLowestArmor','frontmostRowWithHero','backmostRowWithHero','middleRow','cornerTiles'].includes(d.type)
+    ['board','column','adjacent','nearestToLastTarget','projectilePlus1','frontTwoRows','backRow','rowWithHighestSumArmor','rowContainingLowestArmor','rowWithMostHeroes','frontmostRowWithHero','backmostRowWithHero','middleRow','cornerTiles'].includes(d.type)
       || (typeof d.max === 'number' && d.max > 1)
   );
   const hasSingleEnemyTarget = enemyDescriptors.length === 1 && !enemyHasMulti;
@@ -313,6 +375,15 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
         const b = casterSide;
         out.push({ board: b, index: casterRef.index });
       }
+      continue;
+    }
+
+    if (type === 'lastResolvedTarget') {
+      // Reuse the exact most-recently-resolved target token.
+      // Useful for effects like "hit the same target twice".
+      const anchor = out.length ? out[out.length - 1] : null;
+      if (!anchor) continue;
+      pushToken(anchor.board, Number(anchor.index || 0), desc);
       continue;
     }
 
@@ -668,6 +739,33 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       continue;
     }
 
+    if (type === 'lowestEnergy') {
+      const targetSide = resolveSide(side) || casterSide;
+      const boardArr = getBoardArr(targetSide) || [];
+      const candidates = [];
+      for (let i = 0; i < (boardArr || []).length; i++) {
+        const t = boardArr[i];
+        if (!isOccupiedAndAlive(t)) continue;
+        if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
+        const en = (t.currentEnergy != null ? t.currentEnergy : (t.hero && t.hero.energy) || 0);
+        candidates.push({ index: i, energy: en });
+      }
+      if (candidates.length === 0) continue;
+      let bestEnergy = Infinity;
+      for (const c of candidates) {
+        if (c.energy < bestEnergy) bestEnergy = c.energy;
+      }
+      const order = getBookOrder(targetSide);
+      for (const idx of order) {
+        const candidate = candidates.find(c => c.index === idx);
+        if (candidate && candidate.energy === bestEnergy) {
+          pushToken(targetSide, idx, desc);
+          break;
+        }
+      }
+      continue;
+    }
+
     if (type === 'highestSpeed') {
       const targetSide = resolveSide(side) || casterSide;
       const boardArr = getBoardArr(targetSide) || [];
@@ -916,6 +1014,44 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       continue;
     }
 
+    if (type === 'rowWithMostHeroes') {
+      const targetSide = resolveSide(side) || casterSide;
+      const boardArr = getBoardArr(targetSide) || [];
+      const map = (targetSide === 'p2') ? P2_INDEX_TO_TILE : (targetSide === 'p3' ? P3_INDEX_TO_TILE : P1_INDEX_TO_TILE);
+
+      const rowCounts = [0, 0, 0];
+      for (let i = 0; i < (boardArr || []).length; i++) {
+        const t = boardArr[i];
+        if (!isOccupiedAndAlive(t)) continue;
+        const row = indexToRow(i, targetSide);
+        if (row >= 0 && row <= 2) rowCounts[row] += 1;
+      }
+
+      const maxCount = Math.max(...rowCounts);
+      if (maxCount <= 0) continue;
+
+      let chosenRow = 0;
+      for (let r = 0; r < 3; r++) {
+        if (rowCounts[r] === maxCount) {
+          chosenRow = r;
+          break;
+        }
+      }
+
+      const rowIndices = [];
+      for (let i = 0; i < map.length; i++) {
+        const tileNum = map[i];
+        if (Math.floor((tileNum - 1) / 3) === chosenRow) rowIndices.push(i);
+      }
+      rowIndices.sort((a, b) => (map[a] || 0) - (map[b] || 0));
+
+      for (const idx of rowIndices) {
+        const slot = (boardArr || [])[idx];
+        if (isOccupiedAndAlive(slot)) out.push({ board: targetSide, index: idx });
+      }
+      continue;
+    }
+
     if (type === 'highestHealth') {
       // find highest health on target side
       const targetSide = resolveSide(side) || casterSide;
@@ -948,17 +1084,44 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
     }
 
     if (type === 'furthest') {
-      // find the furthest enemy on target side (back row first)
+      // Furthest: pick up to `desc.max` targets by Manhattan tile distance
+      // from caster (no diagonals), with book-order tie-break.
+      const casterBoard = casterSide;
       const targetSide = resolveSide(side) || casterSide;
       const boardArr = getBoardArr(targetSide) || [];
-      // Use the reverse visual book-order to prefer back row
-      const order = getBookOrder(targetSide).slice().reverse();
-      for (const idx of order) {
-        const t = boardArr[idx];
-        if (!isOccupiedAndAlive(t)) continue;
-        if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
-        out.push({ board: targetSide, index: idx });
-        break;
+      const maxCount = (typeof desc.max === 'number' && desc.max > 0) ? Math.floor(desc.max) : 1;
+
+      const cCol = (casterRef.index != null) ? indexToColumn(casterRef.index, casterBoard) : 0;
+      const cRow = (casterRef.index != null) ? indexToRow(casterRef.index, casterBoard) : 0;
+      const cX = cCol + (casterBoard === 'p2' ? 3 : (casterBoard === 'p3' ? 6 : 0));
+
+      const candidates = [];
+      for (let i = 0; i < (boardArr || []).length; i++) {
+        const slot = boardArr[i];
+        if (!isOccupiedAndAlive(slot)) continue;
+        if (desc && desc.excludeSelf && casterRef && typeof casterRef.index === 'number') {
+          if (targetSide === casterBoard && i === casterRef.index) continue;
+        }
+        if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(slot)) continue;
+
+        const tCol = indexToColumn(i, targetSide);
+        const tRow = indexToRow(i, targetSide);
+        const tX = tCol + (targetSide === 'p2' ? 3 : (targetSide === 'p3' ? 6 : 0));
+        const dist = Math.abs(tX - cX) + Math.abs(tRow - cRow);
+        candidates.push({ index: i, dist });
+      }
+      if (candidates.length === 0) continue;
+
+      const order = getBookOrder(targetSide);
+      const priority = {}; order.forEach((v, i) => { priority[v] = i; });
+      candidates.sort((a, b) => {
+        if (a.dist !== b.dist) return b.dist - a.dist;
+        return (priority[a.index] || 0) - (priority[b.index] || 0);
+      });
+
+      const take = Math.min(maxCount, candidates.length);
+      for (let k = 0; k < take; k++) {
+        pushToken(targetSide, candidates[k].index, desc);
       }
       continue;
     }
@@ -973,6 +1136,10 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       for (let i = 0; i < (boardArr || []).length; i++) {
         const t = boardArr[i];
         if (!isOccupiedAndAlive(t)) continue;
+        if (desc && desc.excludeSelf && casterRef && typeof casterRef.index === 'number') {
+          const casterBoard = casterSide;
+          if (targetSide === casterBoard && i === casterRef.index) continue;
+        }
         // Exclude protected single-target tiles from candidates
         if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
         const hp = (t.currentHealth != null ? t.currentHealth : (t.hero && t.hero.health) || 0);
@@ -985,7 +1152,7 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       // Sort by health asc, then by book-order priority
       candidates.sort((a,b) => { if (a.hp !== b.hp) return a.hp - b.hp; return (priority[a.index] || 0) - (priority[b.index] || 0); });
       const take = Math.min(maxCount, candidates.length);
-      for (let j = 0; j < take; j++) out.push({ board: targetSide, index: candidates[j].index });
+      for (let j = 0; j < take; j++) pushToken(targetSide, candidates[j].index, desc);
       continue;
     }
 
@@ -1252,7 +1419,10 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       const boardArr = getBoardArr(targetSide) || [];
       for (const idx of order) {
         const t = (boardArr || [])[idx];
-        if (isOccupiedAndAlive(t)) { out.push({ board: targetSide, index: idx }); break; }
+        if (!isOccupiedAndAlive(t)) continue;
+        if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
+        out.push({ board: targetSide, index: idx });
+        break;
       }
       continue;
     }
@@ -1272,6 +1442,27 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       continue;
     }
   }
+
+  try {
+    if (!bypassTriggers && hasSingleEnemyTarget) {
+      const enemySide = resolveSide('enemy') || casterSide;
+      const enemyBoardArr = getBoardArr(enemySide) || [];
+      const tauntTargets = getTauntTargets(enemyBoardArr, enemySide);
+      if (tauntTargets.length === 0) {
+        for (let i = 0; i < out.length; i++) {
+          const token = out[i];
+          if (!token || token.board !== enemySide || typeof token.index !== 'number') continue;
+          const slot = enemyBoardArr[token.index];
+          if (!isOccupiedAndAlive(slot)) continue;
+          const redirect = getSingleTargetRedirectTarget(slot, enemyBoardArr, enemySide);
+          if (redirect && typeof redirect.index === 'number') {
+            out[i] = { board: redirect.board, index: redirect.index };
+          }
+          break;
+        }
+      }
+    }
+  } catch (e) {}
 
   return out;
 }

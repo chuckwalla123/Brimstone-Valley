@@ -270,7 +270,7 @@ function SpellSprite({ spellId, cfg, frameMs = 600 }) {
   return <canvas ref={canvasRef} className="bp-spell-sprite" style={{ background: 'transparent' }} />;
 }
 
-function SmallTile({ tile, movement, player, index, isReserve = false, events = [], effectPrecastMap = null, onHoverTile = null, onUnhoverTile = null, onEffectHover = null, onEffectOut = null }) {
+function SmallTile({ tile, movement, player, index, isReserve = false, events = [], effectPrecastMap = null, onHoverTile = null, onUnhoverTile = null, onEffectHover = null, onEffectOut = null, onTileWheel = null }) {
   const isEmpty = !tile || !tile.hero;
   const token = tile && tile.id ? tile.id : (isReserve ? `${player}:reserve:${index}` : `${player}:${index}`);
   const boardToken = isReserve ? `${player}:reserve:${index}` : `${player}:${index}`;
@@ -295,6 +295,7 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
           title={isReserve ? 'Reserve' : 'Empty'}
           onMouseEnter={() => { setHover(true); onHoverTile && onHoverTile(tile, player, index); }}
           onMouseLeave={() => { setHover(false); onUnhoverTile && onUnhoverTile(); }}
+          onWheel={e => { onTileWheel && onTileWheel(e); }}
         >
           <div className="db-tile-empty-text" style={{ textAlign: 'center' }}>
             <div style={{ fontSize: isReserve ? 12 : 14 }}>{isReserve ? 'Reserve' : 'Empty'}</div>
@@ -325,6 +326,7 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
           title={`Dead: ${name}`}
           onMouseEnter={() => { setHover(true); onHoverTile && onHoverTile(tile, player, index); }}
           onMouseLeave={() => { setHover(false); onUnhoverTile && onUnhoverTile(); }}
+          onWheel={e => { onTileWheel && onTileWheel(e); }}
         >
           <div style={{ textAlign: 'center' }}>
             <div style={{ fontSize: 12, fontWeight: 700, color: '#f44336' }}>Dead</div>
@@ -370,6 +372,7 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
         onDrop={e => { setHover(false); movement?.onDrop && movement.onDrop(e, token); }}
         onMouseEnter={() => { setHover(true); onHoverTile && onHoverTile(tile, player, index); }}
         onMouseLeave={() => { setHover(false); onUnhoverTile && onUnhoverTile(); }}
+        onWheel={e => { onTileWheel && onTileWheel(e); }}
         title={name}
         style={{ position: 'relative', '--bp-cast-scale': precastScale }}
       >
@@ -486,7 +489,7 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
   );
 }
 
-function BoardGrid({ label, tiles = [], movement, player, isReserve = false, isEliminated = false, eventsMap = {}, effectPrecastMap = {}, onHoverTile = null, onUnhoverTile = null, onEffectHover = null, onEffectOut = null }){
+function BoardGrid({ label, tiles = [], movement, player, isReserve = false, isEliminated = false, eventsMap = {}, effectPrecastMap = {}, onHoverTile = null, onUnhoverTile = null, onEffectHover = null, onEffectOut = null, onTileWheel = null }){
   const playerClass = player === 'p2' ? 'db-player2' : 'db-player1';
   const order = null;
   return (
@@ -498,7 +501,7 @@ function BoardGrid({ label, tiles = [], movement, player, isReserve = false, isE
             const reserveKey = `${player}:reserve:${i}`;
             const ev = eventsMap && eventsMap[reserveKey];
             const vkey = `${player}:reserve:${i}`;
-            return <SmallTile key={t && t.id ? t.id : `${player}:${i}`} tile={t} movement={movement} player={player} index={i} isReserve={isReserve} events={ev} effectPrecastMap={effectPrecastMap} onHoverTile={onHoverTile} onUnhoverTile={onUnhoverTile} onEffectHover={onEffectHover} onEffectOut={onEffectOut} />
+            return <SmallTile key={t && t.id ? t.id : `${player}:${i}`} tile={t} movement={movement} player={player} index={i} isReserve={isReserve} events={ev} effectPrecastMap={effectPrecastMap} onHoverTile={onHoverTile} onUnhoverTile={onUnhoverTile} onEffectHover={onEffectHover} onEffectOut={onEffectOut} onTileWheel={onTileWheel} />
           })}
         </div>
       ) : (
@@ -507,7 +510,7 @@ function BoardGrid({ label, tiles = [], movement, player, isReserve = false, isE
             const t = tiles[i];
             const key = `${player}:${i}`;
             const ev = eventsMap && eventsMap[key];
-            return <SmallTile key={t && t.id ? t.id : key} tile={t} movement={movement} player={player} index={i} isReserve={isReserve} events={ev} effectPrecastMap={effectPrecastMap} onHoverTile={onHoverTile} onUnhoverTile={onUnhoverTile} onEffectHover={onEffectHover} onEffectOut={onEffectOut} />
+            return <SmallTile key={t && t.id ? t.id : key} tile={t} movement={movement} player={player} index={i} isReserve={isReserve} events={ev} effectPrecastMap={effectPrecastMap} onHoverTile={onHoverTile} onUnhoverTile={onUnhoverTile} onEffectHover={onEffectHover} onEffectOut={onEffectOut} onTileWheel={onTileWheel} />
           })}
         </div>
       )}
@@ -681,13 +684,56 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   const addLog = useCallback(msg => setLog(l => [...l, msg]), []);
 
   const [hoverInfo, setHoverInfo] = useState(null);
+  const hoverPanelRef = useRef(null);
+  const hoverClearTimeoutRef = useRef(null);
+  const hoverPanelActiveRef = useRef(false);
+
+  const clearHoverClearTimeout = useCallback(() => {
+    if (hoverClearTimeoutRef.current) {
+      clearTimeout(hoverClearTimeoutRef.current);
+      hoverClearTimeoutRef.current = null;
+    }
+  }, []);
+
+  const scheduleHoverClear = useCallback(() => {
+    clearHoverClearTimeout();
+    hoverClearTimeoutRef.current = setTimeout(() => {
+      if (!hoverPanelActiveRef.current) {
+        setHoverInfo(null);
+      }
+      hoverClearTimeoutRef.current = null;
+    }, 260);
+  }, [clearHoverClearTimeout]);
+
+  useEffect(() => {
+    return () => clearHoverClearTimeout();
+  }, [clearHoverClearTimeout]);
+
   const handleHoverTile = useCallback((tile, player, index) => {
+    clearHoverClearTimeout();
     if (!tile || !tile.hero) { setHoverInfo(null); return; }
     setHoverInfo({ type: 'tile', tile, player, index });
-  }, []);
-  const handleUnhoverTile = useCallback(() => setHoverInfo(null), []);
-  const handleEffectHover = useCallback((effect) => { setHoverInfo({ type: 'effect', effect }); }, []);
-  const handleEffectOut = useCallback(() => setHoverInfo(null), []);
+  }, [clearHoverClearTimeout]);
+  const handleUnhoverTile = useCallback(() => scheduleHoverClear(), [scheduleHoverClear]);
+  const handleEffectHover = useCallback((effect) => {
+    clearHoverClearTimeout();
+    setHoverInfo({ type: 'effect', effect });
+  }, [clearHoverClearTimeout]);
+  const handleEffectOut = useCallback(() => scheduleHoverClear(), [scheduleHoverClear]);
+  const handleTileWheel = useCallback((e) => {
+    if (!hoverInfo) return;
+    const panel = hoverPanelRef.current;
+    if (!panel) return;
+    const dy = typeof e.deltaY === 'number' ? e.deltaY : 0;
+    const dx = typeof e.deltaX === 'number' ? e.deltaX : 0;
+    const canScrollY = panel.scrollHeight > panel.clientHeight;
+    const canScrollX = panel.scrollWidth > panel.clientWidth;
+    if (!canScrollY && !canScrollX) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (dy) panel.scrollTop += dy;
+    if (dx) panel.scrollLeft += dx;
+  }, [hoverInfo]);
 
   const movement = useMovement({
     p1Board, p2Board, p3Board, p1Reserve: p1ReserveBoard, p2Reserve: p2ReserveBoard, p3Reserve: p3ReserveBoard,
@@ -801,6 +847,61 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       return `${action.type}:${JSON.stringify(action)}`;
     };
 
+    const playPendingSecondaryForTarget = async (boardName, index) => {
+      const pending = pendingSecondaryRef.current;
+      if (!pending || !boardName || typeof index !== 'number') return;
+      const tside = boardNameToSide(boardName);
+      const targetKey = `${tside}:${index}`;
+      const targetRowKey = `${tside}:${indexToRow(index, tside)}`;
+      const matches = Array.isArray(pending.targets) && pending.targets.length > 0
+        ? pending.targets.some(t => t && String(t.boardName).startsWith(tside) && Number(t.index) === Number(index))
+        : true;
+      if (!matches) return;
+      if (pending.mode === 'rowSweep' ? pending.played.has(targetRowKey) : pending.played.has(targetKey)) return;
+
+      if (pending.mode === 'rowSweep') {
+        const row = indexToRow(index, tside);
+        const rowIndices = [];
+        for (let i = 0; i < 9; i++) {
+          if (indexToRow(i, tside) === row) rowIndices.push(i);
+        }
+        const rowAnchors = rowIndices
+          .map(idx => ({ idx, center: getTileCenter(`${tside}:${idx}`) }))
+          .filter(entry => !!entry.center);
+        const startAnchor = rowAnchors.reduce((best, cur) => {
+          if (!best) return cur;
+          if (cur.center.y !== best.center.y) return cur.center.y > best.center.y ? cur : best;
+          return cur.center.x < best.center.x ? cur : best;
+        }, null);
+        const endAnchor = rowAnchors.reduce((best, cur) => {
+          if (!best) return cur;
+          if (cur.center.y !== best.center.y) return cur.center.y < best.center.y ? cur : best;
+          return cur.center.x < best.center.x ? cur : best;
+        }, null);
+        const startCenter = startAnchor ? startAnchor.center : null;
+        const endCenter = endAnchor ? endAnchor.center : null;
+        if (play && startCenter && endCenter) {
+          const pendingRowProps = { ...(pending.props || {}) };
+          play({ name: pending.name, from: startCenter, to: endCenter, duration: pending.duration, props: pendingRowProps });
+          await sleep(Number(pending.duration || 1200));
+        }
+        pending.played.add(targetRowKey);
+      } else {
+        const targetCenter = getTileCenter(targetKey);
+        if (play && targetCenter) {
+          play({ name: pending.name, from: targetCenter, to: targetCenter, duration: pending.duration, props: pending.props || {} });
+          await sleep(Number(pending.duration || 1200));
+        }
+        pending.played.add(targetKey);
+      }
+
+      if (Array.isArray(pending.expectedPlays) && pending.expectedPlays.length > 0) {
+        if (pending.played.size >= pending.expectedPlays.length) pendingSecondaryRef.current = null;
+      } else if (pending.targets && pending.played.size >= pending.targets.length) {
+        pendingSecondaryRef.current = null;
+      }
+    };
+
     // Deduplicate emotes/pulses
     if (['effectPulse', 'energyIncrement'].includes(lastAction.type)) {
       const pulseKey = getPulseKey(lastAction);
@@ -829,8 +930,9 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       const dur = Number(lastAction.duration || 500) || 500;
       await sleep(dur);
     } else if (lastAction.type === 'effectApplied') {
-      // Effects are now rendered directly from gameState - no local visibility management
-      // Just wait briefly for visual continuity
+      if (lastAction.phase === 'secondary' && lastAction.target && lastAction.target.boardName) {
+        await playPendingSecondaryForTarget(lastAction.target.boardName, Number(lastAction.target.index));
+      }
       await sleep(300);
     } else if (lastAction.type === 'effectPreCast') {
       if (lastAction.target && lastAction.target.boardName) {
@@ -935,9 +1037,23 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         const targetDescriptors = (spellDef && spellDef.spec && Array.isArray(spellDef.spec.targets)) ? spellDef.spec.targets : [];
         const results = Array.isArray(lastAction.results) ? lastAction.results : [];
         const allTargetTokens = results.map(r => r && r.target).filter(Boolean);
-        // Prefer a primary-phase target for the primary animation. If none, don't infer primary from secondary.
-        const primaryResults = results.filter(r => r && r.phase === 'primary' && r.target);
-        const firstTarget = (primaryResults.length > 0 ? primaryResults[0].target : null);
+        const secondaryTargetKeys = new Set(
+          (Array.isArray(lastAction.secondaryTargets) ? lastAction.secondaryTargets : results
+            .filter(r => r && r.phase === 'secondary' && r.target)
+            .map(r => r.target)
+          )
+            .filter(Boolean)
+            .map(t => `${boardNameToSide(t.boardName)}:${t.index}`)
+        );
+        const inferredPrimaryTargets = (spellDef.animationSecondary
+          ? allTargetTokens.filter(tgt => !secondaryTargetKeys.has(`${boardNameToSide(tgt.boardName)}:${tgt.index}`))
+          : allTargetTokens
+        );
+        const explicitPrimaryTargets = Array.isArray(lastAction.primaryTargets)
+          ? lastAction.primaryTargets.filter(t => t && t.boardName && typeof t.index === 'number')
+          : [];
+        const primaryTargetTokens = (explicitPrimaryTargets.length > 0 ? explicitPrimaryTargets : inferredPrimaryTargets);
+        const firstTarget = (primaryTargetTokens.length > 0 ? primaryTargetTokens[0] : null);
         const descSide = (targetDescriptors[0] && targetDescriptors[0].side) ? targetDescriptors[0].side : 'enemy';
         const inferredSide = descSide === 'ally' ? casterSide : (gameMode === 'ffa3' ? null : (casterSide === 'p1' ? 'p2' : 'p1'));
         const targetSide = firstTarget ? boardNameToSide(firstTarget.boardName) : inferredSide;
@@ -952,12 +1068,20 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
           size: Math.round((config.maxDisplaySize || 96) * uiScale)
         } : {};
 
-        const targetTypes = targetDescriptors.map(t => t && t.type).filter(Boolean);
+        const primaryDescriptorIndices = Array.isArray(lastAction.primaryDescriptorIndices)
+          ? lastAction.primaryDescriptorIndices.filter(i => Number.isInteger(i) && i >= 0)
+          : results
+              .filter(r => r && r.phase === 'primary' && Number.isInteger(r.descriptorIndex) && r.descriptorIndex >= 0)
+              .map(r => r.descriptorIndex);
+        const descriptorSource = (primaryDescriptorIndices.length > 0)
+          ? Array.from(new Set(primaryDescriptorIndices)).map(i => targetDescriptors[i]).filter(Boolean)
+          : targetDescriptors;
+        const targetTypes = descriptorSource.map(t => t && t.type).filter(Boolean);
         const isBoardSpell = targetTypes.includes('board');
         const isColumnSpell = targetTypes.includes('column');
         const secondaryAnimationMode = spellDef && spellDef.secondaryAnimationMode ? spellDef.secondaryAnimationMode : null;
         // Include rowContainingLowestArmor so spells targeting the lowest-armor row behave like other row spells
-        const isRowSpell = targetTypes.some(t => t === 'rowContainingHighestArmor' || t === 'rowContainingLowestArmor' || t === 'frontmostRowWithHero' || t === 'backmostRowWithHero' || t === 'frontTwoRows' || t === 'backRow' || t === 'rowWithHighestSumArmor');
+        const isRowSpell = targetTypes.some(t => t === 'rowContainingHighestArmor' || t === 'rowContainingLowestArmor' || t === 'frontmostRowWithHero' || t === 'backmostRowWithHero' || t === 'frontTwoRows' || t === 'backRow' || t === 'rowWithHighestSumArmor' || t === 'rowWithMostHeroes');
         const isHealSpell = (spellDef && spellDef.spec && spellDef.spec.formula && spellDef.spec.formula.type === 'heal') || results.some(r => r && r.applied && r.applied.type === 'heal');
         const placement = isHealSpell ? 'inplace' : (spellDef.animationPlacement || 'travel');
 
@@ -977,7 +1101,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
           if (isBoardSpell && targetSide) {
             // For board-wide spells, cover each targeted board with a single scaled animation
             const tokenSides = Array.from(
-              new Set(allTargetTokens.map(t => boardNameToSide(t.boardName)).filter(Boolean))
+              new Set(primaryTargetTokens.map(t => boardNameToSide(t.boardName)).filter(Boolean))
             );
             const sidesToAnimate = tokenSides.length > 0 ? tokenSides : [targetSide];
             for (const side of sidesToAnimate) {
@@ -996,8 +1120,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               play({ name: animName, from: boardCenter, to: boardCenter, duration: lastAction.animationMs || 1200, props: boardProps });
               await sleep(Number(lastAction.animationMs || 1200));
             }
-          } else if (spellId === 'multishot' && casterCenter && allTargetTokens.length > 0) {
-            for (const tgt of allTargetTokens) {
+          } else if (spellId === 'multishot' && casterCenter && primaryTargetTokens.length > 0) {
+            for (const tgt of primaryTargetTokens) {
               const tside = boardNameToSide(tgt.boardName);
               const tkey = `${tside}:${tgt.index}`;
               const tcenter = tokenCenterMap[tkey];
@@ -1007,7 +1131,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             }
           } else if (placement === 'inplace' && !isRowSpell && !isColumnSpell && !isBoardSpell) {
             // Play in-place animation at each target (heal spells use this)
-            for (const tgt of allTargetTokens) {
+            for (const tgt of primaryTargetTokens) {
               const tside = boardNameToSide(tgt.boardName);
               const tkey = `${tside}:${tgt.index}`;
               const tcenter = tokenCenterMap[tkey];
@@ -1026,17 +1150,24 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
                 return indexToColumn(a, side) - indexToColumn(b, side);
               });
             };
-            const secondaryTargets = new Set(
-              results
-                .filter(r => r && r.phase === 'secondary' && r.target)
-                .map(r => `${boardNameToSide(r.target.boardName)}:${r.target.index}`)
-            );
-            const hasSelfTarget = targetDescriptors.some(t => t && t.type === 'self');
-            const excludeCasterFromPrimary = !!(spellDef.animationSecondary && hasSelfTarget && casterSide && lastAction.caster && typeof lastAction.caster.index === 'number');
-            const primaryTargets = (spellDef.animationSecondary
-              ? allTargetTokens.filter(tgt => !secondaryTargets.has(`${boardNameToSide(tgt.boardName)}:${tgt.index}`))
-              : allTargetTokens
-            ).filter(tgt => !(excludeCasterFromPrimary && boardNameToSide(tgt.boardName) === casterSide && tgt.index === lastAction.caster.index));
+            const getBottomTopAnchors = (indices, side) => {
+              const anchors = (indices || [])
+                .map(idx => ({ idx, center: tokenCenterMap[`${side}:${idx}`] }))
+                .filter(entry => !!entry.center);
+              if (anchors.length === 0) return { start: null, end: null };
+              const start = anchors.reduce((best, cur) => {
+                if (!best) return cur;
+                if (cur.center.y !== best.center.y) return cur.center.y > best.center.y ? cur : best;
+                return cur.center.x < best.center.x ? cur : best;
+              }, null);
+              const end = anchors.reduce((best, cur) => {
+                if (!best) return cur;
+                if (cur.center.y !== best.center.y) return cur.center.y < best.center.y ? cur : best;
+                return cur.center.x < best.center.x ? cur : best;
+              }, null);
+              return { start, end };
+            };
+            const primaryTargets = primaryTargetTokens;
             const tokenSides = Array.from(
               new Set(primaryTargets.map(t => boardNameToSide(t.boardName)).filter(Boolean))
             );
@@ -1096,32 +1227,19 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
                 for (let i = 0; i < 9; i++) {
                   if (indexToRow(i, side) === row) rowIndices.push(i);
                 }
-                sortByX(rowIndices, side);
-                const startIdx = rowIndices[0];
-                const endIdx = rowIndices[rowIndices.length - 1];
-                const startKey = `${side}:${startIdx}`;
-                const endKey = `${side}:${endIdx}`;
-                const startCenter = tokenCenterMap[startKey];
-                const endCenter = tokenCenterMap[endKey];
+                const { start, end } = getBottomTopAnchors(rowIndices, side);
+                const startCenter = start ? start.center : null;
+                const endCenter = end ? end.center : null;
                 if (startCenter && endCenter) {
-                  play({ name: animName, from: startCenter, to: endCenter, duration: lastAction.animationMs || 1200, props });
+                  const rowProps = { ...props };
+                  play({ name: animName, from: startCenter, to: endCenter, duration: lastAction.animationMs || 1200, props: rowProps });
                   await sleep(Number(lastAction.animationMs || 1200));
                 }
               }
             }
           } else if (isColumnSpell && targetSide) {
             const casterCol = indexToColumn(lastAction.caster.index, casterSide);
-            const secondaryTargets = new Set(
-              results
-                .filter(r => r && r.phase === 'secondary' && r.target)
-                .map(r => `${boardNameToSide(r.target.boardName)}:${r.target.index}`)
-            );
-            const hasSelfTarget = targetDescriptors.some(t => t && t.type === 'self');
-            const excludeCasterFromPrimary = !!(spellDef.animationSecondary && hasSelfTarget && casterSide && lastAction.caster && typeof lastAction.caster.index === 'number');
-            const primaryTargets = (spellDef.animationSecondary
-              ? allTargetTokens.filter(tgt => !secondaryTargets.has(`${boardNameToSide(tgt.boardName)}:${tgt.index}`))
-              : allTargetTokens
-            ).filter(tgt => !(excludeCasterFromPrimary && boardNameToSide(tgt.boardName) === casterSide && tgt.index === lastAction.caster.index));
+            const primaryTargets = primaryTargetTokens;
             const tokenSides = Array.from(
               new Set(primaryTargets.map(t => boardNameToSide(t.boardName)).filter(Boolean))
             );
@@ -1147,15 +1265,15 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
                 ? indexToColumn(sideFirst.index, side)
                 : ((side !== casterSide) ? (2 - casterCol) : casterCol);
               const colIndices = columnIndicesForBoard(sideCol, side);
-              const frontIdx = colIndices[0];
-              const backIdx = colIndices[colIndices.length - 1];
+              const colAnchors = colIndices
+                .map(idx => ({ idx, center: tokenCenterMap[`${side}:${idx}`] }))
+                .filter(entry => !!entry.center);
+              if (colAnchors.length === 0) continue;
+              const startAnchor = colAnchors.reduce((best, cur) => (!best || cur.center.y > best.center.y) ? cur : best, null);
+              const endAnchor = colAnchors.reduce((best, cur) => (!best || cur.center.y < best.center.y) ? cur : best, null);
               const p3CastingToOther = casterSide === 'p3' && side !== 'p3';
-              const startIdx = frontIdx;
-              const endIdx = backIdx;
-              const startKey = `${side}:${startIdx}`;
-              const endKey = `${side}:${endIdx}`;
-              const startBase = tokenCenterMap[startKey];
-              const endBase = tokenCenterMap[endKey];
+              const startBase = startAnchor ? startAnchor.center : null;
+              const endBase = endAnchor ? endAnchor.center : null;
               if (!startBase || !endBase) continue;
               let startCenter = { ...startBase };
               const baseOffset = 120;
@@ -1199,17 +1317,19 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               await sleep(Number(lastAction.animationMs || 1200));
             }
           } else {
-            if (allTargetTokens.length > 1) {
-              const secondaryTargets = new Set(
-                results
-                  .filter(r => r && r.phase === 'secondary' && r.target)
-                  .map(r => `${boardNameToSide(r.target.boardName)}:${r.target.index}`)
-              );
-              const primaryTargets = spellDef.animationSecondary
-                ? allTargetTokens.filter(tgt => !secondaryTargets.has(`${boardNameToSide(tgt.boardName)}:${tgt.index}`))
-                : allTargetTokens;
-
+            if (primaryTargetTokens.length > 1) {
+              const primaryTargets = primaryTargetTokens;
+              const uniquePrimaryTargets = [];
+              const seenPrimaryTargetKeys = new Set();
               for (const tgt of primaryTargets) {
+                const key = `${boardNameToSide(tgt.boardName)}:${tgt.index}`;
+                if (!seenPrimaryTargetKeys.has(key)) {
+                  seenPrimaryTargetKeys.add(key);
+                  uniquePrimaryTargets.push(tgt);
+                }
+              }
+
+              for (const tgt of uniquePrimaryTargets) {
                 const tside = boardNameToSide(tgt.boardName);
                 const tkey = `${tside}:${tgt.index}`;
                 const tcenter = tokenCenterMap[tkey];
@@ -1313,43 +1433,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         else if (lastAction.action === 'energy') evPayload = { kind: 'energy', amount: lastAction.amount };
 
         if (lastAction.phase === 'secondary' && pendingSecondaryRef.current) {
-          const pending = pendingSecondaryRef.current;
-          const targetKey = `${tside}:${lastAction.target.index}`;
-          const targetRowKey = `${tside}:${indexToRow(lastAction.target.index, tside)}`;
-          const matches = Array.isArray(pending.targets) && pending.targets.length > 0
-            ? pending.targets.some(t => t && String(t.boardName).startsWith(tside) && Number(t.index) === Number(lastAction.target.index))
-            : true;
-          if (matches && (pending.mode === 'rowSweep' ? !pending.played.has(targetRowKey) : !pending.played.has(targetKey))) {
-            if (pending.mode === 'rowSweep') {
-              const row = indexToRow(lastAction.target.index, tside);
-              const rowIndices = [];
-              for (let i = 0; i < 9; i++) {
-                if (indexToRow(i, tside) === row) rowIndices.push(i);
-              }
-              rowIndices.sort((a, b) => indexToColumn(a, tside) - indexToColumn(b, tside));
-              const startIdx = rowIndices[0];
-              const endIdx = rowIndices[rowIndices.length - 1];
-              const startCenter = getTileCenter(`${tside}:${startIdx}`);
-              const endCenter = getTileCenter(`${tside}:${endIdx}`);
-              if (play && startCenter && endCenter) {
-                play({ name: pending.name, from: startCenter, to: endCenter, duration: pending.duration, props: pending.props || {} });
-                await sleep(Number(pending.duration || 1200));
-              }
-              pending.played.add(targetRowKey);
-            } else {
-              const targetCenter = getTileCenter(targetKey);
-              if (play && targetCenter) {
-                play({ name: pending.name, from: targetCenter, to: targetCenter, duration: pending.duration, props: pending.props || {} });
-                await sleep(Number(pending.duration || 1200));
-              }
-              pending.played.add(targetKey);
-            }
-            if (Array.isArray(pending.expectedPlays) && pending.expectedPlays.length > 0) {
-              if (pending.played.size >= pending.expectedPlays.length) pendingSecondaryRef.current = null;
-            } else if (pending.targets && pending.played.size >= pending.targets.length) {
-              pendingSecondaryRef.current = null;
-            }
-          }
+          await playPendingSecondaryForTarget(lastAction.target.boardName, Number(lastAction.target.index));
         }
 
         if (evPayload) {
@@ -1779,7 +1863,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-            <BoardGrid label="P1 Reserve" tiles={p1ReserveBoard} movement={movement} player="p1" isReserve={true} isEliminated={p1Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
+            <BoardGrid label="P1 Reserve" tiles={p1ReserveBoard} movement={movement} player="p1" isReserve={true} isEliminated={p1Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
             {!autoPlay && !hideBattleControls && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', padding: 8 }}>
                 <button onClick={() => runRound()} disabled={!canControlRound || gameState === 'running'}>Run Round</button>
@@ -1787,7 +1871,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             )}
           </div>
 
-          <BoardGrid label={matchPlayers?.p1 || 'Player 1'} tiles={p1Board} movement={movement} player="p1" isEliminated={p1Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
+          <BoardGrid label={matchPlayers?.p1 || 'Player 1'} tiles={p1Board} movement={movement} player="p1" isEliminated={p1Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
         </div>
 
         <div style={{ width: 48, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
@@ -1856,8 +1940,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
-          <BoardGrid label={matchPlayers?.p2 || 'Player 2'} tiles={p2Board} movement={movement} player="p2" isEliminated={p2Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
-          <BoardGrid label="P2 Reserve" tiles={p2ReserveBoard} movement={movement} player="p2" isReserve={true} isEliminated={p2Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
+          <BoardGrid label={matchPlayers?.p2 || 'Player 2'} tiles={p2Board} movement={movement} player="p2" isEliminated={p2Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
+          <BoardGrid label="P2 Reserve" tiles={p2ReserveBoard} movement={movement} player="p2" isReserve={true} isEliminated={p2Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
         </div>
       </div>
 
@@ -1867,15 +1951,29 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       <div style={{ display: 'flex', justifyContent: 'center', padding: 12 }}>
         <div style={{
           width: 760,
-          minHeight: 'calc(100px * var(--ui-scale, 1))',
+          height: 'calc(180px * var(--ui-scale, 1))',
           background: '#1a1a2e',
           border: '1px solid #3a3a5a',
           padding: 'calc(6px * var(--ui-scale, 1))',
           borderRadius: 'var(--tile-border-radius, 6px)',
           fontSize: 'calc(11px * var(--ui-scale, 1))',
           lineHeight: 1.2,
-          color: '#e0e0e0'
-        }}>
+          color: '#e0e0e0',
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          scrollbarGutter: 'stable',
+          boxSizing: 'border-box'
+        }}
+          ref={hoverPanelRef}
+          onMouseEnter={() => {
+            hoverPanelActiveRef.current = true;
+            clearHoverClearTimeout();
+          }}
+          onMouseLeave={() => {
+            hoverPanelActiveRef.current = false;
+            scheduleHoverClear();
+          }}
+        >
           {hoverInfo ? (
             hoverInfo.type === 'tile' && hoverInfo.tile && hoverInfo.tile.hero ? (
               <div>
@@ -1978,8 +2076,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       {gameMode === 'ffa3' && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
-            <BoardGrid label={matchPlayers?.p3 || 'Player 3'} tiles={p3Board} movement={movement} player="p3" isEliminated={p3Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
-            <BoardGrid label="P3 Reserve" tiles={p3ReserveBoard} movement={movement} player="p3" isReserve={true} isEliminated={p3Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} />
+            <BoardGrid label={matchPlayers?.p3 || 'Player 3'} tiles={p3Board} movement={movement} player="p3" isEliminated={p3Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
+            <BoardGrid label="P3 Reserve" tiles={p3ReserveBoard} movement={movement} player="p3" isReserve={true} isEliminated={p3Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
           </div>
         </div>
       )}

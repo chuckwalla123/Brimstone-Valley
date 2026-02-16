@@ -4,8 +4,8 @@
 import { HEROES } from '../heroes.js';
 import { getSpellById } from '../spells.js';
 import { AUGMENTS, getRandomAugments, applyAugmentsToHero } from './augments.js';
+import { indexToColumn, indexToRow, indexToTowerPosition } from '../targeting.js';
 import { 
-  getHeroPoolForLevel, 
   getEnemyAugmentCount, 
   getAIDifficultyForLevel,
   getBossForLevel,
@@ -23,6 +23,87 @@ const AUGMENT_ID_MIGRATIONS = {
   deletedCounter: 'thornsStrong',
   earlySpark: 'earlySparkI'
 };
+
+function buildEnemyDraftPool() {
+  return HEROES.filter(hero => hero && hero.id && hero.isMinion !== true);
+}
+
+function draftRandomEnemyHeroIds(enemyCount) {
+  const pool = buildEnemyDraftPool();
+  const targetCount = Math.min(Math.max(0, Number(enemyCount || 0)), pool.length);
+  if (targetCount <= 0) return [];
+
+  const shuffled = [...pool].sort(() => Math.random() - 0.5);
+  return shuffled.slice(0, targetCount).map(hero => hero.id);
+}
+
+function buildPlayerThreatByColumn(playerMainBoard = []) {
+  const threatByColumn = [0, 0, 0];
+  (playerMainBoard || []).forEach((tile, index) => {
+    if (!tile || !tile.hero || tile._dead) return;
+    const col = indexToColumn(index, 'p1');
+    const health = Number(tile.currentHealth != null ? tile.currentHealth : tile.hero.health || 0);
+    const armor = Number(tile.currentArmor != null ? tile.currentArmor : tile.hero.armor || 0);
+    const speed = Number(tile.currentSpeed != null ? tile.currentSpeed : tile.hero.speed || 0);
+    const spellPower = Number(tile.currentSpellPower != null ? tile.currentSpellPower : tile.hero.spellPower || 0);
+    threatByColumn[col] += health + (armor * 3) + (speed * 1.5) + (spellPower * 1.25);
+  });
+  return threatByColumn;
+}
+
+function evaluateEnemyBattleSlot(hero, battleIndex, playerMainBoard = [], occupiedEnemyMain = [], threatByColumn = [0, 0, 0]) {
+  if (!hero) return -Infinity;
+  if (occupiedEnemyMain[battleIndex]) return -Infinity;
+
+  const row = indexToRow(battleIndex, 'p2');
+  const col = indexToColumn(battleIndex, 'p2');
+  const rowKey = row === 0 ? 'front' : (row === 1 ? 'middle' : 'back');
+
+  const health = Number(hero.currentHealth != null ? hero.currentHealth : hero.health || 0);
+  const armor = Number(hero.currentArmor != null ? hero.currentArmor : hero.armor || 0);
+  const speed = Number(hero.currentSpeed != null ? hero.currentSpeed : hero.speed || 0);
+  const spellPower = Number(hero.currentSpellPower != null ? hero.currentSpellPower : hero.spellPower || 0);
+  const durability = health + (armor * 4);
+
+  const slotSpell = hero.spells?.[rowKey];
+  const spellCasts = Number(slotSpell?.casts || 0);
+  const spellCost = Number(slotSpell?.cost || 0);
+  const offense = (spellCasts * 2.6) + (speed * 0.8) + (spellPower * 1.5) - (spellCost * 1.2);
+
+  const playerColumnThreat = Number(threatByColumn[col] || 0);
+  const exposureMultiplier = row === 0 ? 1.2 : (row === 1 ? 1.0 : 0.75);
+  const survivabilityScore = durability - (playerColumnThreat * exposureMultiplier);
+
+  let sameColumnAllies = 0;
+  for (let i = 0; i < occupiedEnemyMain.length; i++) {
+    if (!occupiedEnemyMain[i]) continue;
+    if (indexToColumn(i, 'p2') === col) sameColumnAllies += 1;
+  }
+  const stackingPenalty = sameColumnAllies * 5;
+  const frontlineBonus = row === 0 ? (durability * 0.12) : 0;
+
+  return offense + (survivabilityScore * 0.35) + frontlineBonus - stackingPenalty;
+}
+
+function pickEnemyBattleIndex(hero, occupiedEnemyMain = [], playerMainBoard = []) {
+  const openSlots = [];
+  for (let i = 0; i < 9; i++) {
+    if (!occupiedEnemyMain[i]) openSlots.push(i);
+  }
+  if (openSlots.length === 0) return null;
+
+  const threatByColumn = buildPlayerThreatByColumn(playerMainBoard);
+  const scored = openSlots
+    .map(index => ({
+      index,
+      score: evaluateEnemyBattleSlot(hero, index, playerMainBoard, occupiedEnemyMain, threatByColumn)
+    }))
+    .sort((a, b) => b.score - a.score);
+
+  const topCount = Math.min(4, scored.length);
+  const topCandidates = scored.slice(0, topCount);
+  return topCandidates[Math.floor(Math.random() * topCandidates.length)]?.index ?? scored[0]?.index ?? openSlots[0];
+}
 
 function migrateRunAugments(runState) {
   if (!runState || !Array.isArray(runState.selectedHeroes)) return runState;
@@ -267,8 +348,11 @@ export function updateHeroPositions(runState, positions) {
  * Starts at 2 and increases by 1 per boss defeated
  */
 export function getAugmentCap(runState) {
-  const bossCount = Array.isArray(runState?.bossesDefeated) ? runState.bossesDefeated.length : 0;
-  return BASE_AUGMENT_CAP + bossCount;
+  const defeatedBosses = Array.isArray(runState?.bossesDefeated) ? runState.bossesDefeated : [];
+  const defeatedCount = defeatedBosses.length;
+  const pendingBossId = runState?.pendingBossId;
+  const pendingBossBonus = (pendingBossId && !defeatedBosses.includes(pendingBossId)) ? 1 : 0;
+  return BASE_AUGMENT_CAP + defeatedCount + pendingBossBonus;
 }
 
 /**
@@ -446,15 +530,14 @@ export function getPlayerHeroesForBattle(runState) {
  * @param {number} level - Current tower level
  * @returns {Object} Enemy team configuration
  */
-export function generateEnemyTeam(level) {
-  const heroPool = getHeroPoolForLevel(level);
+export function generateEnemyTeam(level, options = {}) {
   const augmentCount = getEnemyAugmentCount(level);
   const difficulty = getAIDifficultyForLevel(level);
   const enemyCount = Math.min(7, Math.max(3, level + 2));
+  const playerMainBoard = Array.isArray(options.playerMainBoard) ? options.playerMainBoard : [];
   
-  // Shuffle and pick 7 heroes
-  const shuffled = [...heroPool].sort(() => Math.random() - 0.5);
-  const selectedIds = shuffled.slice(0, Math.min(enemyCount, shuffled.length));
+  // Draft heroes from the full non-minion roster with pure random selection.
+  const selectedIds = draftRandomEnemyHeroIds(enemyCount);
   
   // Pre-distribute augment counts across enemies to avoid all-zero rolls
   const perHeroAugments = Array(Math.min(enemyCount, selectedIds.length)).fill(0);
@@ -505,20 +588,34 @@ export function generateEnemyTeam(level) {
     return hero;
   }).filter(Boolean);
   
-  // Randomly place 5 on main board, 2 in reserve
-  const shuffledEnemies = [...enemies].sort(() => Math.random() - 0.5);
-  const mainCount = Math.min(5, shuffledEnemies.length);
-  const mainBoardHeroes = shuffledEnemies.slice(0, mainCount);
-  const reserveHeroes = shuffledEnemies.slice(mainCount, Math.min(shuffledEnemies.length, mainCount + 2));
-  
-  // Random positions for main board (0-8)
-  const mainPositions = [0, 1, 2, 3, 4, 5, 6, 7, 8].sort(() => Math.random() - 0.5).slice(0, mainCount);
+  const mainCount = Math.min(5, enemies.length);
+  const mainBoardHeroes = enemies.slice(0, mainCount);
+  const reserveHeroes = enemies.slice(mainCount, Math.min(enemies.length, mainCount + 2));
+
+  // Place each drafted hero into a random choice among its top 4 evaluated slots.
+  const occupiedEnemyMain = Array(9).fill(null);
+  mainBoardHeroes.forEach(hero => {
+    const pickedIndex = pickEnemyBattleIndex(hero, occupiedEnemyMain, playerMainBoard);
+    if (pickedIndex != null) {
+      occupiedEnemyMain[pickedIndex] = hero;
+      return;
+    }
+    const fallback = occupiedEnemyMain.findIndex(slot => !slot);
+    if (fallback >= 0) occupiedEnemyMain[fallback] = hero;
+  });
+
+  const mainBoard = occupiedEnemyMain
+    .map((hero, battleIndex) => {
+      if (!hero) return null;
+      return {
+        hero,
+        position: indexToTowerPosition(battleIndex, 'p2')
+      };
+    })
+    .filter(Boolean);
   
   return {
-    mainBoard: mainBoardHeroes.map((hero, idx) => ({
-      hero,
-      position: mainPositions[idx]
-    })),
+    mainBoard,
     reserve: reserveHeroes,
     difficulty
   };

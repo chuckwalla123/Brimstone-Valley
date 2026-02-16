@@ -33,6 +33,7 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
   const casterSpellPower = (casterRef && casterRef.tile && typeof casterRef.tile.currentSpellPower === 'number')
     ? Number(casterRef.tile.currentSpellPower) + bonusSpellPower
     : bonusSpellPower;
+  const casterIgnoresArmor = !!(casterRef && casterRef.tile && casterRef.tile.hero && casterRef.tile.hero._towerIgnoreArmor);
 
   // Build canonical attack/heal payload fragments to be used per-target
   const buildAttackFragment = () => {
@@ -62,7 +63,7 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
       }
       const frag = { action: 'damage', value: Number(val) + bonusDamage };
       frag.armorMultiplier = typeof useSpec.formula.armorMultiplier === 'number' ? useSpec.formula.armorMultiplier : 1;
-      if (useSpec.formula.ignoreArmor) frag.ignoreArmor = true;
+      if (useSpec.formula.ignoreArmor || casterIgnoresArmor) frag.ignoreArmor = true;
       // Mark if we need to add target's missing health per-target (for Execute spell)
       if (useSpec.formula.addTargetMissingHealth) frag.addTargetMissingHealth = true;
       return frag;
@@ -79,7 +80,12 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
       const roll = Math.floor(Math.random() * die) + 1;
       const val = (useSpec.formula && useSpec.formula.ignoreSpellPower) ? (base + roll) : (base + roll + casterSpellPower);
       // Include roll details for dice animation
-      return { action: 'damage', value: val + bonusDamage, rollInfo: { die, base, roll, total: val + bonusDamage } };
+      return {
+        action: 'damage',
+        value: val + bonusDamage,
+        ...(casterIgnoresArmor ? { ignoreArmor: true } : {}),
+        rollInfo: { die, base, roll, total: val + bonusDamage }
+      };
     }
     // healPower: healing that scales with spell power (used by most healing spells)
     if (useSpec.formula.type === 'healPower') {
@@ -221,6 +227,9 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
     } else if (attackFrag) {
       // If the formula requests adding the target's missing health, compute it per-target
       if (attackFrag.addTargetMissingHealth) {
+        const maxFormulaValue = (useSpec && useSpec.formula && typeof useSpec.formula.maxValue === 'number')
+          ? Number(useSpec.formula.maxValue)
+          : null;
         try {
           const tgt = payload.targets[i];
           const boardArr = (tgt && tgt.board === 'p1') ? (boards.p1Board || []) : (tgt && tgt.board === 'p2') ? (boards.p2Board || []) : (boards.p3Board || []);
@@ -232,26 +241,26 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
             const fragCopy = { ...attackFrag };
             fragCopy.value = Number(fragCopy.value || 0) + missingHp;
             delete fragCopy.addTargetMissingHealth; // Remove the marker
-            if (useSpec && useSpec.id === 'execute' && typeof useSpec.formula?.maxValue === 'number') {
-              fragCopy.value = Math.min(Number(fragCopy.value || 0), Number(useSpec.formula.maxValue));
+            if (maxFormulaValue != null) {
+              fragCopy.value = Math.min(Number(fragCopy.value || 0), maxFormulaValue);
             }
             payload.perTargetPayloads.push(fragCopy);
           } else {
             // No valid target, use base damage
             const fragCopy = { ...attackFrag };
             delete fragCopy.addTargetMissingHealth;
-          if (useSpec && useSpec.id === 'execute' && typeof useSpec.formula?.maxValue === 'number') {
-            fragCopy.value = Math.min(Number(fragCopy.value || 0), Number(useSpec.formula.maxValue));
-          }
+            if (maxFormulaValue != null) {
+              fragCopy.value = Math.min(Number(fragCopy.value || 0), maxFormulaValue);
+            }
             payload.perTargetPayloads.push(fragCopy);
           }
         } catch (err) {
           // Fallback to base damage on error
           const fragCopy = { ...attackFrag };
           delete fragCopy.addTargetMissingHealth;
-        if (useSpec && useSpec.id === 'execute' && typeof useSpec.formula?.maxValue === 'number') {
-          fragCopy.value = Math.min(Number(fragCopy.value || 0), Number(useSpec.formula.maxValue));
-        }
+          if (maxFormulaValue != null) {
+            fragCopy.value = Math.min(Number(fragCopy.value || 0), maxFormulaValue);
+          }
           payload.perTargetPayloads.push(fragCopy);
         }
       } else if (useSpec.formula && useSpec.formula.addTargetArmor) {
@@ -307,6 +316,23 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
           const count = (tile && tile.effects) ? tile.effects.filter(e => e && e.name === effectName).length : 0;
           const fragCopy = { ...attackFrag };
           fragCopy.value = Number(fragCopy.value || 0) + (count * mult);
+          payload.perTargetPayloads.push(fragCopy);
+        } catch (e) {
+          payload.perTargetPayloads.push({ ...attackFrag });
+        }
+      } else if (useSpec.formula && useSpec.formula.addTargetAugmentCount) {
+        try {
+          const tgt = payload.targets[i];
+          const boardArr = (tgt && tgt.board === 'p1') ? (boards.p1Board || []) : (tgt && tgt.board === 'p2') ? (boards.p2Board || []) : (boards.p3Board || []);
+          const tile = (boardArr || [])[tgt && typeof tgt.index === 'number' ? tgt.index : -1];
+          const multiplier = (typeof useSpec.formula.addTargetAugmentMultiplier === 'number')
+            ? Number(useSpec.formula.addTargetAugmentMultiplier)
+            : 1;
+          const augmentCount = Array.isArray(tile && tile.hero && tile.hero._towerAugments)
+            ? tile.hero._towerAugments.length
+            : (Array.isArray(tile && tile.hero && tile.hero.augments) ? tile.hero.augments.length : 0);
+          const fragCopy = { ...attackFrag };
+          fragCopy.value = Number(fragCopy.value || 0) + (Number(augmentCount || 0) * multiplier);
           payload.perTargetPayloads.push(fragCopy);
         } catch (e) {
           payload.perTargetPayloads.push({ ...attackFrag });

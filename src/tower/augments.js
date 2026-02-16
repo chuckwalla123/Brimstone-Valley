@@ -267,7 +267,7 @@ export const AUGMENTS = {
     tier: 'common',
     type: 'special',
     valueRange: [2, 2],
-    apply: (hero, value) => { hero._towerEarlySpark = value; }
+    apply: (hero, value) => { hero._towerEarlySpark = (hero._towerEarlySpark || 0) + Number(value || 0); }
   },
   earlySparkII: {
     id: 'earlySparkII',
@@ -276,7 +276,7 @@ export const AUGMENTS = {
     tier: 'uncommon',
     type: 'special',
     valueRange: [4, 4],
-    apply: (hero, value) => { hero._towerEarlySpark = value; }
+    apply: (hero, value) => { hero._towerEarlySpark = (hero._towerEarlySpark || 0) + Number(value || 0); }
   },
   earlySparkIII: {
     id: 'earlySparkIII',
@@ -285,7 +285,7 @@ export const AUGMENTS = {
     tier: 'rare',
     type: 'special',
     valueRange: [6, 6],
-    apply: (hero, value) => { hero._towerEarlySpark = value; }
+    apply: (hero, value) => { hero._towerEarlySpark = (hero._towerEarlySpark || 0) + Number(value || 0); }
   },
   earlySparkIV: {
     id: 'earlySparkIV',
@@ -294,7 +294,7 @@ export const AUGMENTS = {
     tier: 'epic',
     type: 'special',
     valueRange: [8, 8],
-    apply: (hero, value) => { hero._towerEarlySpark = value; }
+    apply: (hero, value) => { hero._towerEarlySpark = (hero._towerEarlySpark || 0) + Number(value || 0); }
   },
   frontlineVanguard: {
     id: 'frontlineVanguard',
@@ -898,6 +898,17 @@ export const AUGMENTS = {
     }
   },
 
+  armorBreaker: {
+    id: 'armorBreaker',
+    name: 'Armor Breaker',
+    description: 'Your damage ignores Armor',
+    tier: 'legendary',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerIgnoreArmor = true;
+    }
+  },
+
   lastStand: {
     id: 'lastStand',
     name: 'Last Stand',
@@ -966,15 +977,27 @@ export const AUGMENTS = {
     }
   },
 
-  voidShieldIII: {
-    id: 'voidShieldIII',
-    name: 'Void Shield III',
-    description: 'Reduce incoming damage by {value} (after armor)',
-    tier: 'legendary',
+  periodicPulseI: {
+    id: 'periodicPulseI',
+    name: 'Sustained Pulse I',
+    description: '+{value} to periodic damage and healing effects',
+    tier: 'rare',
     type: 'special',
-    valueRange: [3, 3],
+    valueRange: [1, 1],
     apply: (hero, value) => {
-      hero._towerVoidShield = (hero._towerVoidShield || 0) + Number(value || 0);
+      hero._towerPeriodicPulseBonus = (hero._towerPeriodicPulseBonus || 0) + Number(value || 0);
+    }
+  },
+
+  periodicPulseII: {
+    id: 'periodicPulseII',
+    name: 'Sustained Pulse II',
+    description: '+{value} to periodic damage and healing effects',
+    tier: 'epic',
+    type: 'special',
+    valueRange: [2, 2],
+    apply: (hero, value) => {
+      hero._towerPeriodicPulseBonus = (hero._towerPeriodicPulseBonus || 0) + Number(value || 0);
     }
   },
 
@@ -1009,6 +1032,19 @@ export const AUGMENTS = {
     apply: (hero) => {
       hero._towerSpellEcho = 'back';
     }
+  },
+
+  absolvingGrace: {
+    id: 'absolvingGrace',
+    name: 'Absolving Grace',
+    description: 'At end of round: cleanse all debuffs, heal {value} per debuff removed.',
+    tier: 'legendary',
+    type: 'special',
+    bossExclusive: true,
+    valueRange: [3, 3],
+    apply: (hero, value) => {
+      hero._towerRoundCleanseHealPerDebuff = Number(value || 0);
+    }
   }
 };
 
@@ -1022,7 +1058,11 @@ export const AUGMENTS = {
 export function getRandomAugments(level, count = 3, excludeIds = [], options = {}) {
   const availableAugments = Object.values(AUGMENTS).filter(aug => {
     const tierInfo = AUGMENT_TIERS[aug.tier];
-    return level >= tierInfo.minLevel && !excludeIds.includes(aug.id);
+    const includeBossExclusive = !!options.includeBossExclusive;
+    const isBossExclusive = !!aug.bossExclusive;
+    return level >= tierInfo.minLevel
+      && !excludeIds.includes(aug.id)
+      && (!isBossExclusive || includeBossExclusive);
   });
 
   if (availableAugments.length === 0) return [];

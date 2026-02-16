@@ -3,7 +3,7 @@ import { stripBackgroundFromImageData, BG_TRANSPARENCY_TOLERANCE } from './utils
 import getAssetPath from '../utils/assetPath';
 
 // Slash animation: sprite-sheet driven, small melee swipe animation.
-export default function Slash({ from = { x: 0, y: 0 }, to = { x: 0, y: 0 }, duration = 400, onDone, size = 64, sprite = '/images/spells/Slash_2x2_4frames.png', frames = 4, cols: propCols = 2, rows: propRows = 2, mirror, rotateDeg = 0 }) {
+export default function Slash({ from = { x: 0, y: 0 }, to = { x: 0, y: 0 }, duration = 400, onDone, size = 64, sprite = '/images/spells/Slash_2x2_4frames.png', frames = 4, cols: propCols = 2, rows: propRows = 2, mirror, flipY = false, rotateDeg = 0 }) {
   const resolvedSprite = getAssetPath(sprite);
   const [currentPos, setCurrentPos] = useState(from);
   const [visible, setVisible] = useState(true);
@@ -130,12 +130,14 @@ export default function Slash({ from = { x: 0, y: 0 }, to = { x: 0, y: 0 }, dura
   const dx = (to.x || 0) - (from.x || 0);
   // horizontal flip decision: prefer explicit `mirror` prop, otherwise infer from travel direction
   const flipX = (typeof mirror !== 'undefined') ? Boolean(mirror) : (dx < 0);
+  const useFlipY = Boolean(flipY);
+  const scalePart = `${flipX ? 'scaleX(-1)' : ''} ${useFlipY ? 'scaleY(-1)' : ''}`.trim();
 
   const orbStyle = {
     position: 'absolute',
     left: `${currentPos.x}px`,
     top: `${currentPos.y}px`,
-    transform: `translate(-50%,-50%) rotate(${Number(rotateDeg || 0)}deg) ${flipX ? 'scaleX(-1)' : ''}`,
+    transform: `translate(-50%,-50%) rotate(${Number(rotateDeg || 0)}deg) ${scalePart}`.trim(),
     // Position is driven by RAF interpolation with easing; only animate opacity via CSS transition
     transition: `opacity ${Math.round(duration/3)}ms ease-out`,
     background: 'transparent',

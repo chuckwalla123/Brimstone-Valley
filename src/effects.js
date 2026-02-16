@@ -76,6 +76,7 @@ export const EFFECTS = {
   },
   BulwarkAura: { name: 'Bulwark Aura', kind: 'buff', duration: 2, modifiers: { armor: 1, speed: 1 }, description: 'Grants +1 Armor and +1 Speed for 2 rounds.' },
   Haste: { name: 'Haste', kind: 'buff', duration: 2, modifiers: { speed: 2 }, description: 'Grants +2 Speed for 2 rounds.' },
+  SpeedUp: { name: 'Speed up', image: '/images/effects/Speed.png', kind: 'buff', duration: 'permanent', modifiers: { speed: 1 }, description: 'Increases Speed by 1.' },
   Quickness: { name: 'Quickness', image: '/images/effects/Quickness.png', kind: 'buff', duration: 'permanent', modifiers: { speed: 1, spellPower: 1 }, description: 'Increases Speed and Spell Power by 1.' },
   BlessedRegen: { name: 'Blessed Regen', kind: 'buff', duration: 2, pulse: { type: 'heal', value: 1 }, description: 'Heals 1 at the beginning of each round for 2 rounds.' },
   Regen: { name: 'Regen', image: '/images/effects/Regen.png', kind: 'buff', duration: 10, pulse: { type: 'heal', value: 1 }, description: 'Heals 1 at the beginning of each round for 10 rounds.' },
@@ -99,8 +100,17 @@ export const EFFECTS = {
   // Lie In Wait: grants +2 Spell Power and prevents single-target spells from targeting the affected hero for 5 rounds
   LieInWait: { name: 'Lie In Wait', image: '/images/effects/Lie in Wait.png', kind: 'buff', duration: 5, modifiers: { spellPower: 2 }, preventSingleTarget: true, description: 'Grants +2 Spell Power and makes the affected hero untargetable by single-target spells for 5 rounds.' },
   LieInWaitLevel5: { name: 'Lie In Wait', image: '/images/effects/Lie in Wait.png', kind: 'buff', duration: 1, modifiers: { spellPower: 2 }, preventSingleTarget: true, description: 'Grants +2 Spell Power and makes the affected hero untargetable by single-target spells for 1 round.' },
+  Fade: { name: 'Fade', image: '/images/effects/Fade.png', kind: 'buff', duration: 5, modifiers: { spellPower: 1 }, preventSingleTarget: true, description: 'Grants +1 Spell Power and makes the affected hero untargetable by single-target spells for 5 rounds.' },
   // Taunt: forces single-target enemy spells to target this hero
   Taunt: { name: 'Taunt', image: '/images/effects/Taunt.png', kind: 'buff', duration: 'permanent', taunt: true, description: 'Forces single-target enemy spells to target this Hero.' },
+  Loyalty: {
+    name: 'Loyalty',
+    image: '/images/effects/Loyalty.png',
+    kind: 'buff',
+    duration: 'permanent',
+    redirectSingleTargetToEffectApplier: true,
+    description: 'If an enemy single-target spell would target this hero, it targets the Shield Maiden who applied Loyalty instead (if able).'
+  },
   Defend: {
     name: 'Defend',
     image: '/images/effects/Defend.png',
@@ -180,6 +190,10 @@ export const EFFECTS = {
   UndyingRage: {
     name: 'Undying Rage', kind: 'passive', duration: 'permanent',
     description: 'Passive: The first instance of damage that would have killed this hero instead reduces them to 1 Health. One-time use.'
+  },
+  Crumble: {
+    name: 'Crumble', kind: 'passive', duration: 'permanent',
+    description: 'Passive: The first time this hero\'s Health falls below 7, they permanently lose 1 base Armor.'
   },
   MudArmor: {
     name: 'Mud Armor', image: '/images/effects/Mud Armor.png', kind: 'buff', duration: 'permanent',

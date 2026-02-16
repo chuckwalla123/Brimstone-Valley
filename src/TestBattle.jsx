@@ -9,7 +9,7 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
 const draftableHeroes = HEROES.filter(hero => hero && hero.draftable !== false);
 
 export default function TestBattle() {
-  // Build boards for testing: 2 Reapers + 1 Lancer on each main board
+  // Build boards for testing: 2 Shield Maidens + 1 Lancer on each side, no reserves
   const { p1Main, p1Reserve, p2Main, p2Reserve } = useMemo(() => {
     const clone = (v) => JSON.parse(JSON.stringify(v));
     const p1Main = makeEmptyMain('p1');
@@ -23,10 +23,10 @@ export default function TestBattle() {
       console.error('Error listing HEROES ids', e);
     }
 
-    const reaper = HEROES.find(h => h.id === 'reaperID');
+    const shieldMaiden = HEROES.find(h => h.id === 'shieldMaidenID');
     const lancer = HEROES.find(h => h.id === 'lancerID');
 
-    if (reaper && lancer) {
+    if (shieldMaiden && lancer) {
       const prepare = (hero) => {
         const h = clone(hero);
         h.currentHealth = hero.health;
@@ -37,15 +37,15 @@ export default function TestBattle() {
         return h;
       };
 
-      p1Main[0].hero = prepare(reaper);
-      p1Main[1].hero = prepare(reaper);
+      p1Main[0].hero = prepare(shieldMaiden);
+      p1Main[1].hero = prepare(shieldMaiden);
       p1Main[2].hero = prepare(lancer);
 
-      p2Main[0].hero = prepare(reaper);
-      p2Main[1].hero = prepare(reaper);
+      p2Main[0].hero = prepare(shieldMaiden);
+      p2Main[1].hero = prepare(shieldMaiden);
       p2Main[2].hero = prepare(lancer);
     } else {
-      console.warn('Reaper or Lancer not found; test placement skipped.', { reaper: !!reaper, lancer: !!lancer });
+      console.warn('Required heroes not found; test placement skipped.', { shieldMaiden: !!shieldMaiden, lancer: !!lancer });
     }
 
     return { p1Main, p1Reserve, p2Main, p2Reserve };
@@ -58,7 +58,7 @@ export default function TestBattle() {
     // Connect to server
     const newSocket = io(SERVER_URL);
 
-    // Create initial gameState with mirrored Reaper + Lancer test boards
+    // Create initial gameState with mirrored Rogue + Lancer test boards
     const initialGameState = {
       p1Main,
       p1Reserve,
@@ -167,7 +167,7 @@ export default function TestBattle() {
 
   return (
     <div style={{ padding: 12 }}>
-      <div style={{ marginBottom: 8, fontWeight: 700 }}>Test: 2 Reapers + 1 Lancer per side</div>
+      <div style={{ marginBottom: 8, fontWeight: 700 }}>Test: 2 Shield Maiden + 1 Lancer per side</div>
       <button onClick={handleResetTestBattle} style={{ marginBottom: 8 }}>Reset Test Battle</button>
       {console.debug && console.debug('TestBattle boards', { p1Main, p1Reserve, p2Main, p2Reserve })}
       <BattlePhase
