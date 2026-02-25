@@ -172,6 +172,77 @@ const estimateIncomingDamagePerTurn = (hero, tileIndex, isP2, enemyBoard = [], e
   return totalIncoming;
 };
 
+const getDeltaEnergyAmount = (deltaEnergy) => {
+  if (typeof deltaEnergy === 'number') return deltaEnergy;
+  if (deltaEnergy && typeof deltaEnergy === 'object' && typeof deltaEnergy.amount === 'number') {
+    return deltaEnergy.amount;
+  }
+  return 0;
+};
+
+const estimateIncomingAllyEnergyPerTurn = (
+  tileIndex,
+  isP2,
+  enemyBoard = [],
+  enemyReserve = [],
+  allyBoard = [],
+  allyReserve = []
+) => {
+  if (tileIndex < 0) return 0;
+
+  const allySide = isP2 ? 'p2' : 'p1';
+  const enemySide = isP2 ? 'p1' : 'p2';
+  const boards = isP2
+    ? { p1Board: enemyBoard, p2Board: allyBoard, p1Reserve: enemyReserve, p2Reserve: allyReserve }
+    : { p1Board: allyBoard, p2Board: enemyBoard, p1Reserve: allyReserve, p2Reserve: enemyReserve };
+
+  let totalEnergySupport = 0;
+
+  (allyBoard || []).forEach((allyTile, allyIdx) => {
+    if (!allyTile || !allyTile.hero || allyTile._dead) return;
+    const allyHero = allyTile.hero;
+    const row = indexToRow(allyIdx, allySide);
+    const activeRow = row === 0 ? 'front' : (row === 1 ? 'middle' : 'back');
+    const spellData = allyHero.spells ? allyHero.spells[activeRow] : null;
+    if (!spellData) return;
+
+    const castsRemaining = (allyTile._castsRemaining && typeof allyTile._castsRemaining[activeRow] === 'number')
+      ? Number(allyTile._castsRemaining[activeRow])
+      : (spellData.casts != null ? Number(spellData.casts) : null);
+    if (castsRemaining == null || Number.isNaN(castsRemaining) || castsRemaining <= 0) return;
+
+    const spellId = spellData.spell || spellData.id;
+    if (!spellId) return;
+    const spell = getSpellById(spellId);
+    if (!spell || !spell.spec || !spell.spec.post || !spell.spec.post.deltaEnergy) return;
+
+    const cost = Number(spellData.cost || 0);
+    const allySpeed = Number(allyTile.currentSpeed ?? allyHero.speed ?? 0);
+    const allyEnergy = Number(allyTile.currentEnergy ?? allyHero.energy ?? 0) + allySpeed;
+    if (cost > 0 && allyEnergy < cost) return;
+
+    const targets = resolveTargets(
+      spell.spec.targets || [],
+      { boardName: allySide, index: allyIdx, tile: allyTile },
+      boards,
+      null,
+      { bypassTriggers: !!(spell.spec.post && spell.spec.post.bypassTriggers) }
+    );
+
+    const hitsEvaluatedTile = (targets || []).some(
+      t => t && t.board === allySide && t.index === tileIndex
+    );
+    if (!hitsEvaluatedTile) return;
+
+    const deltaEnergy = getDeltaEnergyAmount(spell.spec.post.deltaEnergy);
+    if (deltaEnergy > 0) {
+      totalEnergySupport += deltaEnergy;
+    }
+  });
+
+  return totalEnergySupport;
+};
+
 function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserve = [], allyBoard = [], allyReserve = [], casterSpellPower = 0, hero = null, slotKey = null) {
   if (!spell || !spell.spec) return 0;
   
@@ -755,6 +826,20 @@ function calculateTileValue(hero, tileIndex, isP2, enemyBoard = [], enemyReserve
   
   const speed = hero.speed || 1;
   let totalSpellValue = 0;
+
+  const allyBoardSim = [...(allyBoard || [])];
+  allyBoardSim[tileIndex] = allyBoardSim[tileIndex] && allyBoardSim[tileIndex].hero
+    ? { ...allyBoardSim[tileIndex], hero }
+    : { hero, _dead: false };
+
+  const incomingAllyEnergy = estimateIncomingAllyEnergyPerTurn(
+    tileIndex,
+    isP2,
+    enemyBoard,
+    enemyReserve,
+    allyBoardSim,
+    allyReserve
+  );
   
   // Evaluate only the spell(s) active at this position
   // Most heroes have one spell per row, but some might have multiple
@@ -808,7 +893,7 @@ function calculateTileValue(hero, tileIndex, isP2, enemyBoard = [], enemyReserve
     // Clamp by current energy and remaining casts when runtime state is available.
     let perTurnImpact = spellImpact * (speed / cost);
     const currentEnergy = (tile && typeof tile.currentEnergy === 'number')
-      ? Number(tile.currentEnergy) + speed
+      ? Number(tile.currentEnergy) + speed + incomingAllyEnergy
       : null;
     if (cost > 0 && castsRemaining != null) {
       let castsThisTurn = Number(castsRemaining);

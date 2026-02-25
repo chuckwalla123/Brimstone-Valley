@@ -38,11 +38,68 @@ import { getAI } from './ai';
 import getAssetPath from './utils/assetPath';
 import sfxManager from './SfxManager';
 
+const keyedSpriteCache = new Map();
+
 // Helper to get current UI scale from CSS variable
 function getUiScale() {
   if (typeof document === 'undefined') return 1;
   const value = getComputedStyle(document.documentElement).getPropertyValue('--ui-scale');
   return parseFloat(value) || 1;
+}
+
+function ChromaKeyImage({ src, alt, style, enabled = false, tolerance = BG_TRANSPARENCY_TOLERANCE }) {
+  const rawSrc = getAssetPath(src || '');
+  const [resolvedSrc, setResolvedSrc] = useState(rawSrc);
+
+  useEffect(() => {
+    if (!rawSrc) {
+      setResolvedSrc(rawSrc);
+      return;
+    }
+    if (!enabled) {
+      setResolvedSrc(rawSrc);
+      return;
+    }
+
+    const cacheKey = `${rawSrc}::${tolerance}`;
+    const cached = keyedSpriteCache.get(cacheKey);
+    if (cached) {
+      setResolvedSrc(cached);
+      return;
+    }
+
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = rawSrc;
+    img.onload = () => {
+      if (cancelled) return;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        stripBackgroundFromImageData(imageData, tolerance);
+        ctx.putImageData(imageData, 0, 0);
+        const keyedDataUrl = canvas.toDataURL('image/png');
+        keyedSpriteCache.set(cacheKey, keyedDataUrl);
+        if (!cancelled) setResolvedSrc(keyedDataUrl);
+      } catch (e) {
+        if (!cancelled) setResolvedSrc(rawSrc);
+      }
+    };
+    img.onerror = () => {
+      if (!cancelled) setResolvedSrc(rawSrc);
+    };
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rawSrc, enabled, tolerance]);
+
+  return <img src={resolvedSrc} alt={alt} style={style} />;
 }
 
 function boardNameToSide(boardName) {
@@ -272,6 +329,7 @@ function SpellSprite({ spellId, cfg, frameMs = 600 }) {
 
 function SmallTile({ tile, movement, player, index, isReserve = false, events = [], effectPrecastMap = null, onHoverTile = null, onUnhoverTile = null, onEffectHover = null, onEffectOut = null, onTileWheel = null }) {
   const isEmpty = !tile || !tile.hero;
+  const isMineTile = !!(isEmpty && tile && tile._tileState === 'mine');
   const token = tile && tile.id ? tile.id : (isReserve ? `${player}:reserve:${index}` : `${player}:${index}`);
   const boardToken = isReserve ? `${player}:reserve:${index}` : `${player}:${index}`;
   const draggable = movement?.canDrag ? movement.canDrag({ ...tile, player }) : false;
@@ -292,13 +350,14 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
           onDragEnter={e => { setHover(true); e.preventDefault(); onHoverTile && onHoverTile(tile, player, index); }}
           onDragLeave={e => { setHover(false); onUnhoverTile && onUnhoverTile(); }}
           onDrop={e => { setHover(false); movement?.onDrop && movement.onDrop(e, token); }}
-          title={isReserve ? 'Reserve' : 'Empty'}
+          title={isReserve ? 'Reserve' : (isMineTile ? 'Mine' : 'Empty')}
           onMouseEnter={() => { setHover(true); onHoverTile && onHoverTile(tile, player, index); }}
           onMouseLeave={() => { setHover(false); onUnhoverTile && onUnhoverTile(); }}
           onWheel={e => { onTileWheel && onTileWheel(e); }}
         >
           <div className="db-tile-empty-text" style={{ textAlign: 'center' }}>
-            <div style={{ fontSize: isReserve ? 12 : 14 }}>{isReserve ? 'Reserve' : 'Empty'}</div>
+            <div style={{ fontSize: isReserve ? 12 : 14 }}>{isReserve ? 'Reserve' : (isMineTile ? 'Mine' : 'Empty')}</div>
+            {isMineTile ? <div style={{ fontSize: 11, color: '#ff9800', marginTop: 4 }}>Explosive</div> : null}
             {isReserve ? <div style={{ fontSize: 11, color: '#aaa', marginTop: 4 }}>Drop here to reserve</div> : null}
           </div>
         </div>
@@ -353,10 +412,21 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
     back: (tile && tile._castsRemaining && typeof tile._castsRemaining.back === 'number') ? tile._castsRemaining.back : (base?.spells?.back?.casts ?? 0),
   };
   const effects = tile.effects || [];
+  const uiScale = getUiScale();
+  const spriteOffsetY = Number.isFinite(tile?.hero?.spriteOffsetY) ? tile.hero.spriteOffsetY : 0;
+  const spriteOffsetYPx = Number.isFinite(tile?.hero?.spriteOffsetYPx) ? tile.hero.spriteOffsetYPx : 0;
+  const spriteScale = Number.isFinite(tile?.hero?.spriteScale) ? tile.hero.spriteScale : 1;
+  const spriteFit = tile?.hero?.spriteFit || 'cover';
+  const useChromaKey = !!tile?.hero?.spriteChromaKey;
+  const spriteTransforms = [];
+  if (spriteOffsetY) spriteTransforms.push(`translateY(${spriteOffsetY}%)`);
+  if (spriteOffsetYPx) spriteTransforms.push(`translateY(${Math.round(spriteOffsetYPx * uiScale)}px)`);
+  if (spriteScale !== 1) spriteTransforms.push(`scale(${spriteScale})`);
   const precastScale = (() => {
     const ev = (events || []).find(e => e && e.kind === 'precast' && typeof e.scale === 'number');
     return ev && typeof ev.scale === 'number' ? ev.scale : 1;
   })();
+  const hideCasterSprite = !!((events || []).some(ev => ev && ev.kind === 'hide-caster'));
 
     return (
     <div className="bp-tile-row">
@@ -400,20 +470,24 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
 
           {/* hero background image (full tile, behind overlays) */}
           {tile.hero && tile.hero.image ? (
-            <img
-              src={getAssetPath(tile.hero.image)}
+            <ChromaKeyImage
+              src={tile.hero.image}
               alt={name}
+              enabled={useChromaKey}
+              tolerance={72}
               style={{
                 position: 'absolute',
                 left: 0,
                 top: 0,
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover',
-                background: '#fff',
+                objectFit: spriteFit,
+                objectPosition: 'center',
+                transform: spriteTransforms.length ? spriteTransforms.join(' ') : 'none',
+                background: 'transparent',
                 borderRadius: 6,
                 zIndex: 0,
-                opacity: 1,
+                opacity: hideCasterSprite ? 0 : 1,
               }}
             />
           ) : null}
@@ -478,6 +552,10 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
               }
               return <div key={key} className="bp-float" style={{ color: '#ffd54f', left: pos.left, top: pos.top }}>{`+${amt}`}</div>;
             }
+            if (ev.kind === 'miss') {
+              const pos = (typeof ev.effectIndex === 'number') ? computePos(ev.effectIndex) : computePos(ei % 4);
+              return <div key={key} className="bp-float" style={{ color: '#cfd8dc', left: pos.left, top: pos.top, fontWeight: 800 }}>MISS</div>;
+            }
               return null;
           })}
 
@@ -521,8 +599,9 @@ function BoardGrid({ label, tiles = [], movement, player, isReserve = false, isE
 import { executeRound } from './battleEngine';
 import { indexToColumn, indexToRow, columnIndicesForBoard } from './targeting';
 
-export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty = null, autoPlay: autoPlayProp, localSide = null, matchPlayers = null, showReturnToMenu = true }){
+export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty = null, autoPlay: autoPlayProp, localSide = null, matchPlayers = null, showReturnToMenu = true, battleSpeedMultiplier = 1, towerLevel = null }){
   const autoPlay = (typeof autoPlayProp === 'boolean') ? autoPlayProp : !!aiDifficulty;
+  const normalizedBattleSpeed = Math.max(1, Number(battleSpeedMultiplier || 1));
   const gameMode = gameState?.gameMode || 'classic';
   const p1Main = gameState?.p1Main || [];
   const p2Main = gameState?.p2Main || [];
@@ -542,6 +621,12 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   const lastAnimMsRef = useRef(1200);
   const animationEndTimeRef = useRef(0);
   const [log, setLog] = useState([]);
+  const [combatLog, setCombatLog] = useState([]);
+  const lastCombatSeqRef = useRef(0);
+  const [showCombatLog, setShowCombatLog] = useState(() => {
+    const saved = localStorage.getItem('showBattleCombatLog');
+    return saved == null ? true : saved === 'true';
+  });
   const [phase, setPhase] = useState('ready');
   const [priorityPlayer, setPriorityPlayer] = useState('player1');
   const [eventsMap, setEventsMap] = useState({});
@@ -549,12 +634,115 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   const pendingSecondaryRef = useRef(null);
   const lastProcessedSeqRef = useRef(0);
   const recentEmoteRef = useRef({});
+  const suppressedDamagePulseRef = useRef({});
   const [effectPrecastMap, setEffectPrecastMap] = useState({});
   const prayerEmoteRef = useRef({});
   const [gameOver, setGameOver] = useState(null);
   const [victoryOverlayVisible, setVictoryOverlayVisible] = useState(false);
   // Dice roll animation state
   const [diceRoll, setDiceRoll] = useState(null); // { die, base, roll, total }
+
+  useEffect(() => {
+    const handleStorage = (event) => {
+      if (event.key !== 'showBattleCombatLog') return;
+      const value = event.newValue;
+      setShowCombatLog(value == null ? true : value === 'true');
+    };
+    window.addEventListener('storage', handleStorage);
+    return () => window.removeEventListener('storage', handleStorage);
+  }, []);
+
+  const resolveTileFromToken = useCallback((token) => {
+    if (!token || typeof token.index !== 'number') return null;
+    const boardName = String(token.boardName || token.board || '');
+    if (boardName.startsWith('p1')) return (p1Board || [])[token.index] || null;
+    if (boardName.startsWith('p2')) return (p2Board || [])[token.index] || null;
+    if (boardName.startsWith('p3')) return (p3Board || [])[token.index] || null;
+    return null;
+  }, [p1Board, p2Board, p3Board]);
+
+  const formatTokenLabel = useCallback((token) => {
+    const tile = resolveTileFromToken(token);
+    if (tile && tile.hero && tile.hero.name) return tile.hero.name;
+    if (!token || typeof token.index !== 'number') return 'Unknown';
+    const boardName = String(token.boardName || token.board || '');
+    return `${boardName}[${token.index}]`;
+  }, [resolveTileFromToken]);
+
+  const appendCombatLog = useCallback((msg) => {
+    if (!msg) return;
+    setCombatLog(prev => {
+      const next = [...prev, msg];
+      return next.slice(-80);
+    });
+  }, []);
+
+  const appendCombatEntriesForAction = useCallback((action) => {
+    if (!action || !showCombatLog) return;
+    if (typeof action.seq === 'number') {
+      if (action.seq <= lastCombatSeqRef.current) return;
+      lastCombatSeqRef.current = action.seq;
+    }
+
+    if (action.type === 'cast') {
+      const casterLabel = formatTokenLabel(action.caster);
+      const spellName = action.spellId ? (getSpellById(action.spellId)?.name || action.spellId) : 'Spell';
+      const results = Array.isArray(action.results) ? action.results : [];
+      results.forEach((result) => {
+        if (!result || !result.target) return;
+        const targetLabel = formatTokenLabel(result.target);
+        const applied = result.applied || (result.effectType ? { type: result.effectType, amount: result.amount } : null);
+        if (applied && applied.type === 'damage' && Number(applied.amount || 0) > 0) {
+          appendCombatLog(`${casterLabel} used ${spellName} on ${targetLabel} for ${Number(applied.amount || 0)} damage.`);
+        }
+        if (applied && applied.type === 'heal' && Number(applied.amount || 0) > 0) {
+          appendCombatLog(`${casterLabel} used ${spellName} on ${targetLabel} for ${Number(applied.amount || 0)} healing.`);
+        }
+        if (!applied) {
+          appendCombatLog(`${casterLabel} used ${spellName} on ${targetLabel}.`);
+        }
+        const effectsApplied = Array.isArray(result.effectsApplied) ? result.effectsApplied.filter(Boolean) : [];
+        if (effectsApplied.length > 0) {
+          appendCombatLog(`${casterLabel} applied ${effectsApplied.join(', ')} to ${targetLabel}.`);
+        }
+      });
+      return;
+    }
+
+    if (action.type === 'effectPulse' && action.target && Number(action.amount || 0) > 0) {
+      const targetLabel = formatTokenLabel(action.target);
+      const sourceLabel = action.source ? formatTokenLabel(action.source) : null;
+      if (action.action === 'damage') {
+        appendCombatLog(`${sourceLabel ? `${sourceLabel} ` : ''}${action.effectName || 'Effect'} dealt ${Number(action.amount || 0)} damage to ${targetLabel}.`);
+      } else if (action.action === 'heal') {
+        appendCombatLog(`${sourceLabel ? `${sourceLabel} ` : ''}${action.effectName || 'Effect'} healed ${targetLabel} for ${Number(action.amount || 0)}.`);
+      }
+      return;
+    }
+
+    if (action.type === 'energyIncrement' && action.target && Number(action.amount || 0) !== 0) {
+      const targetLabel = formatTokenLabel(action.target);
+      appendCombatLog(`${targetLabel} gained ${Number(action.amount || 0)} Energy${action.effectName ? ` (${action.effectName})` : ''}.`);
+      return;
+    }
+
+    if (action.type === 'effectApplied' && action.target && action.effectName) {
+      const targetLabel = formatTokenLabel(action.target);
+      appendCombatLog(`${targetLabel} gained ${action.effectName}.`);
+      return;
+    }
+
+    if (action.type === 'onRoundStartTriggered') {
+      const sourceLabel = action.source ? formatTokenLabel(action.source) : 'Unknown';
+      appendCombatLog(`Round start: ${sourceLabel} triggered ${action.effectName || 'an effect'}.`);
+    }
+  }, [showCombatLog, formatTokenLabel, appendCombatLog]);
+
+  useEffect(() => {
+    const action = gameState?.lastAction;
+    if (!action) return;
+    appendCombatEntriesForAction(action);
+  }, [gameState?.lastAction?.seq, gameState?.lastAction, appendCombatEntriesForAction]);
 
   // Sync state with gameState. Apply immediately for actions that represent
   // applied changes so client rendering reflects server-applied state at the
@@ -735,6 +923,20 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     if (dx) panel.scrollLeft += dx;
   }, [hoverInfo]);
 
+  const handleScrollablePanelWheel = useCallback((e) => {
+    const panel = e.currentTarget;
+    if (!panel) return;
+    const dy = typeof e.deltaY === 'number' ? e.deltaY : 0;
+    const dx = typeof e.deltaX === 'number' ? e.deltaX : 0;
+    const canScrollY = panel.scrollHeight > panel.clientHeight;
+    const canScrollX = panel.scrollWidth > panel.clientWidth;
+    if (!canScrollY && !canScrollX) return;
+    e.preventDefault();
+    e.stopPropagation();
+    if (dy) panel.scrollTop += dy;
+    if (dx) panel.scrollLeft += dx;
+  }, []);
+
   const movement = useMovement({
     p1Board, p2Board, p3Board, p1Reserve: p1ReserveBoard, p2Reserve: p2ReserveBoard, p3Reserve: p3ReserveBoard,
     setP1Board, setP2Board, setP3Board, setP1ReserveBoard, setP2ReserveBoard, setP3ReserveBoard,
@@ -793,6 +995,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   const processingQueueRef = useRef(false);
 
   const sleep = ms => new Promise(res => setTimeout(res, ms));
+  const scaleClientDelay = (ms, minMs = 0) => Math.max(Number(minMs || 0), Math.floor(Number(ms || 0) / normalizedBattleSpeed));
 
   const applyStateSnapshot = (snapshot) => {
     if (!snapshot) return;
@@ -820,6 +1023,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     if (typeof lastAction.seq === 'number') {
       lastProcessedSeqRef.current = lastAction.seq;
     }
+
+    appendCombatEntriesForAction(lastAction);
 
     if (lastAction.type === 'onRoundStartTriggered' || lastAction.type === 'roundComplete') {
       lastPulseSeenRef.current = {};
@@ -922,7 +1127,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       }
       
       if (lastAction.type === 'roundComplete' && autoPlay && !lastAction.winner && movement && movement.startMovementPhase) {
-        await sleep(300);
+        await sleep(scaleClientDelay(300));
         movement.startMovementPhase();
       }
     } else if (lastAction.type === 'postCastWait') {
@@ -933,7 +1138,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       if (lastAction.phase === 'secondary' && lastAction.target && lastAction.target.boardName) {
         await playPendingSecondaryForTarget(lastAction.target.boardName, Number(lastAction.target.index));
       }
-      await sleep(300);
+      await sleep(scaleClientDelay(300));
     } else if (lastAction.type === 'effectPreCast') {
       if (lastAction.target && lastAction.target.boardName) {
         const tside = boardNameToSide(lastAction.target.boardName);
@@ -972,13 +1177,18 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             }
             return n;
           });
-        }, isReactionPrecast ? 300 : 2000);
-        await sleep(isReactionPrecast ? 0 : 500);
+          }, isReactionPrecast ? scaleClientDelay(300) : scaleClientDelay(2000));
+        await sleep(isReactionPrecast ? 0 : scaleClientDelay(500));
       }
     } else if (lastAction.type === 'preCast' || lastAction.type === 'precast') {
       if (lastAction.caster && lastAction.caster.boardName) {
         const casterSide = boardNameToSide(lastAction.caster.boardName);
         const casterKey = `${casterSide}:${lastAction.caster.index}`;
+        const spellDef = getSpellById(lastAction.spellId) || {};
+        const hideCasterDuringPreCast = (typeof spellDef.hideCasterDuringPreCast === 'boolean')
+          ? spellDef.hideCasterDuringPreCast
+          : !!spellDef.hideCasterDuringCast;
+        const hideCasterEventId = hideCasterDuringPreCast ? `hide-caster-pre:${Date.now()}-${Math.random().toString(36).slice(2, 6)}` : null;
         setEventsMap(prev => {
           const next = { ...prev };
           next[casterKey] = next[casterKey] || [];
@@ -995,26 +1205,90 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             }
             return n;
           });
-        }, 2000);
-        // Wait 500ms for precast glow
-        await sleep(500);
+        }, scaleClientDelay(2000));
+        if (play && lastAction.animation) {
+          const cfg = SPELL_CONFIG[lastAction.animation] || null;
+          const uiScale = getUiScale();
+          const casterBoardArr = casterSide === 'p1' ? p1Board : (casterSide === 'p2' ? p2Board : p3Board);
+          const casterTile = (casterBoardArr || [])[Number(lastAction.caster.index)] || null;
+          const casterSpriteScale = Number(casterTile?.hero?.spriteScale || 1);
+          const scaleToCaster = !!spellDef.animationScaleToCaster;
+          const scaleMult = Number(spellDef.preCastAnimationScaleMultiplier || spellDef.animationScaleMultiplier || 1);
+          const resolvedScale = scaleToCaster ? Math.max(1, casterSpriteScale) * Math.max(0.1, scaleMult) : 1;
+          const props = cfg ? {
+            sprite: getAssetPath(cfg.file),
+            frames: cfg.frames,
+            cols: cfg.cols,
+            rows: cfg.rows,
+            size: Math.round((cfg.maxDisplaySize || 96) * uiScale * resolvedScale)
+          } : {};
+          const alignToCasterSpriteCenter = !!spellDef.alignToCasterSpriteCenter;
+          const preNudgeX = Number(spellDef.preCastAnimationAnchorNudgeX ?? spellDef.animationAnchorNudgeX ?? 0);
+          const preNudgeY = Number(spellDef.preCastAnimationAnchorNudgeY ?? spellDef.animationAnchorNudgeY ?? 0);
+          const preBaseCenter = alignToCasterSpriteCenter
+            ? (getTileVisualSpriteCenter(casterKey, casterTile) || getTileCenter(casterKey))
+            : getTileCenter(casterKey);
+          const casterCenter = preBaseCenter
+            ? { x: Math.round(preBaseCenter.x + preNudgeX), y: Math.round(preBaseCenter.y + preNudgeY) }
+            : null;
+          const animDuration = scaleClientDelay(Number(lastAction.animationMs || 600), 120);
+          const placement = lastAction.animationPlacement || 'inplace';
+          if (casterCenter) {
+            if (hideCasterDuringPreCast) {
+              setEventsMap(prev => {
+                const next = { ...prev };
+                next[casterKey] = next[casterKey] || [];
+                next[casterKey].push({ kind: 'hide-caster', id: hideCasterEventId });
+                return next;
+              });
+            }
+            if (placement === 'travel') {
+              play({ name: lastAction.animation, from: casterCenter, to: casterCenter, duration: animDuration, props });
+            } else {
+              play({ name: lastAction.animation, from: casterCenter, to: casterCenter, duration: animDuration, props });
+            }
+            await sleep(animDuration);
+          } else {
+            await sleep(scaleClientDelay(500));
+          }
+        } else {
+          // Wait 500ms for precast glow
+          await sleep(scaleClientDelay(500));
+        }
+        if (hideCasterDuringPreCast) {
+          setEventsMap(prev => {
+            const n = { ...prev };
+            if (n[casterKey]) {
+              n[casterKey] = n[casterKey].filter(ev => !(ev && ev.kind === 'hide-caster' && ev.id === hideCasterEventId));
+              if (n[casterKey].length === 0) delete n[casterKey];
+            }
+            return n;
+          });
+        }
       }
     } else if (lastAction.type === 'cast') {
       const casterSide = boardNameToSide(lastAction.caster && lastAction.caster.boardName || '');
+      const casterKey = `${casterSide}:${lastAction.caster.index}`;
       const spellId = lastAction.spellId;
+      const isAvalanche = spellId === 'avalanche';
       const animationSpellId = lastAction.copiedSpellId || spellId;
       const spellDef = getSpellById(animationSpellId) || {};
+      const castAnimationDuration = scaleClientDelay(Number(lastAction.animationMs || 1200), 120);
+      const secondaryAnimationDuration = scaleClientDelay(Number(lastAction.secondaryAnimationMs || lastAction.animationMs || 1200), 120);
       pendingSecondaryRef.current = null;
+      const hideCasterDuringCast = !!spellDef.hideCasterDuringCast;
+      const hideCasterEventId = hideCasterDuringCast ? `hide-caster-cast:${Date.now()}-${Math.random().toString(36).slice(2, 6)}` : null;
 
       // Show dice roll animation if this spell has roll info
-      if (lastAction.rollInfo && lastAction.rollInfo.die && lastAction.rollInfo.roll) {
+      if (!isAvalanche && spellDef.showRollAnimation !== false && lastAction.rollInfo && lastAction.rollInfo.die && lastAction.rollInfo.roll) {
         setDiceRoll(lastAction.rollInfo);
         // Keep dice visible for 1.5 seconds before spell animation plays
-        await sleep(1500);
+        await sleep(scaleClientDelay(1500));
         setDiceRoll(null);
       }
 
-      if (play && spellDef.animation) {
+      const animName = (spellDef && spellDef.animation) || lastAction.animation || null;
+      if (play && animName) {
         // Build token center map from DOM
         const tokenCenterMap = {};
         try {
@@ -1030,9 +1304,6 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             } catch (e) {}
           });
         } catch (e) {}
-
-        const casterKey = `${casterSide}:${lastAction.caster.index}`;
-        const casterCenter = tokenCenterMap[casterKey];
 
         const targetDescriptors = (spellDef && spellDef.spec && Array.isArray(spellDef.spec.targets)) ? spellDef.spec.targets : [];
         const results = Array.isArray(lastAction.results) ? lastAction.results : [];
@@ -1057,16 +1328,30 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         const descSide = (targetDescriptors[0] && targetDescriptors[0].side) ? targetDescriptors[0].side : 'enemy';
         const inferredSide = descSide === 'ally' ? casterSide : (gameMode === 'ffa3' ? null : (casterSide === 'p1' ? 'p2' : 'p1'));
         const targetSide = firstTarget ? boardNameToSide(firstTarget.boardName) : inferredSide;
-        const animName = spellDef.animation;
         const config = SPELL_CONFIG[animName];
         const uiScale = getUiScale();
+        const casterBoardArr = casterSide === 'p1' ? p1Board : (casterSide === 'p2' ? p2Board : p3Board);
+        const casterTile = (casterBoardArr || [])[Number(lastAction.caster.index)] || null;
+        const casterSpriteScale = Number(casterTile?.hero?.spriteScale || 1);
+        const scaleToCaster = !!spellDef.animationScaleToCaster;
+        const scaleMult = Number(spellDef.animationScaleMultiplier || 1);
+        const alignToCasterSpriteCenter = !!spellDef.alignToCasterSpriteCenter;
+        const castNudgeX = Number(spellDef.animationAnchorNudgeX || 0);
+        const castNudgeY = Number(spellDef.animationAnchorNudgeY || 0);
+        const resolvedScale = scaleToCaster ? Math.max(1, casterSpriteScale) * Math.max(0.1, scaleMult) : 1;
         const props = config ? {
           sprite: getAssetPath(config.file),
           frames: config.frames,
           cols: config.cols,
           rows: config.rows,
-          size: Math.round((config.maxDisplaySize || 96) * uiScale)
+          size: Math.round((config.maxDisplaySize || 96) * uiScale * resolvedScale)
         } : {};
+        const castBaseCenter = alignToCasterSpriteCenter
+          ? (getTileVisualSpriteCenter(casterKey, casterTile) || tokenCenterMap[casterKey])
+          : tokenCenterMap[casterKey];
+        const casterCenter = castBaseCenter
+          ? { x: Math.round(castBaseCenter.x + castNudgeX), y: Math.round(castBaseCenter.y + castNudgeY) }
+          : null;
 
         const primaryDescriptorIndices = Array.isArray(lastAction.primaryDescriptorIndices)
           ? lastAction.primaryDescriptorIndices.filter(i => Number.isInteger(i) && i >= 0)
@@ -1080,16 +1365,31 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         const isBoardSpell = targetTypes.includes('board');
         const isColumnSpell = targetTypes.includes('column');
         const secondaryAnimationMode = spellDef && spellDef.secondaryAnimationMode ? spellDef.secondaryAnimationMode : null;
+        const boardTravelFromCaster = !!(spellDef && spellDef.animationBoardTravel);
+        const boardCenterSingle = !!(spellDef && spellDef.animationBoardCenterSingle);
         // Include rowContainingLowestArmor so spells targeting the lowest-armor row behave like other row spells
         const isRowSpell = targetTypes.some(t => t === 'rowContainingHighestArmor' || t === 'rowContainingLowestArmor' || t === 'frontmostRowWithHero' || t === 'backmostRowWithHero' || t === 'frontTwoRows' || t === 'backRow' || t === 'rowWithHighestSumArmor' || t === 'rowWithMostHeroes');
         const isHealSpell = (spellDef && spellDef.spec && spellDef.spec.formula && spellDef.spec.formula.type === 'heal') || results.some(r => r && r.applied && r.applied.type === 'heal');
         const placement = isHealSpell ? 'inplace' : (spellDef.animationPlacement || 'travel');
 
-        // Play sound effect if spell has one
-        if (spellDef && spellDef.sound) {
+        if (hideCasterDuringCast) {
+          setEventsMap(prev => {
+            const next = { ...prev };
+            next[casterKey] = next[casterKey] || [];
+            next[casterKey].push({ kind: 'hide-caster', id: hideCasterEventId });
+            return next;
+          });
+        }
+
+        // Play sound effect from action override or spell definition
+        const actionSound = lastAction && lastAction.sound ? lastAction.sound : null;
+        const soundFile = actionSound || (spellDef && spellDef.sound ? spellDef.sound : null);
+        if (soundFile) {
           try {
-            const audio = new Audio(getAssetPath(spellDef.sound));
-            const baseVolume = spellDef.soundVolume != null ? spellDef.soundVolume : 0.5;
+            const audio = new Audio(getAssetPath(soundFile));
+            const baseVolume = (lastAction && typeof lastAction.soundVolume === 'number')
+              ? Number(lastAction.soundVolume)
+              : (spellDef && spellDef.soundVolume != null ? spellDef.soundVolume : 0.5);
             const sfxVolume = sfxManager.getVolume();
             audio.volume = Math.max(0, Math.min(1, baseVolume * sfxVolume));
             audio.play().catch(() => {});
@@ -1116,9 +1416,10 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               const boardWidth = Math.abs(bottomRight.x - topLeft.x) + 100;
               const boardHeight = Math.abs(bottomRight.y - topLeft.y) + 100;
               const boardSize = Math.max(boardWidth, boardHeight);
-              const boardProps = { ...props, size: boardSize };
-              play({ name: animName, from: boardCenter, to: boardCenter, duration: lastAction.animationMs || 1200, props: boardProps });
-              await sleep(Number(lastAction.animationMs || 1200));
+              const boardProps = boardCenterSingle ? { ...props } : { ...props, size: boardSize };
+              const boardFrom = (boardTravelFromCaster && casterCenter) ? casterCenter : boardCenter;
+              play({ name: animName, from: boardFrom, to: boardCenter, duration: castAnimationDuration, props: boardProps });
+              await sleep(castAnimationDuration);
             }
           } else if (spellId === 'multishot' && casterCenter && primaryTargetTokens.length > 0) {
             for (const tgt of primaryTargetTokens) {
@@ -1126,8 +1427,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               const tkey = `${tside}:${tgt.index}`;
               const tcenter = tokenCenterMap[tkey];
               if (!tcenter) continue;
-              play({ name: animName, from: casterCenter, to: tcenter, duration: lastAction.animationMs || 1200, props });
-              await sleep(Number(lastAction.animationMs || 1200));
+              play({ name: animName, from: casterCenter, to: tcenter, duration: castAnimationDuration, props });
+              await sleep(castAnimationDuration);
             }
           } else if (placement === 'inplace' && !isRowSpell && !isColumnSpell && !isBoardSpell) {
             // Play in-place animation at each target (heal spells use this)
@@ -1136,8 +1437,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               const tkey = `${tside}:${tgt.index}`;
               const tcenter = tokenCenterMap[tkey];
               if (!tcenter) continue;
-              play({ name: animName, from: tcenter, to: tcenter, duration: lastAction.animationMs || 1200, props });
-              await sleep(Number(lastAction.animationMs || 1200));
+              play({ name: animName, from: tcenter, to: tcenter, duration: castAnimationDuration, props });
+              await sleep(castAnimationDuration);
             }
           } else if (isRowSpell && targetSide && firstTarget) {
             const sortByX = (indices, side) => {
@@ -1214,10 +1515,10 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
                     name: animName,
                     from: { x: startCenter.x, y: startCenter.y + yOffset },
                     to: { x: endCenter.x, y: endCenter.y + yOffset },
-                    duration: lastAction.animationMs || 1200,
+                    duration: castAnimationDuration,
                     props: coneProps
                   });
-                  await sleep(Number(lastAction.animationMs || 1200));
+                  await sleep(castAnimationDuration);
                 }
               } else {
                 const sideFirst = sideTargets[0];
@@ -1232,8 +1533,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
                 const endCenter = end ? end.center : null;
                 if (startCenter && endCenter) {
                   const rowProps = { ...props };
-                  play({ name: animName, from: startCenter, to: endCenter, duration: lastAction.animationMs || 1200, props: rowProps });
-                  await sleep(Number(lastAction.animationMs || 1200));
+                  play({ name: animName, from: startCenter, to: endCenter, duration: castAnimationDuration, props: rowProps });
+                  await sleep(castAnimationDuration);
                 }
               }
             }
@@ -1269,11 +1570,11 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
                 .map(idx => ({ idx, center: tokenCenterMap[`${side}:${idx}`] }))
                 .filter(entry => !!entry.center);
               if (colAnchors.length === 0) continue;
-              const startAnchor = colAnchors.reduce((best, cur) => (!best || cur.center.y > best.center.y) ? cur : best, null);
-              const endAnchor = colAnchors.reduce((best, cur) => (!best || cur.center.y < best.center.y) ? cur : best, null);
               const p3CastingToOther = casterSide === 'p3' && side !== 'p3';
-              const startBase = startAnchor ? startAnchor.center : null;
-              const endBase = endAnchor ? endAnchor.center : null;
+              // columnIndicesForBoard is ordered front->middle->back.
+              // Use that deterministic order so travel always terminates at the back tile.
+              const startBase = colAnchors[0] ? colAnchors[0].center : null;
+              const endBase = colAnchors[colAnchors.length - 1] ? colAnchors[colAnchors.length - 1].center : null;
               if (!startBase || !endBase) continue;
               let startCenter = { ...startBase };
               const baseOffset = 120;
@@ -1313,8 +1614,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               } else {
                 startCenter = { x: startBase.x, y: startBase.y - offset };
               }
-              play({ name: animName, from: startCenter, to: endBase, duration: lastAction.animationMs || 1200, props: travelProps });
-              await sleep(Number(lastAction.animationMs || 1200));
+              play({ name: animName, from: startCenter, to: endBase, duration: castAnimationDuration, props: travelProps });
+              await sleep(castAnimationDuration);
             }
           } else {
             if (primaryTargetTokens.length > 1) {
@@ -1334,16 +1635,16 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
                 const tkey = `${tside}:${tgt.index}`;
                 const tcenter = tokenCenterMap[tkey];
                 if (casterCenter && tcenter) {
-                  play({ name: animName, from: casterCenter, to: tcenter, duration: lastAction.animationMs || 1200, props });
-                  await sleep(Number(lastAction.animationMs || 1200));
+                  play({ name: animName, from: casterCenter, to: tcenter, duration: castAnimationDuration, props });
+                  await sleep(castAnimationDuration);
                 }
               }
             } else {
               const targetKey = `${targetSide}:${firstTarget.index}`;
               const targetCenter = tokenCenterMap[targetKey];
               if (casterCenter && targetCenter) {
-                play({ name: animName, from: casterCenter, to: targetCenter, duration: lastAction.animationMs || 1200, props });
-                await sleep(Number(lastAction.animationMs || 1200));
+                play({ name: animName, from: casterCenter, to: targetCenter, duration: castAnimationDuration, props });
+                await sleep(castAnimationDuration);
               }
             }
           }
@@ -1362,7 +1663,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             } : {};
             pendingSecondaryRef.current = {
               name: secName,
-              duration: Number(lastAction.secondaryAnimationMs || lastAction.animationMs || 1200),
+              duration: secondaryAnimationDuration,
               props: secProps,
               casterKey,
               casterCenter,
@@ -1396,7 +1697,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
           } : {};
           pendingSecondaryRef.current = {
             name: secName,
-            duration: Number(lastAction.secondaryAnimationMs || lastAction.animationMs || 1200),
+            duration: secondaryAnimationDuration,
             props: secProps,
             casterKey,
             casterCenter,
@@ -1413,11 +1714,74 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             played: new Set()
           };
         }
+
+        if (isAvalanche) {
+          const rollResults = Array.isArray(lastAction.rollInfos)
+            ? lastAction.rollInfos.filter(r => r && r.phase === 'primary' && r.target && r.rollInfo)
+            : (Array.isArray(lastAction.results) ? lastAction.results : [])
+                .filter(r => r && r.phase === 'primary' && r.target && r.applied && r.applied.rollInfo)
+                .map(r => ({
+                  target: r.target,
+                  rollInfo: r.applied.rollInfo,
+                  amount: Number((r.applied && r.applied.amount) || 0),
+                  phase: r.phase || 'primary'
+                }));
+          for (const result of rollResults) {
+            const tside = boardNameToSide(result.target.boardName);
+            const amount = Number(result.amount || 0);
+            if (result.rollInfo) {
+              setDiceRoll(result.rollInfo);
+              await sleep(scaleClientDelay(1000));
+              setDiceRoll(null);
+            }
+            if (tside && Number.isFinite(amount)) {
+              suppressDamagePulse(tside, Number(result.target.index), amount, 5000);
+              showTimedTileEmote(
+                tside,
+                Number(result.target.index),
+                { kind: 'damage', amount },
+                `avalanche:${lastAction.seq || Date.now()}:${tside}:${result.target.index}`,
+                2400
+              );
+            }
+            await sleep(scaleClientDelay(500));
+          }
+        }
       } else {
         // No animation; tiny pause to keep ordering consistent
-        await sleep(50);
+        await sleep(scaleClientDelay(50));
       }
+
+      if (lastAction.noEffect && lastAction.caster && typeof lastAction.caster.index === 'number') {
+        const missId = (typeof lastAction.seq === 'number')
+          ? `seq:${lastAction.seq}:cast-miss`
+          : `cast-miss:${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        showMissEmote(casterSide, Number(lastAction.caster.index), missId);
+        await sleep(scaleClientDelay(300));
+      }
+
+      if (hideCasterDuringCast) {
+        setEventsMap(prev => {
+          const n = { ...prev };
+          if (n[casterKey]) {
+            n[casterKey] = n[casterKey].filter(ev => !(ev && ev.kind === 'hide-caster' && ev.id === hideCasterEventId));
+            if (n[casterKey].length === 0) delete n[casterKey];
+          }
+          return n;
+        });
+      }
+
       emoteDelayRef.current = 0;
+    } else if (lastAction.type === 'spellMiss') {
+      const missRef = (lastAction && lastAction.caster) || (lastAction && lastAction.target);
+      if (missRef && missRef.boardName && typeof missRef.index === 'number') {
+        const side = boardNameToSide(missRef.boardName);
+        const missId = (typeof lastAction.seq === 'number')
+          ? `seq:${lastAction.seq}:spell-miss`
+          : `spell-miss:${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+        showMissEmote(side, Number(missRef.index), missId);
+        await sleep(scaleClientDelay(250));
+      }
     } else if (lastAction.type === 'postEffectDelay') {
       const dur = Number(lastAction.duration || 0) || 0;
       // block subsequent events for the duration
@@ -1437,6 +1801,9 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         }
 
         if (evPayload) {
+          if (evPayload.kind === 'damage' && shouldSuppressDamagePulse(tside, Number(lastAction.target.index), evPayload.amount)) {
+            return;
+          }
           if (evPayload.kind === 'energy' && shouldSkipEnergyEmote(tside, lastAction.target.index, evPayload.amount)) {
             return;
           }
@@ -1494,7 +1861,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               }
               return n;
             });
-          }, 800);
+          }, scaleClientDelay(800));
           // keep emote on-screen for a bit; non-blocking clear
           setTimeout(() => {
             setEventsMap(prev => {
@@ -1505,9 +1872,9 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               }
               return n;
             });
-          }, 2400);
+          }, scaleClientDelay(2400));
           // small spacing so subsequent emotes/animations don't overlap
-          await sleep(500);
+          await sleep(scaleClientDelay(500));
         }
       }
     } else if (lastAction.type === 'energyIncrement') {
@@ -1535,8 +1902,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             }
             return n;
           });
-        }, 2000);
-        await sleep(500);
+        }, scaleClientDelay(2000));
+        await sleep(scaleClientDelay(500));
       }
     } else if (lastAction.type === 'onRoundStartTriggered') {
       // no-op or log for now
@@ -1582,7 +1949,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   // track the primary dest key for the last-cast so we can identify secondary pulses
   const lastPrimaryDestRef = useRef(null);
 
-  const getTileCenter = (token) => {
+  const getTileElement = (token) => {
     try {
       if (!token) return null;
       // Prefer canonical board token attribute when available
@@ -1622,12 +1989,49 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
         }
       }
       if (!el) return null;
+      return el;
+    } catch (e) { console.warn('getTileElement error', e); return null; }
+  };
+
+  const getTileCenter = (token) => {
+    try {
+      const el = getTileElement(token);
+      if (!el) return null;
       const r = el.getBoundingClientRect();
       return {
         x: Math.round(r.left + r.width / 2 + window.scrollX),
         y: Math.round(r.top + r.height / 2 + window.scrollY)
       };
     } catch (e) { console.warn('getTileCenter error', e); return null; }
+  };
+
+  const getTileVisualSpriteCenter = (token, tile) => {
+    try {
+      const base = getTileCenter(token);
+      if (!base) return null;
+      const hero = tile && tile.hero ? tile.hero : null;
+      if (!hero) return base;
+      const el = getTileElement(token);
+      const rect = el ? el.getBoundingClientRect() : null;
+      const tileWidth = rect ? Number(rect.width || 0) : 0;
+      const tileHeight = rect ? Number(rect.height || 0) : 0;
+      const uiScale = getUiScale();
+
+      const spriteOffsetX = Number.isFinite(hero.spriteOffsetX) ? Number(hero.spriteOffsetX) : 0;
+      const spriteOffsetXPx = Number.isFinite(hero.spriteOffsetXPx) ? Number(hero.spriteOffsetXPx) : 0;
+      const spriteOffsetY = Number.isFinite(hero.spriteOffsetY) ? Number(hero.spriteOffsetY) : 0;
+      const spriteOffsetYPx = Number.isFinite(hero.spriteOffsetYPx) ? Number(hero.spriteOffsetYPx) : 0;
+
+      const xShift = (tileWidth * (spriteOffsetX / 100)) + (spriteOffsetXPx * uiScale);
+      const yShift = (tileHeight * (spriteOffsetY / 100)) + (spriteOffsetYPx * uiScale);
+
+      return {
+        x: Math.round(base.x + xShift),
+        y: Math.round(base.y + yShift)
+      };
+    } catch (e) {
+      return getTileCenter(token);
+    }
   };
 
   const shouldSkipEnergyEmote = (side, index, amount) => {
@@ -1639,7 +2043,84 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     return false;
   };
 
-  const runRound = async () => {
+  const suppressDamagePulse = (side, index, amount, ttlMs = 5000) => {
+    if (!side || typeof index !== 'number') return;
+    const key = `${side}:${index}:damage:${Number(amount || 0)}`;
+    suppressedDamagePulseRef.current[key] = Date.now() + Number(ttlMs || 5000);
+  };
+
+  const shouldSuppressDamagePulse = (side, index, amount) => {
+    if (!side || typeof index !== 'number') return false;
+    const now = Date.now();
+    const store = suppressedDamagePulseRef.current || {};
+    Object.keys(store).forEach((k) => {
+      if (!store[k] || store[k] <= now) delete store[k];
+    });
+    const key = `${side}:${index}:damage:${Number(amount || 0)}`;
+    if (store[key] && store[key] > now) {
+      delete store[key];
+      return true;
+    }
+    return false;
+  };
+
+  const showTimedTileEmote = (side, index, evPayload, eventId = null, removeAfterMs = 2400) => {
+    if (!side || typeof index !== 'number' || !evPayload || !evPayload.kind) return;
+    const tileKey = `${side}:${index}`;
+    const id = eventId || `local:${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+    const payload = { ...evPayload, id };
+    setEventsMap(prev => {
+      const next = { ...prev };
+      next[tileKey] = next[tileKey] || [];
+      if (!next[tileKey].some(ev => ev && ev.id === id)) {
+        next[tileKey].push(payload);
+      }
+      return next;
+    });
+    setTimeout(() => {
+      setEventsMap(prev => {
+        const next = { ...prev };
+        if (next[tileKey]) {
+          next[tileKey] = next[tileKey].filter(ev => ev && ev.id !== id);
+          if (next[tileKey].length === 0) delete next[tileKey];
+        }
+        return next;
+      });
+    }, scaleClientDelay(Number(removeAfterMs || 2400)));
+  };
+
+  const showMissEmote = (side, index, eventId = null, durationMs = 1400) => {
+    if (!side || typeof index !== 'number') return;
+    const tileKey = `${side}:${index}`;
+    const dedupeKey = `${tileKey}:miss`;
+    const now = Date.now();
+    const recent = recentEmoteRef.current[dedupeKey];
+    if (recent && (now - recent) < 900) return;
+    recentEmoteRef.current[dedupeKey] = now;
+
+    const id = eventId || `miss:${now}-${Math.random().toString(36).slice(2, 6)}`;
+    setEventsMap(prev => {
+      const next = { ...prev };
+      next[tileKey] = next[tileKey] || [];
+      if (!next[tileKey].some(ev => ev && ev.id === id)) {
+        next[tileKey].push({ kind: 'miss', id });
+      }
+      return next;
+    });
+
+    setTimeout(() => {
+      setEventsMap(prev => {
+        const next = { ...prev };
+        if (next[tileKey]) {
+          next[tileKey] = next[tileKey].filter(ev => ev && ev.id !== id);
+          if (next[tileKey].length === 0) delete next[tileKey];
+        }
+        return next;
+      });
+    }, scaleClientDelay(Number(durationMs || 1400)));
+  };
+
+  const runRound = useCallback(async () => {
     const prioritySide = (priorityPlayer === 'player1' || priorityPlayer === 'p1') ? 'p1' : (priorityPlayer === 'player2' || priorityPlayer === 'p2') ? 'p2' : 'p3';
     if (localSide && !aiDifficulty && localSide !== prioritySide) {
       return;
@@ -1678,42 +2159,71 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       });
 
       await waitForSync;
-      socket.emit('makeMove', { type: 'startRound', priorityPlayer });
+      socket.emit('makeMove', { type: 'startRound', priorityPlayer, speedMultiplier: normalizedBattleSpeed });
     }
-  };
+  }, [
+    priorityPlayer,
+    localSide,
+    aiDifficulty,
+    socket,
+    p1Board,
+    p2Board,
+    p3Board,
+    p1ReserveBoard,
+    p2ReserveBoard,
+    p3ReserveBoard,
+    gameMode,
+    normalizedBattleSpeed,
+    addLog
+  ]);
 
 
   // Auto-play logic for production mode
   const prevGameStateRef = useRef(null);
   const hasStartedRef = useRef(false);
   const firstRoundTimerRef = useRef(null);
-  
-  // Reset hasStartedRef when a new game/battle starts (detect by checking if step is 0 and phase is battle)
+  const runRoundRef = useRef(null);
+  const battleSpeedRef = useRef(normalizedBattleSpeed);
+
   useEffect(() => {
-    if (gameState?.step === 0 && gameState?.phase === 'battle' && hasStartedRef.current) {
-      
+    runRoundRef.current = runRound;
+  }, [runRound]);
+
+  useEffect(() => {
+    battleSpeedRef.current = normalizedBattleSpeed;
+  }, [normalizedBattleSpeed]);
+  
+  // Reset hasStartedRef when a fresh battle state arrives.
+  useEffect(() => {
+    const prev = prevGameStateRef.current;
+    const enteringBattle = gameState?.phase === 'battle' && prev?.phase !== 'battle';
+    const freshBattleState = gameState?.phase === 'battle' && !gameState?.lastAction;
+    if ((enteringBattle || freshBattleState) && hasStartedRef.current) {
       hasStartedRef.current = false;
     }
-  }, [gameState?.step, gameState?.phase]);
+    prevGameStateRef.current = gameState || null;
+  }, [gameState]);
   
   // Trigger first round on mount
   useEffect(() => {
     if (!autoPlay || hasStartedRef.current) return;
+    if (!gameState || gameState.phase !== 'battle' || gameState.lastAction) return;
     
     hasStartedRef.current = true;
-    const timer = setTimeout(() => {
-      runRound();
-    }, 1500);
+    firstRoundTimerRef.current = setTimeout(() => {
+      if (runRoundRef.current) {
+        runRoundRef.current();
+      }
+      firstRoundTimerRef.current = null;
+    }, Math.max(250, Math.floor(1500 / Math.max(1, Number(battleSpeedRef.current || 1)))));
     
     return () => {
-      // Don't cancel if we've committed to starting
-      if (firstRoundTimerRef.current && !hasStartedRef.current) {
+      if (firstRoundTimerRef.current) {
         clearTimeout(firstRoundTimerRef.current);
         firstRoundTimerRef.current = null;
       }
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPlay]);
+  }, [autoPlay, gameState?.phase, gameState?.lastAction]);
   
   // Handle state transitions after first round
   const prevPhaseRef = useRef(null);
@@ -1744,12 +2254,11 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       // Extra delay to ensure all movement visuals are done
       const timer = setTimeout(() => {
         runRound();
-      }, 2500); // Longer delay to ensure movement animations complete
+      }, Math.max(600, Math.floor(2500 / normalizedBattleSpeed))); // Scale with battle speed while preserving readability
       
       return () => clearTimeout(timer);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoPlay, phase]);
+  }, [autoPlay, phase, normalizedBattleSpeed, runRound]);
 
   // AI Movement automation using AI module
   useEffect(() => {
@@ -1782,6 +2291,29 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     
     const ai = getAI(aiDifficulty);
     const delay = ai.getThinkingDelay();
+
+    const parseAiTileId = (tileId) => {
+      if (typeof tileId !== 'string') return null;
+      const parts = tileId.split(':');
+      if (parts.length !== 2) return null;
+      const board = parts[0];
+      const idx = Number(parts[1]);
+      if (Number.isNaN(idx)) return null;
+      return { board, idx };
+    };
+
+    const getP2TileById = (tileId) => {
+      const parsed = parseAiTileId(tileId);
+      if (!parsed) return null;
+      if (parsed.board === 'p2') return (p2Board || [])[parsed.idx] || null;
+      if (parsed.board === 'p2Reserve') return (p2ReserveBoard || [])[parsed.idx] || null;
+      return null;
+    };
+
+    const lockedOpeningHeroIds = new Set(['fireMageID', 'darkMageID', 'drunkardID']);
+    const currentRoundNumber = Number(gameState?.roundNumber ?? gameState?.round ?? 0);
+    const isTower13OpeningMovementLock = Number(towerLevel) === 13 && currentRoundNumber <= 1;
+    const isLockedTile = (tile) => !!(tile && tile.hero && lockedOpeningHeroIds.has(tile.hero.id));
     
     
     
@@ -1823,6 +2355,52 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
           currentMovement.handleSwapById(anyP2TileId, anyP2TileId);
         }
         return;
+      }
+
+      if (isTower13OpeningMovementLock) {
+        const sourceTile = getP2TileById(decision.sourceId);
+        const destinationTile = getP2TileById(decision.destinationId);
+        if (isLockedTile(sourceTile) || isLockedTile(destinationTile)) {
+          let fallbackNoopId = null;
+          for (let i = 0; i < p2Board.length; i++) {
+            const tile = p2Board[i];
+            if (tile?.hero && !tile._dead && !isLockedTile(tile)) {
+              fallbackNoopId = `p2:${i}`;
+              break;
+            }
+          }
+          if (!fallbackNoopId) {
+            for (let i = 0; i < p2ReserveBoard.length; i++) {
+              const tile = p2ReserveBoard[i];
+              if (tile?.hero && !tile._dead && !isLockedTile(tile)) {
+                fallbackNoopId = `p2Reserve:${i}`;
+                break;
+              }
+            }
+          }
+          if (!fallbackNoopId) {
+            for (let i = 0; i < p2Board.length; i++) {
+              const tile = p2Board[i];
+              if (tile?.hero && !tile._dead) {
+                fallbackNoopId = `p2:${i}`;
+                break;
+              }
+            }
+          }
+          if (!fallbackNoopId) {
+            for (let i = 0; i < p2ReserveBoard.length; i++) {
+              const tile = p2ReserveBoard[i];
+              if (tile?.hero && !tile._dead) {
+                fallbackNoopId = `p2Reserve:${i}`;
+                break;
+              }
+            }
+          }
+          if (fallbackNoopId && currentMovement?.handleSwapById) {
+            currentMovement.handleSwapById(fallbackNoopId, fallbackNoopId);
+          }
+          return;
+        }
       }
       
       
@@ -1961,10 +2539,12 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
           color: '#e0e0e0',
           overflowY: 'auto',
           overflowX: 'hidden',
+          overscrollBehavior: 'contain',
           scrollbarGutter: 'stable',
           boxSizing: 'border-box'
         }}
           ref={hoverPanelRef}
+          onWheel={handleScrollablePanelWheel}
           onMouseEnter={() => {
             hoverPanelActiveRef.current = true;
             clearHoverClearTimeout();
@@ -2072,6 +2652,35 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
           {/* log moved outside the hover panel to render below the box */}
         </div>
       </div>
+
+      {showCombatLog && (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: '0 12px 12px 12px' }}>
+          <div style={{
+            width: 760,
+            maxHeight: 'calc(140px * var(--ui-scale, 1))',
+            background: '#141424',
+            border: '1px solid #2f2f46',
+            borderRadius: 'var(--tile-border-radius, 6px)',
+            padding: 'calc(6px * var(--ui-scale, 1))',
+            overflowY: 'auto',
+            overscrollBehavior: 'contain',
+            fontSize: 'calc(10px * var(--ui-scale, 1))',
+            color: '#cbd5e1',
+            boxSizing: 'border-box'
+          }}
+            onWheel={handleScrollablePanelWheel}
+          >
+            <div style={{ fontWeight: 700, marginBottom: 4, color: '#a78bfa' }}>Combat Log</div>
+            {combatLog.length === 0 ? (
+              <div style={{ color: '#6b7280' }}>Status-impact events will appear here.</div>
+            ) : (
+              combatLog.map((entry, idx) => (
+                <div key={`combat-log-${idx}`}>{entry}</div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {gameMode === 'ffa3' && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>

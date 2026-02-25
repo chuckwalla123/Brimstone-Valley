@@ -3,6 +3,7 @@
   "private": true,
   "scripts": {
     "test": "node ./scripts/smoke-test.mjs",
+    "test:thief": "node ./test-thief-pilfer.js",
     "backup": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-to-github.ps1",
     "backup:msg": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-to-github.ps1 -Message"
   }

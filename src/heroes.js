@@ -109,6 +109,22 @@ export const HEROES = [
     },
   },
   {
+    id: 'warriorID',
+    name: 'Warrior',
+    image: '/images/heroes/Warrior Cropped.jpg',
+    health: 10,
+    armor: 2,
+    speed: 3,
+    energy: 0,
+    passives: [EFFECTS.MonsterSlayer],
+    spells: {
+      front: { id: 'slash', cost: 2, casts: 6 },
+      middle: { id: 'cleave', cost: 3, casts: 3 },
+      back: { id: 'armorBreakStrike', cost: 3, casts: 4 },
+    },
+    description: 'Warrior: Slash [2] targets highest Health for 5; Cleave [3] hits the frontmost enemy row for 5; Armor Break [3] targets highest Armor for 4 and applies Armor Break (-2 Armor). Passive Monster Slayer: +1 Spell Power against monster targets.'
+  },
+  {
     id: 'samuraiID',
     name: 'Samurai',
     image: '/images/heroes/Samurai cropped.jpg',
@@ -205,6 +221,39 @@ export const HEROES = [
       back: { id: 'prayer', cost: 3, casts: 2 },
     },
     description: 'Angel: Slash [2] (front), Light Pillar [4] (middle), Prayer [3] (back).'
+  },
+
+  {
+    id: 'specterID',
+    name: 'Specter',
+    image: '/images/heroes/Specter cropped.jpg',
+    health: 10,
+    armor: 0,
+    speed: 2,
+    energy: 2,
+    passives: [EFFECTS.Ghost],
+    spells: {
+      front: { id: 'spook', cost: 3, casts: 3 },
+      middle: { id: 'hex', cost: 2, casts: 5 },
+      back: { id: 'soulDrain', cost: 4, casts: 2 },
+    },
+    description: 'Specter: Spook [3] projectile for 3 that moves the target to the furthest available tile from Specter; Hex [2] hits least-effects enemy for 2 and applies Curse; Soul Drain [4] targets highest Energy enemy for 3, drains 1 Energy, then heals caster for 3 and grants 1 Energy. Passive Ghost: spells ignore Armor; when targeted by enemy spells, roll d6 and on 5-6 the spell misses.'
+  },
+
+  {
+    id: 'sorceressID',
+    name: 'Sorceress',
+    image: '/images/heroes/Sorceress Cropped.jpg',
+    health: 8,
+    armor: 1,
+    speed: 3,
+    energy: 1,
+    spells: {
+      front: { id: 'searingLight', cost: 5, casts: 3 },
+      middle: { id: 'enrage', cost: 3, casts: 3 },
+      back: { id: 'energyWave', cost: 5, casts: 3 },
+    },
+    description: 'Sorceress: Searing Light [5] hits enemy with most positive effects for 8 and removes top positive effect; Enrage [3] buffs nearest ally with +2 Spell Power but they take +1 post-calculation damage; Energy Wave [5] is a projectile for 8 and reduces Energy by 1.'
   },
 
   // New hero: Nephilim (from provided card)
@@ -617,6 +666,52 @@ export const HEROES = [
       back: { id: 'swiftness', cost: 5, casts: 2 },
     },
   },
+  {
+    id: 'thiefID',
+    name: 'Thief',
+    image: '/images/heroes/Thief Cropped.jpg',
+    health: 7,
+    armor: 2,
+    speed: 5,
+    energy: 2,
+    spells: {
+      front: { id: 'stab', cost: 2, casts: 7 },
+      middle: { id: 'pilfer', cost: 5, casts: 3 },
+      back: { id: 'coup', cost: 7, casts: 2 },
+    },
+    description: 'Thief: Stab [2] targets lowest Speed for 3 Attack Power; Pilfer [5] steals the top positive effect from the enemy with the most buffs and places it on the ally with the most Health (casts at -1 priority); Coup [7] targets least Armor for 7 Attack Power.'
+  },
+  {
+    id: 'summonerID',
+    name: 'Summoner',
+    image: '/images/heroes/Summoner Cropped.jpg',
+    health: 9,
+    armor: 0,
+    speed: 2,
+    energy: 0,
+    spells: {
+      front: { id: 'summonerSummonAlly', cost: 2, casts: 1 },
+      middle: { id: 'summonerSummonMinion', cost: 1, casts: 4 },
+      back: { id: 'summonerSupportMinion', cost: 2, casts: 3 },
+    },
+    description: 'Summoner: Summon Ally [2] moves the first living reserve ally onto the nearest available board tile and grants Energy equal to its current Speed; Summon Minion [1] applies Minion to the ally with the least effects; Support Minion [2] heals the two nearest allies that have Minion for 2.'
+  },
+  {
+    id: 'tetheredSpiritID',
+    name: 'Tethered Spirit',
+    image: '/images/heroes/Tethered Spirit Cropped.jpg',
+    health: 9,
+    armor: 1,
+    speed: 1,
+    energy: 0,
+    passives: [EFFECTS.Link],
+    spells: {
+      front: { id: 'etherium', cost: 4, casts: 1 },
+      middle: { id: 'helpingHand', cost: 3, casts: 4 },
+      back: { id: 'voidShield', cost: 2, casts: 3 },
+    },
+    description: 'Tethered Spirit: Etherium [2] applies Fade to the ally with the highest Energy; Helping Hand [3] heals nearest ally for 4 and repositions them to the first open tile in reverse book order; Void Shield [2] applies Void Shield to the ally with the least stacks. Passive Link: whenever another ally (not this hero) casts a spell, gain 1 Energy.'
+  },
   // New hero: Nymph (from provided card image)
   {
     id: 'nymphID',
@@ -899,6 +994,22 @@ export const HEROES = [
     },
   },
   {
+    id: 'werewolfID',
+    name: 'Werewolf',
+    image: '/images/heroes/Werewolf Cropped.jpg',
+    health: 20,
+    armor: 0,
+    speed: 3,
+    energy: 0,
+    monster: true,
+    spells: {
+      front: { id: 'bite', cost: 3, casts: 4 },
+      middle: { id: 'howl', cost: 3, casts: 2 },
+      back: { id: 'maul', cost: 6, casts: 2 },
+    },
+    description: 'Werewolf: Bite [3] targets highest Health for 4, applies Bleed, and heals self for 1; Howl [3] targets the enemy front row and reduces Energy by 2; Maul [6] targets lowest Health for 6, applies Bleed, and heals self for 2.'
+  },
+  {
     id: 'dragonlingID',
     name: 'Dragonling',
     image: '/images/heroes/Dragonling Cropped.jpg',
@@ -965,6 +1076,39 @@ export const HEROES = [
     description: 'Blood Golem: A necromantic tank that drains life, protects allies by absorbing damage, and consumes corpses to heal.'
   },
   {
+    id: 'vampireID',
+    name: 'Vampire',
+    image: '/images/heroes/Vampire Cropped.jpg',
+    health: 12,
+    armor: 1,
+    speed: 3,
+    energy: 1,
+    monster: true,
+    passives: [EFFECTS.BloodSuck],
+    spells: {
+      front: { id: 'batSwarm', cost: 3, casts: 2 },
+      middle: { id: 'bloodyFangs', cost: 2, casts: 5 },
+      back: { id: 'bloodLust', cost: 3, casts: 4 },
+    },
+    description: 'Vampire: Bat Swarm [3] targets all enemies with Bleed for 4 Attack Power; Bloody Fangs [2] targets the enemy with the least effects for 3 Attack Power and applies Bleed; Blood Lust [3] targets the enemy with the most Bleed effects for 5 Attack Power. Passive: Blood Suck (heals 2 Health for each enemy target that already has Bleed).'
+  },
+  {
+    id: 'titanID',
+    name: 'Titan',
+    image: '/images/heroes/Titan Cropped.jpg',
+    health: 22,
+    armor: 0,
+    speed: 3,
+    energy: 0,
+    monster: true,
+    spells: {
+      front: { id: 'flex', cost: 2, casts: 5 },
+      middle: { id: 'tableTilt', cost: 3, casts: 2 },
+      back: { id: 'avalanche', cost: 7, casts: 2 },
+    },
+    description: 'Titan: Flex [2] targets highest Health for 3 Attack Power (5 if target has less Health than Titan); Table Tilt [3] shifts the enemy board to the caster\'s right and deals damage equal to tiles moved; Avalanche [7] targets each enemy separately for a d6 roll of Attack Power.'
+  },
+  {
     id: 'fireGolemID',
     name: 'Fire Golem',
     image: '/images/heroes/Fire Golem Cropped.jpg',
@@ -980,6 +1124,22 @@ export const HEROES = [
       back: { id: 'consumeBurn', cost: 2, casts: 3 }
     },
     description: 'Fire Golem: Consumed By Flames [2] scales with Burn stacks, Heating Up [2] grants a Burn-on-cast buff, Consume Burn [2] removes a Burn for burst damage and self-heal. Passive: Smolder (targeting the golem applies Burn to the attacker).'
+  },
+  {
+    id: 'waterGolemID',
+    name: 'Water Golem',
+    image: '/images/heroes/Water Golem Cropped.png',
+    health: 24,
+    armor: 0,
+    speed: 2,
+    energy: 0,
+    monster: true,
+    spells: {
+      front: { id: 'tidalWave', cost: 3, casts: 3 },
+      middle: { id: 'cleansingWater', cost: 2, casts: 3 },
+      back: { id: 'healingWater', cost: 2, casts: 2 },
+    },
+    description: 'Water Golem: Tidal Wave [3] targets the frontmost enemy row with at least one Hero for 4 Attack Power; Cleansing Water [2] targets adjacent allies and removes the topmost negative effect; Healing Water [2] buffs the caster to heal adjacent allies for 1 at the beginning of each round.'
   },
   {
     id: 'rockGolemID',
@@ -1060,6 +1220,21 @@ export const HEROES = [
     },
   },
   {
+    id: 'witchDoctorID',
+    name: 'Witch Doctor',
+    image: '/images/heroes/Witch Doctor Cropped.jpg',
+    health: 9,
+    armor: 1,
+    speed: 2,
+    energy: 0,
+    spells: {
+      front: { id: 'affliction', cost: 2, casts: 3 },
+      middle: { id: 'ritual', cost: 3, casts: 3 },
+      back: { id: 'toads', cost: 3, casts: 2 },
+    },
+    description: 'Witch Doctor: Affliction [2] hits the enemy with the least effects for 4 (ignores Armor) and applies Curse; Ritual [3] heals the allied middle row for 2 and grants +1 Energy; Toads [3] deals 5 to the projectile target and applies Poison to that target and all adjacent enemies.'
+  },
+  {
     id: 'axemanID',
     name: 'Axeman',
     image: '/images/heroes/Axeman Cropped.jpg',
@@ -1105,6 +1280,23 @@ export const HEROES = [
     description: 'Fallen Angel: slash deals 5 Attack Power to highest Health; darkPillar is a column attack applying Curse (-1 Spell Power); retribution grants retaliation buff (3 damage when targeted).'
   },
   {
+    id: 'stonecasedKingID',
+    name: 'Stonecased King',
+    image: '/images/heroes/Stone cased king cropped.jpg',
+    health: 14,
+    armor: 3,
+    speed: 0,
+    allowZeroSpeed: true,
+    energy: 0,
+    passives: [EFFECTS.Awaken],
+    spells: {
+      front: { id: 'vengefulSlash', cost: 2, casts: 4 },
+      middle: { id: 'decreeOfHatred', cost: 3, casts: 3 },
+      back: { id: 'reclaimThrone', cost: 2, casts: 3 },
+    },
+    description: 'Stonecased King: Vengeful Slash [2] targets highest Health for 8 Attack Power; Decree of Hatred [3] fires a projectile in each enemy column for 5 Attack Power; Reclaim Throne [2] targets highest Armor for 6 Attack Power ignoring Armor. Passive Awaken: when targeted by an enemy spell, gain +1 Speed (max 3), and effects cannot alter his Speed.'
+  },
+  {
     id: 'shieldMaidenID',
     name: 'Shield Maiden',
     image: '/images/heroes/Shield Maiden Cropped.jpg',
@@ -1133,6 +1325,52 @@ export const HEROES = [
       back: { id: 'flameThrower', cost: 3, casts: 4 },
     },
     description: 'Pyro: Wildfire [2] targets the enemy with the least effects and applies Wildfire (at the beginning of each round, it deals 1 damage, then spreads to adjacent heroes); Conflagration [3] deals 2 to the entire enemy board; Flame Thrower [3] is a column attack for 4 and applies Burn.'
+  },
+  {
+    id: 'timeMageID',
+    name: 'Time Mage',
+    image: '/images/heroes/Time Mage Cropped.jpg',
+    health: 6,
+    armor: 0,
+    speed: 2,
+    energy: 0,
+    spells: {
+      front: { id: 'timeWarp', cost: 2, casts: 3 },
+      middle: { id: 'haste', cost: 2, casts: 3 },
+      back: { id: 'energyBlast', cost: 2, casts: 4 },
+    },
+    description: 'Time Mage: Time Warp [2] targets highest Speed enemy and applies Time Warp (-2 Speed); Haste [2] targets lowest Speed ally and applies Haste (+2 Speed); Energy Blast [2] targets highest Energy enemy and reduces Energy by 2.'
+  },
+  {
+    id: 'tinkererID',
+    name: 'Tinkerer',
+    image: '/images/heroes/Tinkerer Cropped.jpg',
+    health: 9,
+    armor: 1,
+    speed: 2,
+    energy: 0,
+    spells: {
+      front: { id: 'landMine', cost: 2, casts: 5 },
+      middle: { id: 'buildTurret', cost: 2, casts: 2 },
+      back: { id: 'fieldUpgrade', cost: 2, casts: 2 },
+    },
+    description: 'Tinkerer: Land Mine [2] places a mine on the first empty tile in the mirrored enemy column; enemy movement onto that mine triggers an explosion for 7 Attack Power. Build Turret [2] heals self for 1 and applies Turret, which hits highest Health enemy for 5 at round start. Field Upgrade [2] targets the ally with the highest Speed and least effects and makes their spells ignore Armor.'
+  },
+  {
+    id: 'trollID',
+    name: 'Troll',
+    image: '/images/heroes/troll Cropped.jpg',
+    health: 18,
+    armor: 0,
+    speed: 2,
+    energy: 0,
+    monster: true,
+    spells: {
+      front: { id: 'clubSmash', cost: 3, casts: 3 },
+      middle: { id: 'trollRegeneration', cost: 2, casts: 3 },
+      back: { id: 'payTheToll', cost: 2, casts: 1 },
+    },
+    description: 'Troll: Club Smash [3] targets highest Health enemy for 6 Attack Power and applies Armor Break (-2 Armor). Troll Regeneration [2] heals self for 5. Pay The Toll [2] applies an effect that deals 2 damage to moved or swapped enemies that end on the main board.'
   },
 ];
 

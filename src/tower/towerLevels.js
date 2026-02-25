@@ -433,12 +433,210 @@ export const BOSS_SPELLS = {
         applyEffectToSelf: { effects: ['DragonYear'] }
       }
     }
+  },
+
+  // Level 35 Nephilim Boss
+  level35AstralLance: {
+    ...SPELLS.dualityStrike,
+    id: 'level35AstralLance',
+    name: 'Astral Lance',
+    description: 'Targets the enemy with the highest Health, dealing 10 Attack Power and healing the caster equal to damage dealt.',
+    spec: {
+      ...SPELLS.dualityStrike.spec,
+      formula: { type: 'attackPower', value: 10 },
+      post: { healCasterEqualToDamage: true },
+      animationMs: 1100
+    }
+  },
+
+  level35BloodEdict: {
+    ...SPELLS.lifeForALife,
+    id: 'level35BloodEdict',
+    name: 'Blood Edict',
+    description: 'Targets the enemy with the lowest Health, dealing 7 Attack Power. If this kills, heal the lowest ally for 8 and gain 1 Energy.',
+    spec: {
+      ...SPELLS.lifeForALife.spec,
+      formula: { type: 'attackPower', value: 7 },
+      post: {
+        conditionalSecondaryOnWouldKill: {
+          secondarySpec: {
+            targets: [{ type: 'lowestHealth', side: 'ally', max: 1 }],
+            formula: { type: 'healPower', value: 8 }
+          }
+        },
+        deltaEnergy: { amount: 1, side: 'ally', target: 'self' }
+      },
+      animationMs: 1200
+    }
+  },
+
+  level35JudgmentOfTwilight: {
+    ...SPELLS.lightAndDark,
+    id: 'level35JudgmentOfTwilight',
+    name: 'Judgment of Twilight',
+    description: 'Deals 7 Attack Power to all enemies and heals all allies for 4.',
+    spec: {
+      targets: [{ type: 'board', side: 'enemy' }, { type: 'board', side: 'ally' }],
+      formula: { type: 'attackPower', value: 7 },
+      post: { secondaryHeal: { amount: 4, side: 'ally', target: 'board' } },
+      animationMs: 1300
+    },
+    animation: 'Dark Pillar_2x2_4frames',
+    animationSecondary: 'Healing_2x2_4frames',
+    animationPlacement: 'inplace'
+  },
+
+  // Level 40 The Boss (Phase 1)
+  level40Overrule: {
+    ...SPELLS.duel,
+    id: 'level40Overrule',
+    name: 'Double Strike',
+    description: 'Targets the enemy with the highest Health, dealing 10 Attack Power + one quarter of the target\'s current Health.',
+    spec: {
+      targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 13, addTargetCurrentHealthDivisor: 4 },
+      animationMs: 1100
+    },
+    animation: 'Boss Double Strike_2x2_4frames',
+    animationPlacement: 'travel',
+    hideCasterDuringCast: true,
+    animationScaleToCaster: true,
+    animationScaleMultiplier: 1.3,
+    alignToCasterSpriteCenter: true,
+    animationAnchorNudgeX: -10,
+    animationAnchorNudgeY: -20
+  },
+
+  level40WarMandate: {
+    ...SPELLS.avalanche,
+    id: 'level40WarMandate',
+    name: 'Tremor',
+    description: 'Targets each enemy for a random amount of Attack Power between 5 and 20.',
+    spec: {
+      targets: [{ type: 'board', side: 'enemy' }],
+      formula: { type: 'roll', base: 4, die: 16, rollPerTarget: true, suppressRollInfo: true },
+      animationMs: 1200
+    },
+    animation: 'Boss Tremor_2x2_4frames',
+    animationSecondary: null,
+    animationPlacement: 'travel',
+    animationBoardTravel: true,
+    animationBoardCenterSingle: true,
+    hideCasterDuringCast: true,
+    animationScaleToCaster: true,
+    animationScaleMultiplier: 1.3,
+    showRollAnimation: false,
+    alignToCasterSpriteCenter: true,
+    animationAnchorNudgeX: -10,
+    animationAnchorNudgeY: -20
+  },
+
+  level40Kingslaw: {
+    ...SPELLS.darkBolt,
+    id: 'level40Kingslaw',
+    name: 'Dark Energy',
+    description: 'Targets the enemy with the most Energy, dealing 6 + target\'s current row casts remaining and ignoring Armor.',
+    spec: {
+      targets: [{ type: 'highestEnergy', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 9, ignoreArmor: true, addTargetCurrentRowCasts: true },
+      animationMs: 1200
+    },
+    animation: 'Dark Energy_2x2_4frames',
+    animationPlacement: 'travel',
+    preCastAnimation: 'Boss Dark Energy_2x2_4frames',
+    preCastAnimationPlacement: 'inplace',
+    preCastAnimationMs: 700,
+    preCastAnimationScaleMultiplier: 1.3,
+    hideCasterDuringPreCast: true,
+    hideCasterDuringCast: false,
+    animationScaleToCaster: true,
+    animationScaleMultiplier: 1.45,
+    alignToCasterSpriteCenter: true,
+    animationAnchorNudgeX: 0,
+    animationAnchorNudgeY: 0,
+    preCastAnimationAnchorNudgeX: -10,
+    preCastAnimationAnchorNudgeY: -20
+  },
+
+  // Level 40 The Boss (Ghost Phase)
+  level40PhantomOverrule: {
+    ...SPELLS.slash,
+    id: 'level40PhantomOverrule',
+    name: 'Ghostly Attack',
+    description: 'Targets the enemy with the highest Speed, dealing 12 Attack Power.',
+    spec: {
+      targets: [{ type: 'highestSpeed', side: 'enemy', max: 1 }],
+      formula: { type: 'attackPower', value: 12 },
+      animationMs: 1100
+    },
+    animation: 'Ghost Ghostly Attack_2x2_4frames',
+    animationPlacement: 'travel',
+    hideCasterDuringCast: true,
+    animationScaleToCaster: true,
+    animationScaleMultiplier: 1.3,
+    alignToCasterSpriteCenter: true,
+    animationAnchorNudgeX: -10,
+    animationAnchorNudgeY: -20
+  },
+
+  level40HauntingMandate: {
+    ...SPELLS.meteor,
+    id: 'level40HauntingMandate',
+    name: 'Ultimate Devastation',
+    description: 'Targets the enemy board and the caster for 10 Attack Power.',
+    spec: {
+      targets: [{ type: 'board', side: 'enemy' }],
+      formula: { type: 'attackPower', value: 10 },
+      post: { damageCaster: { amount: 10, asAttackPower: true } },
+      animationMs: 1200
+    },
+    animation: 'Ghost Ultimate Devistation_2x2_4frames',
+    animationSecondary: null,
+    animationPlacement: 'travel',
+    animationBoardTravel: true,
+    animationBoardCenterSingle: true,
+    hideCasterDuringCast: true,
+    animationScaleToCaster: true,
+    animationScaleMultiplier: 1.3,
+    showRollAnimation: false,
+    alignToCasterSpriteCenter: true,
+    animationAnchorNudgeX: -10,
+    animationAnchorNudgeY: -20
+  },
+
+  level40NetherKingslaw: {
+    ...SPELLS.avalanche,
+    id: 'level40NetherKingslaw',
+    name: 'Whirlwind',
+    description: 'Targets the enemy board for 4 Attack Power and reduces Energy by 3.',
+    spec: {
+      targets: [{ type: 'board', side: 'enemy' }],
+      formula: { type: 'attackPower', value: 4 },
+      post: { deltaEnergy: { amount: -3, side: 'enemy', target: 'target' } },
+      animationMs: 1300
+    },
+    animation: 'Ghost Whirlwind Secondary_2x2_4frames',
+    animationSecondary: null,
+    animationPlacement: 'inplace',
+    preCastAnimation: 'Ghost Whirlwind Primary_2x2_4frames',
+    preCastAnimationPlacement: 'inplace',
+    preCastAnimationMs: 700,
+    preCastAnimationScaleMultiplier: 1.3,
+    hideCasterDuringPreCast: true,
+    hideCasterDuringCast: true,
+    animationScaleToCaster: true,
+    animationScaleMultiplier: 1.3,
+    alignToCasterSpriteCenter: true,
+    animationAnchorNudgeX: -10,
+    animationAnchorNudgeY: -20,
+    preCastAnimationAnchorNudgeX: -10,
+    preCastAnimationAnchorNudgeY: -20
   }
 };
 
 /**
  * Boss configurations
- * Each boss level has 3 possible bosses to keep runs fresh
+ * Most boss levels have 3 possible bosses; endgame levels can use single bespoke bosses.
  */
 export const BOSSES = {
   // ============================================
@@ -449,6 +647,12 @@ export const BOSSES = {
       id: 'boss_infernal_demon',
       name: 'Infernal Demon',
       baseHeroId: 'demonID',
+      imageOverride: '/images/heroes/Infernal Demon Cropped.png',
+      spriteChromaKey: true,
+      spriteFit: 'contain',
+      spriteOffsetY: -10,
+      spriteOffsetYPx: -20,
+      spriteScale: 1.2,
       title: 'The Corruptor',
       description: 'A demon empowered by dark rituals. His curses are twice as potent.',
       stats: {
@@ -464,12 +668,18 @@ export const BOSSES = {
         back: { id: 'acidPool', cost: 3, casts: 5 }
       },
       passives: [],
-      augments: ['thornsStrong', 'randomAugment']
+      augments: ['keenStrike', 'thornsStrong', 'randomAugment']
     },
     {
       id: 'boss_flame_lord',
       name: 'Flame Lord',
       baseHeroId: 'fireMageID',
+      imageOverride: '/images/heroes/Flame Lord Cropped.png',
+      spriteChromaKey: true,
+      spriteFit: 'contain',
+      spriteOffsetY: -10,
+      spriteOffsetYPx: -20,
+      spriteScale: 1.2,
       title: 'Master of Infernos',
       description: 'A fire mage whose flames burn hotter than any forge.',
       stats: {
@@ -485,12 +695,18 @@ export const BOSSES = {
         back: { id: 'level5ConsumedByFlames', cost: 2, casts: 12 }
       },
       passives: [],
-      augments: ['burningSpellsAll', 'randomAugment']
+      augments: ['keenStrike', 'burningSpellsAll', 'randomAugment']
     },
     {
       id: 'boss_shadow_blade',
       name: 'Shadow Blade',
       baseHeroId: 'assassinID',
+      imageOverride: '/images/heroes/Shadow Blade Cropped.png',
+      spriteChromaKey: true,
+      spriteFit: 'contain',
+      spriteOffsetY: -10,
+      spriteOffsetYPx: -20,
+      spriteScale: 1.2,
       title: 'The Silent Death',
       description: 'An assassin whose poisons are legendarily lethal.',
       stats: {
@@ -506,7 +722,7 @@ export const BOSSES = {
         back: { id: 'priorityTarget', cost: 3, casts: 2 }
       },
       passives: [],
-      augments: ['lieInWaitLevel5Augment', 'poisonSpellsAll', 'firstStrike', 'randomAugment']
+      augments: ['keenStrike', 'lieInWaitLevel5Augment', 'poisonSpellsAll', 'firstStrike', 'randomAugment']
     }
   ],
 
@@ -518,10 +734,11 @@ export const BOSSES = {
       id: 'boss_storm_queen',
       name: 'Storm Queen',
       baseHeroId: 'lightningMageID',
+      imageOverride: '/images/heroes/Storm Queen Cropped.png',
       title: 'Herald of Thunder',
       description: 'Commands lightning that strikes with devastating force.',
       stats: {
-        health: 70,
+        health: 73,
         armor: 2,
         speed: 4,
         energy: 2,
@@ -533,12 +750,13 @@ export const BOSSES = {
         back: { id: 'zeusWrath', cost: 12, casts: 1 }
       },
       passives: [],
-      augments: ['randomAugment', 'randomAugment']
+      augments: ['keenStrike', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_blood_lord',
       name: 'Blood Lord',
       baseHeroId: 'bloodmageID',
+      imageOverride: '/images/heroes/Blood Lord Cropped.png',
       title: 'The Sanguine',
       description: 'Drains life from enemies to fuel his dark power.',
       stats: {
@@ -554,12 +772,13 @@ export const BOSSES = {
         back: { id: 'leech', cost: 2, casts: 6 }
       },
       passives: [EFFECTS.Frenzy],
-      augments: ['vampiric', 'bleedSpellsAll', 'randomAugment', 'randomAugment']
+      augments: ['keenStrike', 'vampiric', 'bleedSpellsAll', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_ice_king',
       name: 'Ice King',
       baseHeroId: 'iceMageID',
+      imageOverride: '/images/heroes/Ice King Cropped.png',
       title: 'The Frozen Heart',
       description: 'Her cold magic slows all who oppose her to a crawl.',
       stats: {
@@ -575,7 +794,7 @@ export const BOSSES = {
         back: { id: 'blizzard', cost: 5, casts: 3 }
       },
       passives: [],
-      augments: ['slowSpellsAll', 'randomAugment', 'randomAugment']
+      augments: ['keenStrike', 'slowSpellsAll', 'randomAugment', 'randomAugment']
     }
   ],
 
@@ -587,6 +806,7 @@ export const BOSSES = {
       id: 'boss_behemoth_prime',
       name: 'Behemoth Prime',
       baseHeroId: 'behemothID',
+      imageOverride: '/images/heroes/Behemoth Prime Cropped.png',
       title: 'The Unstoppable',
       description: 'A colossal beast that crushes all in its path.',
       stats: {
@@ -602,12 +822,13 @@ export const BOSSES = {
         back: { id: 'roar', cost: 2, casts: 3 }
       },
       passives: [EFFECTS.Regen],
-      augments: ['thornsStrong', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeII', 'thornsStrong', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_dragon_elder',
       name: 'Dragon Elder',
       baseHeroId: 'greenDragonID',
+      imageOverride: '/images/heroes/Dragon Elder Cropped.png',
       title: 'Ancient Wyrm',
       description: 'An ancient dragon whose breath brings death.',
       stats: {
@@ -623,12 +844,13 @@ export const BOSSES = {
         back: { id: 'gale', cost: 3, casts: 3 }
       },
       passives: [EFFECTS.Poison],
-      augments: ['poisonSpellsAll', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeII', 'poisonSpellsAll', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_fallen_champion',
       name: 'Fallen Champion',
       baseHeroId: 'fallenAngelID',
+      imageOverride: '/images/heroes/Fallen Champion Cropped.png',
       title: 'The Betrayer',
       description: 'Once a hero, now corrupted by darkness.',
       stats: {
@@ -644,7 +866,7 @@ export const BOSSES = {
         back: { id: 'retribution', cost: 2, casts: 3 }
       },
       passives: [EFFECTS.Retribution],
-      augments: ['curseSpellsAll', 'deathPactAugment',  'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeII', 'curseSpellsAll', 'deathPactAugment',  'randomAugment', 'randomAugment', 'randomAugment']
     }
   ],
 
@@ -656,6 +878,7 @@ export const BOSSES = {
       id: 'boss_arcane_overlord',
       name: 'Arcane Overlord',
       baseHeroId: 'arcaneMageID',
+      imageOverride: '/images/heroes/Arcane Overlord Cropped.png',
       title: 'Master of Magic',
       description: 'Commands arcane forces beyond mortal comprehension.',
       stats: {
@@ -671,12 +894,13 @@ export const BOSSES = {
         back: { id: 'level20ArcaneBlast', cost: 4, casts: 3 }
       },
       passives: [],
-      augments: ['doubleStrike', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeII', 'doubleStrike', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_death_knight',
       name: 'Death Knight',
       baseHeroId: 'darkKnightID',
+      imageOverride: '/images/heroes/Death Knight Cropped.png',
       title: 'The Deathless',
       description: 'An undead warrior whose blade drains life.',
       stats: {
@@ -692,7 +916,7 @@ export const BOSSES = {
         back: { id: 'treachery', cost: 2, casts: 3 }
       },
       passives: [EFFECTS.Frenzy],
-      augments: ['phoenixRebirth', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeII', 'phoenixRebirth', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_elemental_fury',
@@ -700,7 +924,7 @@ export const BOSSES = {
       baseHeroId: 'fireMageID',
       title: 'Incarnation of Chaos',
       description: 'A being of pure elemental destruction.',
-      imageOverride: '/images/heroes/Elemental Wizard Cropped.png',
+      imageOverride: '/images/heroes/Elemental Fury Cropped.png',
       stats: {
         health: 71,
         armor: 2,
@@ -714,7 +938,7 @@ export const BOSSES = {
         back: { id: 'meteor', cost: 4, casts: 3 }
       },
       passives: [],
-      augments: ['burningSpellsAll', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeII', 'burningSpellsAll', 'randomAugment', 'randomAugment', 'randomAugment']
     }
   ],
 
@@ -726,6 +950,7 @@ export const BOSSES = {
       id: 'boss_void_mage',
       name: 'Void Mage',
       baseHeroId: 'darkMageID',
+      imageOverride: '/images/heroes/Void Mage Cropped.png',
       title: 'The Annihilator',
       description: 'Wields the power of the void itself.',
       stats: {
@@ -741,18 +966,19 @@ export const BOSSES = {
         back: { id: 'gravity', cost: 4, casts: 4 }
       },
       passives: [],
-      augments: ['vampiric', 'curseSpellsAll', 'executioner', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeIII', 'vampiric', 'curseSpellsAll', 'executioner', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_blood_golem_alpha',
       name: 'Blood Golem Alpha',
       baseHeroId: 'bloodGolemID',
+      imageOverride: '/images/heroes/Blood Golem Alpha Cropped.png',
       title: 'The Immortal',
       description: 'An ancient golem that cannot be destroyed.',
       stats: {
         health: 130,
         armor: 4,
-        speed: 3,
+        speed: 4,
         energy: 1,
         spellPower: 4
       },
@@ -762,12 +988,13 @@ export const BOSSES = {
         back: { id: 'soulDrain', cost: 2, casts: 5 }
       },
       passives: [],
-      augments: ['vampiric', 'thornsStrong', 'regenAugment',  'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeIII', 'vampiric', 'thornsStrong', 'regenAugment',  'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_celestial_judge',
       name: 'Celestial Judge',
       baseHeroId: 'elderID',
+      imageOverride: '/images/heroes/Celestial Judge Cropped.png',
       title: 'The Arbiter',
       description: 'Passes divine judgment on all who oppose.',
       stats: {
@@ -783,7 +1010,7 @@ export const BOSSES = {
         back: { id: 'truth', cost: 3, casts: 4 }
       },
       passives: [],
-      augments: ['curseSpellsAll', 'bleedSpellsAll', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeIII', 'curseSpellsAll', 'bleedSpellsAll', 'randomAugment', 'randomAugment', 'randomAugment']
     }
   ],
 
@@ -795,6 +1022,7 @@ export const BOSSES = {
       id: 'boss_sanctified_hierophant',
       name: 'Sanctified Hierophant',
       baseHeroId: 'clericID',
+      imageOverride: '/images/heroes/Sanctified Hierophant Cropped.png',
       title: 'The Unyielding Light',
       description: 'A high cleric whose rites purge corruption and punish augmented champions.',
       stats: {
@@ -810,12 +1038,13 @@ export const BOSSES = {
         back: { id: 'level30FinalAbsolution', cost: 3, casts: 4 }
       },
       passives: [],
-      augments: ['absolvingGrace', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeIII', 'absolvingGrace', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_necromancer_king',
       name: 'Necromancer King',
       baseHeroId: 'necromancerID',
+      imageOverride: '/images/heroes/Necromancer King Cropped.png',
       title: 'Lord of Bones',
       description: 'A deathlord who commands corpses and drains the living.',
       stats: {
@@ -831,28 +1060,111 @@ export const BOSSES = {
         back: { id: 'soulDrain', cost: 3, casts: 3 }
       },
       passives: [EFFECTS.Regen],
-      augments: ['spellPowerBoostMassive', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeIII', 'spellPowerBoostMassive', 'poisonSpellsMiddle', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_primordial_dragon',
       name: 'Prime Wyrm',
       baseHeroId: 'dragonID',
+      imageOverride: '/images/heroes/Prime Wyrm Cropped.png',
       title: 'The Worldflame',
       description: 'An ancient dragon whose breath ignites the world itself.',
       stats: {
         health: 145,
-        armor: 3,
+        armor: 5,
         speed: 4,
         energy: 3,
-        spellPower: 0
+        spellPower: 3
       },
       spells: {
         front: { id: 'level30DragonFangs', cost: 2, casts: 6 },
         middle: { id: 'level30SkyRend', cost: 2, casts: 5 },
         back: { id: 'level30Worldfire', cost: 4, casts: 3 }
       },
-      passives: [EFFECTS.DragonScales, EFFECTS.Power],
-      augments: ['healthBoostMassive', 'armorBoostHuge', 'spellPowerBoostMassive', 'burningSpellsAll', 'doubleStrike', 'phoenixRebirth', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      passives: [],
+      augments: [ 'keenStrikeIII', 'doubleStrike', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+    }
+  ],
+
+  // ============================================
+  // LEVEL 35 BOSS (BESPOKE)
+  // ============================================
+  level35: [
+    {
+      id: 'boss_astral_nephilim',
+      name: 'Astral Nephilim',
+      baseHeroId: 'nephilimID',
+      imageOverride: '/images/heroes/Astral Nephalim Cropped.png',
+      title: 'Scion of Twilight',
+      description: 'The Nephilim\'s final doctrine: life and death are merely tools.',
+      preFightDialogue: [
+        { speaker: 'Astral Nephilim', side: 'right', text: 'As a Nephilim, I\'ve walked the borders of Heaven and Hell… yet neither realm stirs my blood the way battle on this mortal soil does. These humans—fragile, desperate, burning with that last spark of defiance—they remind me what it means to feel alive.' },
+        { speaker: 'Astral Nephilim', side: 'right', text: 'When the master brought me here, he promised challengers worthy of legend. Heroes who would carve their names into these sacred halls. But none came. Not one.' },
+        { speaker: 'Astral Nephilim', side: 'right', text: 'And now… this is what finally stands before me. You. The so‑called ‘heroes.’ How utterly disappointing.' },
+        { speaker: 'Astral Nephilim', side: 'right', text: 'Still… enough of my rambling. My blade aches for glory, and my heart for the clash that follows. Tell me—will you satisfy my hunger for battle?' }
+      ],
+      stats: {
+        health: 170,
+        armor: 5,
+        speed: 5,
+        energy: 2,
+        spellPower: 2
+      },
+      spells: {
+        front: { id: 'level35AstralLance', cost: 2, casts: 8 },
+        middle: { id: 'level35BloodEdict', cost: 3, casts: 8 },
+        back: { id: 'level35JudgmentOfTwilight', cost: 5, casts: 2 }
+      },
+      passives: [],
+      augments: ['keenStrikeIV','absolvingGrace', 'astralDominion', 'curseSpellsAll', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+    }
+  ],
+
+  // ============================================
+  // LEVEL 40 BOSS (BESPOKE)
+  // ============================================
+  level40: [
+    {
+      id: 'boss_the_boss',
+      name: 'The Boss',
+      baseHeroId: 'warriorID',
+      imageOverride: '/images/heroes/Boss Cropped.png',
+      title: 'Lord of the Tower',
+      description: 'The final ruler of the Shattered Champions, forged by every floor below.',
+      stats: {
+        health: 220,
+        armor: 6,
+        speed: 6,
+        energy: 2,
+        spellPower: 4
+      },
+      spells: {
+        front: { id: 'level40Overrule', cost: 2, casts: 7 },
+        middle: { id: 'level40WarMandate', cost: 4, casts: 2 },
+        back: { id: 'level40Kingslaw', cost: 3, casts: 4 }
+      },
+      passives: [],
+      augments: ['keenStrikeIV', 'healthBoostMassive', 'healthBoostMassive', 'doubleStrike'],
+      phaseRevive: {
+        name: 'The Boss (Ghost)',
+        title: 'The Undying Will',
+        description: 'His body falls, but his will refuses the grave.',
+        imageOverride: '/images/heroes/Boss Ghost Cropped.png',
+        stats: {
+          health: 180,
+          armor: 0,
+          speed: 6,
+          energy: 0,
+          spellPower: 4
+        },
+        spells: {
+          front: { id: 'level40PhantomOverrule', cost: 2, casts: 4 },
+          middle: { id: 'level40NetherKingslaw', cost: 3, casts: 2 },
+          back: { id: 'level40HauntingMandate', cost: 4, casts: 4 }
+        },
+        passives: [EFFECTS.Ghost],
+        reviveHealthPercent: 0.65
+      }
     }
   ]
 };
@@ -877,7 +1189,10 @@ export function getBossForLevel(level) {
  * Check if a level is a boss level
  */
 export function isBossLevel(level) {
-  return level % 5 === 0 && level <= 100;
+  const normalizedLevel = Number(level || 0);
+  if (normalizedLevel % 5 !== 0 || normalizedLevel > 40) return false;
+  const bossKey = `level${normalizedLevel}`;
+  return Array.isArray(BOSSES[bossKey]) && BOSSES[bossKey].length > 0;
 }
 
 export default {

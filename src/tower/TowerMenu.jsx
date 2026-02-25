@@ -206,7 +206,7 @@ export default function TowerMenu({ runState, onContinue, onNewRun, onAbandon, o
 
       <div style={styles.towerIcon}>🏰</div>
       <h1 style={styles.title}>Tower of Shattered Champions</h1>
-      <p style={styles.subtitle}>Ascend 100 levels of increasing challenge</p>
+      <p style={styles.subtitle}>Ascend 40 levels of increasing challenge</p>
 
       <div style={styles.menuBox}>
         {summary && summary.hasTeam && (
@@ -272,7 +272,7 @@ export default function TowerMenu({ runState, onContinue, onNewRun, onAbandon, o
             <li>Win battles to earn powerful augments</li>
             <li>After each battle, recruit or swap a hero</li>
             <li>Face epic bosses every 5 levels</li>
-            <li>Reach level 100 to claim victory!</li>
+            <li>Reach level 40 to claim victory!</li>
           </ul>
         </div>
       </div>

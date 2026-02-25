@@ -35,10 +35,13 @@ import { HEROES } from '../heroes.js';
 
 // Sample n heroes from source array (Fisher-Yates shuffle)
 const isDraftableHero = (hero) => hero && hero.draftable !== false;
+const DRAFTABLE_HEROES = HEROES.filter(isDraftableHero);
+const CLASSIC_DRAFT_POOL_SIZE = 30;
+const FFA3_DRAFT_POOL_SIZE = 26;
 function sampleHeroes(source, n) {
   const pool = Array.isArray(source) ? source.filter(isDraftableHero) : [];
   const shuffled = [...pool].sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, n);
+  return shuffled.slice(0, Math.max(0, Math.min(n, shuffled.length)));
 }
 
 const isSideAlive = (boardArr) => (boardArr || []).some(t => {
@@ -68,6 +71,12 @@ const normalizePrioritySide = (prio) => (
 );
 
 const sideToPlayerKey = (side) => (side === 'p1' ? 'player1' : (side === 'p2' ? 'player2' : 'player3'));
+
+const markHeroMovedThisPhase = (tile) => {
+  try {
+    if (tile && tile.hero) tile.hero._movedThisMovementPhase = true;
+  } catch (e) {}
+};
 
 const getNextPriorityPlayer = (state) => {
   const active = getActiveOrder(state);
@@ -196,7 +205,10 @@ class LocalGameEngine {
     this.gameMode = nextMode || 'classic';
     const isFfa3 = this.gameMode === 'ffa3';
     // Sample heroes for the draft pool
-    const availableHeroes = sampleHeroes(HEROES, isFfa3 ? 26 : 30);
+    const availableHeroes = sampleHeroes(
+      DRAFTABLE_HEROES,
+      isFfa3 ? FFA3_DRAFT_POOL_SIZE : CLASSIC_DRAFT_POOL_SIZE
+    );
 
     this.gameState = {
       phase: 'draft',
@@ -298,7 +310,6 @@ class LocalGameEngine {
     if (payload.p2Reserve) this.gameState.p2Reserve = payload.p2Reserve;
     if (payload.p3Reserve) this.gameState.p3Reserve = payload.p3Reserve;
     if (payload.priorityPlayer) this.gameState.priorityPlayer = payload.priorityPlayer;
-    
     // Transition back to battle phase
     this.gameState.phase = 'battle';
     
@@ -426,6 +437,9 @@ class LocalGameEngine {
     const tmp = boardA[src.index];
     boardA[src.index] = boardB[dst.index];
     boardB[dst.index] = tmp;
+
+    markHeroMovedThisPhase(boardA[src.index]);
+    markHeroMovedThisPhase(boardB[dst.index]);
 
     this._advanceMovementPhase();
   }

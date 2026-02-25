@@ -43,6 +43,11 @@ const styles = {
 export default function StoryBattle({ runState, node, onBattleEnd }) {
   const [socket, setSocket] = useState(null);
   const [gameState, setGameState] = useState(null);
+  const [battleSpeedMultiplier] = useState(() => {
+    const savedStory = Number(localStorage.getItem('storyBattleSpeedMultiplier') || NaN);
+    if (Number.isFinite(savedStory)) return Math.min(4, Math.max(1, savedStory));
+    return 1;
+  });
   const battleEndHandledRef = useRef(false);
   const autoStartRef = useRef(false);
   const battleStateRef = useRef(null);
@@ -255,8 +260,12 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     if (!battleLaunchedRef.current) return;
     if (battleDialogueActive) return;
     autoStartRef.current = true;
-    socket.emit('makeMove', { type: 'startRound', priorityPlayer: gameState.priorityPlayer || 'player1' });
-  }, [socket, gameState, battleDialogueActive]);
+    socket.emit('makeMove', {
+      type: 'startRound',
+      priorityPlayer: gameState.priorityPlayer || 'player1',
+      speedMultiplier: battleSpeedMultiplier
+    });
+  }, [socket, gameState, battleDialogueActive, battleSpeedMultiplier]);
 
   const startBattle = () => {
     if (!socket || !battleStateRef.current || battleLaunchedRef.current) return;
@@ -527,6 +536,7 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
         aiDifficulty={getStoryEnemyTeam(node.enemyTeam)?.aiDifficulty}
         autoPlay={true}
         showReturnToMenu={false}
+        battleSpeedMultiplier={battleSpeedMultiplier}
       />
     </div>
   );

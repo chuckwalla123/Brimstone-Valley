@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { HEROES } from '../heroes.js';
 import getAssetPath from '../utils/assetPath.js';
 import { AUGMENTS } from './augments.js';
-import { getAugmentCap, updateHeroPositions, saveTowerRun } from './towerState.js';
+import { getAugmentCap, updateHeroPositions, saveTowerRun, removeAugmentFromHero } from './towerState.js';
 import { indexToTowerPosition } from '../targeting.js';
 
 const TIER_COLORS = {
@@ -305,10 +305,28 @@ const styles = {
   tooltipDesc: {
     color: '#d1d5db',
     lineHeight: '1.4'
+  },
+  removeAugmentBtn: {
+    marginLeft: 6,
+    width: 18,
+    height: 18,
+    padding: 0,
+    borderRadius: '50%',
+    border: '1px solid rgba(239, 68, 68, 0.8)',
+    background: 'rgba(127, 29, 29, 0.9)',
+    color: '#fca5a5',
+    fontSize: '0.75rem',
+    fontWeight: 'bold',
+    cursor: 'pointer',
+    lineHeight: 1,
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    textAlign: 'center'
   }
 };
 
-function AugmentTag({ augmentId }) {
+function AugmentTag({ augmentId, onRemove }) {
   const [showTooltip, setShowTooltip] = useState(false);
   const augment = AUGMENTS[augmentId];
   
@@ -332,6 +350,18 @@ function AugmentTag({ augmentId }) {
       >
         <span>{getAugmentIcon(augment.type)}</span>
         <span>{augment.name}</span>
+        {onRemove && (
+          <button
+            style={styles.removeAugmentBtn}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRemove();
+            }}
+            title="Remove augment"
+          >
+            ×
+          </button>
+        )}
       </div>
       
       {showTooltip && (
@@ -373,6 +403,7 @@ export default function TowerTeamView({ runState, onBack, onSave }) {
   const [reserveHeroes, setReserveHeroes] = useState([]);
   const [selectedHeroIndex, setSelectedHeroIndex] = useState(null);
   const [hasChanges, setHasChanges] = useState(false);
+  const [, setRefreshNonce] = useState(0);
 
   // Initialize from runState
   useEffect(() => {
@@ -464,7 +495,8 @@ export default function TowerTeamView({ runState, onBack, onSave }) {
     }
 
     const reserveHeroIdx = reserveHeroes[reserveIdx];
-    const selectedWasOnBoard = boardPositions.includes(selectedHeroIndex);
+    const oldPos = boardPositions.indexOf(selectedHeroIndex);
+    const selectedWasOnBoard = oldPos >= 0;
 
     // Swap with reserve hero if slot occupied
     if (reserveHeroIdx !== undefined && selectedWasOnBoard) {
@@ -483,17 +515,40 @@ export default function TowerTeamView({ runState, onBack, onSave }) {
         return newReserve;
       });
     } else {
-      // Put selected hero in reserve
-      setBoardPositions(prev => {
-        const newBoard = [...prev];
-        const oldPos = newBoard.indexOf(selectedHeroIndex);
-        if (oldPos >= 0) newBoard[oldPos] = null;
-        return newBoard;
-      });
-      
+      // Put selected hero in reserve (or move within reserve)
+      if (selectedWasOnBoard) {
+        setBoardPositions(prev => {
+          const newBoard = [...prev];
+          const oldPosInBoard = newBoard.indexOf(selectedHeroIndex);
+          if (oldPosInBoard >= 0) newBoard[oldPosInBoard] = null;
+          return newBoard;
+        });
+      }
+
       setReserveHeroes(prev => {
-        const newReserve = prev.filter(i => i !== selectedHeroIndex);
-        newReserve.push(selectedHeroIndex);
+        const newReserve = [prev[0], prev[1]];
+        const oldReserveIdx = newReserve.indexOf(selectedHeroIndex);
+        const targetHeroIdx = newReserve[reserveIdx];
+
+        if (targetHeroIdx !== undefined && targetHeroIdx !== selectedHeroIndex && oldReserveIdx >= 0) {
+          newReserve[oldReserveIdx] = targetHeroIdx;
+          newReserve[reserveIdx] = selectedHeroIndex;
+        } else {
+          if (oldReserveIdx >= 0) newReserve[oldReserveIdx] = undefined;
+          newReserve[reserveIdx] = selectedHeroIndex;
+        }
+
+        const seenReserve = new Set();
+        for (let i = 0; i < newReserve.length; i += 1) {
+          const idx = newReserve[i];
+          if (idx === undefined || idx === null) continue;
+          if (seenReserve.has(idx)) {
+            newReserve[i] = undefined;
+          } else {
+            seenReserve.add(idx);
+          }
+        }
+
         return newReserve;
       });
     }
@@ -516,6 +571,16 @@ export default function TowerTeamView({ runState, onBack, onSave }) {
     saveTowerRun(updatedRun);
     setHasChanges(false);
     if (onSave) onSave(updatedRun);
+  };
+
+  const handleRemoveAugment = (heroIndex, augmentIndex) => {
+    try {
+      const updatedRun = removeAugmentFromHero(runState, heroIndex, augmentIndex);
+      setRefreshNonce(v => v + 1);
+      if (onSave) onSave(updatedRun);
+    } catch (e) {
+      console.error('Failed to remove augment:', e);
+    }
   };
 
   return (
@@ -685,7 +750,11 @@ export default function TowerTeamView({ runState, onBack, onSave }) {
                     {augments.length > 0 ? (
                       <div style={styles.augmentGrid}>
                         {augments.map((aug, augIdx) => (
-                          <AugmentTag key={augIdx} augmentId={aug.augmentId} />
+                          <AugmentTag
+                            key={augIdx}
+                            augmentId={aug.augmentId}
+                            onRemove={() => handleRemoveAugment(idx, augIdx)}
+                          />
                         ))}
                       </div>
                     ) : (

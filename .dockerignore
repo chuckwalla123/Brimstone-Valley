@@ -7,6 +7,9 @@ src/dist-electron/
 dist-electron/
 dist/
 out/
+src/electron/
+src/dist/
+src/public/
 
 # Build outputs
 *.exe

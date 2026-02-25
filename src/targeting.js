@@ -108,6 +108,23 @@ export function indexToRow(index, boardName = 'p1') {
   return Math.floor((tileNum - 1) / 3); // 0=front,1=middle,2=back
 }
 
+function indexToVisualColumn(index) {
+  const idx = Number(index || 0);
+  return ((idx % 3) + 3) % 3;
+}
+
+function indexToVisualRow(index) {
+  const idx = Number(index || 0);
+  return Math.floor(idx / 3);
+}
+
+function indexToVisualGlobalX(index, boardName = 'p1') {
+  const col = indexToVisualColumn(index);
+  if (boardName === 'p2') return col + 3;
+  if (boardName === 'p3') return col + 6;
+  return col;
+}
+
 // Return the array indices on a given board that belong to the visual column (0..2)
 export function columnIndicesForBoard(col, boardSide = 'p1') {
   const out = [];
@@ -128,6 +145,11 @@ function isOccupiedAndAlive(slot) {
   if (!slot || !slot.hero) return false;
   if (slot._dead) return false;
   return true;
+}
+
+function getVisibleEffects(slot) {
+  if (!slot || !Array.isArray(slot.effects)) return [];
+  return slot.effects.filter(e => e && !e._hidden);
 }
 
 // helper: return true if a slot has an effect that prevents single-target spells
@@ -289,7 +311,7 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
   const enemyDescriptorsForMulti = (targetDescriptors || []).filter(d => d && d.type !== 'self' && (d.side || 'enemy') === 'enemy');
   const enemyIndependentDescriptors = (enemyDescriptorsForMulti || []).filter(d => d && d.type !== 'lastResolvedTarget');
   const isPotentiallyMultiTarget = (enemyIndependentDescriptors && Array.isArray(enemyIndependentDescriptors)) ? (
-    enemyIndependentDescriptors.length > 1 || enemyIndependentDescriptors.some(d => ['board','column','adjacent','nearestToLastTarget','projectilePlus1','frontTwoRows','nearest','middleRow','backRow','frontmostRowWithHero','backmostRowWithHero','rowWithHighestSumArmor','rowContainingHighestArmor','rowContainingLowestArmor','rowWithMostHeroes','cornerTiles'].includes(d.type))
+    enemyIndependentDescriptors.length > 1 || enemyIndependentDescriptors.some(d => ['board','column','adjacent','nearestToLastTarget','projectilePlus1','frontTwoRows','middleRow','backRow','frontmostRowWithHero','backmostRowWithHero','rowWithHighestSumArmor','rowContainingHighestArmor','rowContainingLowestArmor','rowWithMostHeroes','cornerTiles'].includes(d.type))
   ) : false;
 
   const enemyDescriptors = (targetDescriptors || []).filter(d => d && (d.side || 'enemy') === 'enemy' && d.type !== 'self');
@@ -391,7 +413,8 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       // all allies or enemies on the board (only occupied alive tiles)
       const targetSide = resolveSide(side) || casterSide;
       const boardArr = getBoardArr(targetSide) || [];
-      for (let i = 0; i < (boardArr || []).length; i++) {
+      const order = getBookOrder(targetSide);
+      for (const i of order) {
         const slot = (boardArr || [])[i];
         if (isOccupiedAndAlive(slot)) out.push({ board: targetSide, index: i });
       }
@@ -399,9 +422,11 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
     }
 
     if (type === 'column') {
-      // choose column based on caster index, using the visual mapping
+      // choose explicit descriptor column when provided; otherwise derive from caster index
       const casterBoard = casterSide;
-      let col = (casterRef.index != null) ? indexToColumn(casterRef.index, casterBoard) : (desc.col != null ? desc.col : 0);
+      let col = (desc.col != null)
+        ? Number(desc.col)
+        : ((casterRef.index != null) ? indexToColumn(casterRef.index, casterBoard) : 0);
       // target side: ally or enemy relative to caster
       const targetSide = resolveSide(side) || casterSide;
       // When targeting enemies, prefer the mirrored visual column so a caster on the left
@@ -633,10 +658,9 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       const targetSide = resolveSide(side) || casterSide;
       const boardArr = getBoardArr(targetSide) || [];
       const maxCount = (typeof desc.max === 'number' && desc.max > 0) ? Math.floor(desc.max) : 1;
-      // compute caster global coords
-      const cCol = (casterRef.index != null) ? indexToColumn(casterRef.index, casterBoard) : 0;
-      const cRow = (casterRef.index != null) ? indexToRow(casterRef.index, casterBoard) : 0;
-      const cX = cCol + (casterBoard === 'p2' ? 3 : (casterBoard === 'p3' ? 6 : 0));
+      // Compute Manhattan distance using direct visual slot coordinates (index grid 0..8).
+      const cRow = (casterRef.index != null) ? indexToVisualRow(casterRef.index) : 0;
+      const cX = (casterRef.index != null) ? indexToVisualGlobalX(casterRef.index, casterBoard) : 0;
 
       const candidates = [];
       for (let i = 0; i < (boardArr || []).length; i++) {
@@ -646,9 +670,8 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
         if (desc && desc.excludeSelf && casterRef && typeof casterRef.index === 'number') {
           if (targetSide === casterBoard && i === casterRef.index) continue;
         }
-        const tCol = indexToColumn(i, targetSide);
-        const tRow = indexToRow(i, targetSide);
-        const tX = tCol + (targetSide === 'p2' ? 3 : (targetSide === 'p3' ? 6 : 0));
+        const tRow = indexToVisualRow(i);
+        const tX = indexToVisualGlobalX(i, targetSide);
         const dist = Math.abs(tX - cX) + Math.abs(tRow - cRow);
         candidates.push({ index: i, dist });
       }
@@ -670,15 +693,65 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       continue;
     }
 
+    if (type === 'nearestWithEffect') {
+      const casterBoard = casterSide;
+      const targetSide = resolveSide(side) || casterSide;
+      const boardArr = getBoardArr(targetSide) || [];
+      const maxCount = (typeof desc.max === 'number' && desc.max > 0) ? Math.floor(desc.max) : 1;
+      const effectName = String(desc.effectName || desc.effect || '').trim();
+      if (!effectName) continue;
+
+      const cRow = (casterRef.index != null) ? indexToVisualRow(casterRef.index) : 0;
+      const cX = (casterRef.index != null) ? indexToVisualGlobalX(casterRef.index, casterBoard) : 0;
+
+      const candidates = [];
+      for (let i = 0; i < (boardArr || []).length; i++) {
+        const slot = boardArr[i];
+        if (!isOccupiedAndAlive(slot)) continue;
+        if (desc && desc.excludeSelf && casterRef && typeof casterRef.index === 'number') {
+          if (targetSide === casterBoard && i === casterRef.index) continue;
+        }
+
+        const effects = [
+          ...((slot && Array.isArray(slot.effects)) ? slot.effects : []),
+          ...((slot && Array.isArray(slot._passives)) ? slot._passives : (slot && slot.hero && Array.isArray(slot.hero.passives) ? slot.hero.passives : []))
+        ];
+        const hasNamedEffect = effects.some(e => e && e.name === effectName);
+        if (!hasNamedEffect) continue;
+
+        const tRow = indexToVisualRow(i);
+        const tX = indexToVisualGlobalX(i, targetSide);
+        const dist = Math.abs(tX - cX) + Math.abs(tRow - cRow);
+        candidates.push({ index: i, dist });
+      }
+      if (candidates.length === 0) continue;
+
+      const order = getBookOrder(targetSide);
+      const priority = {}; order.forEach((v, j) => { priority[v] = j; });
+      candidates.sort((a, b) => {
+        if (a.dist !== b.dist) return a.dist - b.dist;
+        return (priority[a.index] || 0) - (priority[b.index] || 0);
+      });
+
+      const take = Math.min(maxCount, candidates.length);
+      for (let k = 0; k < take; k++) {
+        pushToken(targetSide, candidates[k].index, desc);
+      }
+      continue;
+    }
+
     if (type === 'projectile' || type === 'projectilePlus1') {
       const casterBoard = casterSide;
       let col = (casterRef.index != null) ? indexToColumn(casterRef.index, casterBoard) : 0;
+      const hasExplicitCol = Number.isFinite(Number(desc.col));
       // target side: ally or enemy relative to caster (respect forced side)
       const targetSide = resolveSide(side) || casterSide;
       // Mirror column when targeting the enemy so a caster on the left of their board
       // aims at the right column of the opposing board (and vice-versa). Match logic
       // used by `column` targeting to keep behavior consistent.
-      if (side === 'enemy') {
+      if (hasExplicitCol) {
+        col = Math.max(0, Math.min(2, Number(desc.col)));
+      } else if (side === 'enemy') {
         col = 2 - col;
       }
       // Get indices for this column, already sorted front->middle->back by columnIndicesForBoard
@@ -711,6 +784,23 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
             }
           }
           break; // Only hit the first target (and optionally the one behind for projectilePlus1)
+        }
+      }
+      continue;
+    }
+
+    if (type === 'firstEmptyInOpposingColumn') {
+      const casterBoard = casterSide;
+      let col = (casterRef.index != null) ? indexToColumn(casterRef.index, casterBoard) : 0;
+      const targetSide = resolveSide('enemy') || (casterSide === 'p1' ? 'p2' : (casterSide === 'p2' ? 'p1' : 'p1'));
+      col = 2 - col;
+      const indices = columnIndicesForBoard(col, targetSide);
+      const boardArr = getBoardArr(targetSide) || [];
+      for (const idx of indices) {
+        const slot = (boardArr || [])[idx];
+        if (!slot || !slot.hero) {
+          out.push({ board: targetSide, index: idx });
+          break;
         }
       }
       continue;
@@ -819,6 +909,42 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       for (const idx of order) {
         const candidate = candidates.find(c => c.index === idx);
         if (candidate && candidate.speed === bestSpeed) {
+          out.push({ board: targetSide, index: idx });
+          break;
+        }
+      }
+      continue;
+    }
+
+    if (type === 'highestSpeedLeastEffects') {
+      const targetSide = resolveSide(side) || casterSide;
+      const boardArr = getBoardArr(targetSide) || [];
+      const candidates = [];
+      for (let i = 0; i < (boardArr || []).length; i++) {
+        const t = boardArr[i];
+        if (!isOccupiedAndAlive(t)) continue;
+        if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
+        if (desc && desc.excludeSelf && casterRef && typeof casterRef.index === 'number') {
+          if (targetSide === casterSide && i === casterRef.index) continue;
+        }
+        const sp = (t.currentSpeed != null ? t.currentSpeed : (t.hero && t.hero.speed) || 0);
+        const effectCount = getVisibleEffects(t).length;
+        candidates.push({ index: i, speed: sp, effectCount });
+      }
+      if (candidates.length === 0) continue;
+      let bestSpeed = -Infinity;
+      for (const c of candidates) {
+        if (c.speed > bestSpeed) bestSpeed = c.speed;
+      }
+      const fastest = candidates.filter(c => c.speed === bestSpeed);
+      let leastEffects = Infinity;
+      for (const c of fastest) {
+        if (c.effectCount < leastEffects) leastEffects = c.effectCount;
+      }
+      const finalists = fastest.filter(c => c.effectCount === leastEffects);
+      const order = getBookOrder(targetSide);
+      for (const idx of order) {
+        if (finalists.some(c => c.index === idx)) {
           out.push({ board: targetSide, index: idx });
           break;
         }
@@ -1091,9 +1217,9 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       const boardArr = getBoardArr(targetSide) || [];
       const maxCount = (typeof desc.max === 'number' && desc.max > 0) ? Math.floor(desc.max) : 1;
 
-      const cCol = (casterRef.index != null) ? indexToColumn(casterRef.index, casterBoard) : 0;
-      const cRow = (casterRef.index != null) ? indexToRow(casterRef.index, casterBoard) : 0;
-      const cX = cCol + (casterBoard === 'p2' ? 3 : (casterBoard === 'p3' ? 6 : 0));
+      // Compute Manhattan distance using direct visual slot coordinates (index grid 0..8).
+      const cRow = (casterRef.index != null) ? indexToVisualRow(casterRef.index) : 0;
+      const cX = (casterRef.index != null) ? indexToVisualGlobalX(casterRef.index, casterBoard) : 0;
 
       const candidates = [];
       for (let i = 0; i < (boardArr || []).length; i++) {
@@ -1104,9 +1230,8 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
         }
         if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(slot)) continue;
 
-        const tCol = indexToColumn(i, targetSide);
-        const tRow = indexToRow(i, targetSide);
-        const tX = tCol + (targetSide === 'p2' ? 3 : (targetSide === 'p3' ? 6 : 0));
+        const tRow = indexToVisualRow(i);
+        const tX = indexToVisualGlobalX(i, targetSide);
         const dist = Math.abs(tX - cX) + Math.abs(tRow - cRow);
         candidates.push({ index: i, dist });
       }
@@ -1198,7 +1323,7 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
         const t = boardArr[i];
         if (!isOccupiedAndAlive(t)) continue;
         if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
-        const cnt = (t && t.effects) ? t.effects.filter(e => e && e.kind === 'debuff').length : 0;
+        const cnt = getVisibleEffects(t).filter(e => e && e.kind === 'debuff').length;
         candidates.push({ index: i, count: cnt });
       }
       if (candidates.length === 0) continue;
@@ -1259,7 +1384,7 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
         const t = boardArr[i];
         if (!isOccupiedAndAlive(t)) continue;
         if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
-        const cnt = (t && t.effects) ? t.effects.filter(e => e && (!effectName || e.name === effectName)).length : 0;
+        const cnt = getVisibleEffects(t).filter(e => e && (!effectName || e.name === effectName)).length;
         candidates.push({ index: i, count: cnt });
       }
       if (candidates.length === 0) continue;
@@ -1287,11 +1412,41 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
         const t = boardArr[i];
         if (!isOccupiedAndAlive(t)) continue;
         if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
-        const cnt = (t && t.effects) ? t.effects.filter(e => e).length : 0;
+        const cnt = getVisibleEffects(t).length;
         candidates.push({ index: i, count: cnt });
       }
       if (candidates.length === 0) continue;
       // Find lowest effect count among valid candidates
+      let bestCount = Infinity;
+      for (const c of candidates) {
+        if (c.count < bestCount) bestCount = c.count;
+      }
+      const order = getBookOrder(targetSide);
+      for (const idx of order) {
+        const candidate = candidates.find(c => c.index === idx);
+        if (candidate && candidate.count === bestCount) {
+          out.push({ board: targetSide, index: idx });
+          break;
+        }
+      }
+      continue;
+    }
+
+    if (type === 'leastVoidShields') {
+      const targetSide = resolveSide(side) || casterSide;
+      const boardArr = getBoardArr(targetSide) || [];
+      const candidates = [];
+      for (let i = 0; i < (boardArr || []).length; i++) {
+        const t = boardArr[i];
+        if (!isOccupiedAndAlive(t)) continue;
+        if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
+        const fromEffects = Array.isArray(t.effects)
+          ? t.effects.filter(e => e && e.name === 'Void Shield').length
+          : 0;
+        const fromTower = Math.max(0, Number((t.hero && t.hero._towerVoidShield) || 0));
+        candidates.push({ index: i, count: fromEffects + fromTower });
+      }
+      if (candidates.length === 0) continue;
       let bestCount = Infinity;
       for (const c of candidates) {
         if (c.count < bestCount) bestCount = c.count;
@@ -1316,7 +1471,7 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
         const t = boardArr[i];
         if (!isOccupiedAndAlive(t)) continue;
         if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
-        const cnt = (t && t.effects) ? t.effects.filter(e => e && e.kind === 'buff').length : 0;
+        const cnt = getVisibleEffects(t).filter(e => e && e.kind === 'buff').length;
         candidates.push({ index: i, count: cnt });
       }
       if (candidates.length === 0) continue;

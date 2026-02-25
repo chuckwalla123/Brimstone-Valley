@@ -6,6 +6,8 @@ import { HEROES } from '../heroes.js';
 import getAssetPath from '../utils/assetPath.js';
 import { addHeroToRun, getRecruitChoices, saveTowerRun, updateHeroPositions } from './towerState.js';
 import { indexToTowerPosition } from '../targeting.js';
+import { getSpellById } from '../spells.js';
+import { AUGMENTS } from './augments.js';
 
 const styles = {
   container: {
@@ -164,6 +166,16 @@ const styles = {
     background: 'rgba(0,0,0,0.3)',
     borderRadius: '6px'
   },
+  hoverReadout: {
+    marginTop: '14px',
+    fontSize: '0.75rem',
+    color: '#d1d5db',
+    background: 'rgba(0, 0, 0, 0.35)',
+    border: '1px solid #4c1d95',
+    borderRadius: '8px',
+    padding: '10px',
+    minHeight: '120px'
+  },
   heroImage: {
     width: '70px',
     height: '70px',
@@ -220,6 +232,8 @@ export default function TowerRecruitChoice({ runState, onConfirm, onSkip, onExit
   const [boardPositions, setBoardPositions] = useState(Array(9).fill(null));
   const [reserveHeroes, setReserveHeroes] = useState([]);
   const [selectedHeroIndex, setSelectedHeroIndex] = useState(null);
+  const [hoverHeroIndex, setHoverHeroIndex] = useState(null);
+  const [draggedHeroIndex, setDraggedHeroIndex] = useState(null);
 
   const heroEntries = runState.selectedHeroes || [];
   const teamFull = heroEntries.length >= 7;
@@ -270,6 +284,68 @@ export default function TowerRecruitChoice({ runState, onConfirm, onSkip, onExit
     }
   };
 
+  const moveHeroToBoard = (heroIndex, position) => {
+    const targetHeroIndex = boardPositions[position];
+    const selectedIsOnBoard = boardPositions.includes(heroIndex);
+    if (!selectedIsOnBoard && !canPlaceOnBoard && targetHeroIndex === null) return;
+
+    let nextBoard = [...boardPositions];
+    let nextReserve = [...reserveHeroes];
+    const oldPos = nextBoard.indexOf(heroIndex);
+    if (oldPos >= 0) nextBoard[oldPos] = null;
+
+    if (targetHeroIndex !== null && targetHeroIndex !== heroIndex) {
+      if (oldPos >= 0) {
+        nextBoard[oldPos] = targetHeroIndex;
+      } else {
+        nextReserve = [...nextReserve.filter(i => i !== heroIndex), targetHeroIndex];
+      }
+    }
+
+    nextBoard[position] = heroIndex;
+    nextReserve = nextReserve.filter(i => i !== heroIndex);
+    clearPlacementIfInvalid(nextBoard, nextReserve);
+    setBoardPositions(nextBoard);
+    setReserveHeroes(nextReserve);
+    setSelectedHeroIndex(null);
+  };
+
+  const moveHeroToReserve = (heroIndex, reserveIdx) => {
+    let nextBoard = [...boardPositions];
+    let nextReserve = [reserveHeroes[0], reserveHeroes[1]];
+    const reserveHeroIdx = nextReserve[reserveIdx];
+    const oldPos = nextBoard.indexOf(heroIndex);
+    const selectedWasOnBoard = oldPos >= 0;
+    const oldReserveIdx = nextReserve.indexOf(heroIndex);
+
+    if (selectedWasOnBoard) nextBoard[oldPos] = null;
+
+    if (reserveHeroIdx !== undefined && reserveHeroIdx !== heroIndex) {
+      if (selectedWasOnBoard) {
+        nextBoard[oldPos] = reserveHeroIdx;
+      } else if (oldReserveIdx >= 0) {
+        nextReserve[oldReserveIdx] = reserveHeroIdx;
+      }
+      nextReserve[reserveIdx] = heroIndex;
+    } else {
+      if (oldReserveIdx >= 0) nextReserve[oldReserveIdx] = undefined;
+      nextReserve[reserveIdx] = heroIndex;
+    }
+
+    const seenReserve = new Set();
+    nextReserve = nextReserve.map(idx => {
+      if (idx === undefined || idx === null) return undefined;
+      if (seenReserve.has(idx)) return undefined;
+      seenReserve.add(idx);
+      return idx;
+    });
+
+    clearPlacementIfInvalid(nextBoard, nextReserve);
+    setBoardPositions(nextBoard);
+    setReserveHeroes(nextReserve);
+    setSelectedHeroIndex(null);
+  };
+
   const handleBoardSlotClick = (position, isEmpty) => {
     if (selectedHeroIndex === null) {
       const heroIdx = boardPositions[position];
@@ -290,29 +366,7 @@ export default function TowerRecruitChoice({ runState, onConfirm, onSkip, onExit
       if (!targetHasHero) return;
     }
 
-    const currentHeroIdx = boardPositions[position];
-    setBoardPositions(prev => {
-      const next = [...prev];
-      const oldPos = next.indexOf(selectedHeroIndex);
-      if (oldPos >= 0) next[oldPos] = null;
-      if (currentHeroIdx !== null) {
-        if (oldPos >= 0) {
-          next[oldPos] = currentHeroIdx;
-        } else {
-          setReserveHeroes(current => [...current.filter(i => i !== selectedHeroIndex), currentHeroIdx]);
-        }
-      }
-      next[position] = selectedHeroIndex;
-      clearPlacementIfInvalid(next, reserveHeroes);
-      return next;
-    });
-
-    setReserveHeroes(prev => {
-      const next = prev.filter(i => i !== selectedHeroIndex);
-      clearPlacementIfInvalid(boardPositions, next);
-      return next;
-    });
-    setSelectedHeroIndex(null);
+    moveHeroToBoard(selectedHeroIndex, position);
   };
 
   const handleReserveSlotClick = (reserveIdx, isEmpty) => {
@@ -329,45 +383,39 @@ export default function TowerRecruitChoice({ runState, onConfirm, onSkip, onExit
       return;
     }
 
-    const reserveHeroIdx = reserveHeroes[reserveIdx];
-    const selectedWasOnBoard = boardPositions.includes(selectedHeroIndex);
-
-    if (reserveHeroIdx !== undefined && selectedWasOnBoard) {
-      setBoardPositions(prev => {
-        const next = [...prev];
-        const oldPos = next.indexOf(selectedHeroIndex);
-        if (oldPos >= 0) next[oldPos] = reserveHeroIdx;
-        clearPlacementIfInvalid(next, reserveHeroes);
-        return next;
-      });
-
-      setReserveHeroes(prev => {
-        const next = [...prev];
-        const selectedIdx = next.indexOf(selectedHeroIndex);
-        if (selectedIdx >= 0) next[selectedIdx] = reserveHeroIdx;
-        next[reserveIdx] = selectedHeroIndex;
-        clearPlacementIfInvalid(boardPositions, next);
-        return next;
-      });
-    } else {
-      setBoardPositions(prev => {
-        const next = [...prev];
-        const oldPos = next.indexOf(selectedHeroIndex);
-        if (oldPos >= 0) next[oldPos] = null;
-        clearPlacementIfInvalid(next, reserveHeroes);
-        return next;
-      });
-
-      setReserveHeroes(prev => {
-        const next = prev.filter(i => i !== selectedHeroIndex);
-        next.push(selectedHeroIndex);
-        clearPlacementIfInvalid(boardPositions, next);
-        return next;
-      });
-    }
-
-    setSelectedHeroIndex(null);
+    moveHeroToReserve(selectedHeroIndex, reserveIdx);
   };
+
+  const handleSlotDragStart = (heroIndex, e) => {
+    if (heroIndex == null) return;
+    setDraggedHeroIndex(heroIndex);
+    if (e?.dataTransfer) {
+      e.dataTransfer.setData('text/plain', String(heroIndex));
+      e.dataTransfer.effectAllowed = 'move';
+    }
+  };
+
+  const handleBoardDrop = (position) => {
+    if (draggedHeroIndex == null) return;
+    moveHeroToBoard(draggedHeroIndex, position);
+    setDraggedHeroIndex(null);
+  };
+
+  const handleReserveDrop = (reserveIdx) => {
+    if (draggedHeroIndex == null) return;
+    moveHeroToReserve(draggedHeroIndex, reserveIdx);
+    setDraggedHeroIndex(null);
+  };
+
+  const canDropHeroOnBoard = (heroIndex, position) => {
+    if (heroIndex == null || position == null) return false;
+    const targetHeroIndex = boardPositions[position];
+    const heroIsOnBoard = boardPositions.includes(heroIndex);
+    if (!heroIsOnBoard && !canPlaceOnBoard && targetHeroIndex === null) return false;
+    return true;
+  };
+
+  const canDropHeroOnReserve = (heroIndex) => heroIndex != null;
 
   const handleConfirm = () => {
     if (!selectedRecruitId) return;
@@ -472,7 +520,8 @@ export default function TowerRecruitChoice({ runState, onConfirm, onSkip, onExit
             const selectedIsOnBoard = selectedHeroIndex !== null && boardPositions.includes(selectedHeroIndex);
             const isValidSwapTarget = selectedHeroIndex !== null && hero && !selectedIsOnBoard;
             const isValidEmptyTarget = selectedHeroIndex !== null && !hero && (canPlaceOnBoard || selectedIsOnBoard);
-            const isHighlight = (canPlaceOnBoard && selectedRecruitId && isEmpty) || isValidSwapTarget || isValidEmptyTarget;
+            const isValidDragTarget = draggedHeroIndex !== null && canDropHeroOnBoard(draggedHeroIndex, towerPos);
+            const isHighlight = (canPlaceOnBoard && selectedRecruitId && isEmpty) || isValidSwapTarget || isValidEmptyTarget || isValidDragTarget;
 
             return (
               <div
@@ -483,7 +532,23 @@ export default function TowerRecruitChoice({ runState, onConfirm, onSkip, onExit
                   ...(isHighlight ? styles.boardSlotHighlight : {}),
                   ...(isSelected ? styles.boardSlotSelected : {})
                 }}
+                draggable={heroIdx !== null}
+                onDragStart={(e) => heroIdx !== null && handleSlotDragStart(heroIdx, e)}
+                onDragEnd={() => setDraggedHeroIndex(null)}
+                onDragOver={(e) => {
+                  if (draggedHeroIndex != null) e.preventDefault();
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  towerPos != null && handleBoardDrop(towerPos);
+                }}
                 onClick={() => towerPos != null && handleBoardSlotClick(towerPos, isEmpty)}
+                onMouseEnter={() => {
+                  if (heroIdx !== null) setHoverHeroIndex(heroIdx);
+                }}
+                onMouseLeave={() => {
+                  setHoverHeroIndex((prev) => (prev === heroIdx ? null : prev));
+                }}
               >
                 <div style={styles.boardSlotLabel}>{ROW_LABELS[rowIdx]}</div>
                 {hero ? (
@@ -513,7 +578,8 @@ export default function TowerRecruitChoice({ runState, onConfirm, onSkip, onExit
               const hero = entry ? getHeroById(entry.heroId) : null;
               const isEmpty = !hero;
               const isSelected = selectedPlacement?.type === 'reserve' && selectedPlacement.index === idx;
-              const isHighlight = (!teamFull && selectedRecruitId && isEmpty) || (selectedHeroIndex !== null && isEmpty);
+              const isValidDragTarget = draggedHeroIndex !== null && canDropHeroOnReserve(draggedHeroIndex);
+              const isHighlight = (!teamFull && selectedRecruitId && isEmpty) || (selectedHeroIndex !== null && isEmpty) || isValidDragTarget;
 
               return (
                 <div
@@ -524,7 +590,23 @@ export default function TowerRecruitChoice({ runState, onConfirm, onSkip, onExit
                     ...(isHighlight ? styles.boardSlotHighlight : {}),
                     ...(isSelected ? styles.boardSlotSelected : {})
                   }}
+                    draggable={heroIdx !== undefined}
+                    onDragStart={(e) => heroIdx !== undefined && handleSlotDragStart(heroIdx, e)}
+                    onDragEnd={() => setDraggedHeroIndex(null)}
+                    onDragOver={(e) => {
+                      if (draggedHeroIndex != null) e.preventDefault();
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      handleReserveDrop(idx);
+                    }}
                   onClick={() => handleReserveSlotClick(idx, isEmpty)}
+                    onMouseEnter={() => {
+                      if (heroIdx !== undefined) setHoverHeroIndex(heroIdx);
+                    }}
+                    onMouseLeave={() => {
+                      setHoverHeroIndex((prev) => (prev === heroIdx ? null : prev));
+                    }}
                 >
                   {hero ? (
                     <>
@@ -551,6 +633,47 @@ export default function TowerRecruitChoice({ runState, onConfirm, onSkip, onExit
             : (selectedRecruitId
               ? (canPlaceOnBoard ? 'Click an empty slot to place your recruit. You can also rearrange your team.' : 'Main board is full. Place your recruit in reserve or swap a hero on the board.')
               : 'Select a recruit, then choose a slot. You can also rearrange your team by selecting a hero.')}
+        </div>
+
+        <div style={styles.hoverReadout}>
+          {(() => {
+            const idx = hoverHeroIndex;
+            if (idx == null || !heroEntries[idx]) {
+              return <div style={{ color: '#9ca3af' }}>Hover a hero on the board/reserve to inspect spells and augments.</div>;
+            }
+            const entry = heroEntries[idx];
+            const hero = getHeroById(entry.heroId);
+            if (!hero) return <div style={{ color: '#9ca3af' }}>No hero data available.</div>;
+            const frontSpell = hero.spells?.front ? getSpellById(hero.spells.front.id) : null;
+            const middleSpell = hero.spells?.middle ? getSpellById(hero.spells.middle.id) : null;
+            const backSpell = hero.spells?.back ? getSpellById(hero.spells.back.id) : null;
+            const augments = Array.isArray(entry.augments) ? entry.augments : [];
+            return (
+              <div>
+                <div style={{ fontWeight: 700, marginBottom: 4 }}>{hero.name}</div>
+                <div><span style={{ fontWeight: 600 }}>Front:</span> {frontSpell?.name || hero.spells?.front?.id || '—'} — {frontSpell?.description || '—'}</div>
+                <div><span style={{ fontWeight: 600 }}>Middle:</span> {middleSpell?.name || hero.spells?.middle?.id || '—'} — {middleSpell?.description || '—'}</div>
+                <div><span style={{ fontWeight: 600 }}>Back:</span> {backSpell?.name || hero.spells?.back?.id || '—'} — {backSpell?.description || '—'}</div>
+                <div style={{ marginTop: 6, fontWeight: 600 }}>Augments:</div>
+                {augments.length === 0 ? (
+                  <div style={{ color: '#9ca3af' }}>None</div>
+                ) : (
+                  <div>
+                    {augments.map((aug, augIdx) => {
+                      const augDef = AUGMENTS[aug?.augmentId];
+                      const value = aug?.rolledValue;
+                      const augDesc = augDef?.description ? augDef.description.replace('{value}', value != null ? value : '') : '';
+                      return (
+                        <div key={`hover-aug-${augIdx}`}>
+                          <span style={{ fontWeight: 700 }}>{augDef?.name || aug?.augmentId || 'Augment'}:</span> {augDesc || '—'}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 

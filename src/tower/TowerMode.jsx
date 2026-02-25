@@ -3,6 +3,7 @@
 
 import React, { useState, useEffect } from 'react';
 import TowerMenu from './TowerMenu.jsx';
+import TowerIntro from './TowerIntro.jsx';
 import TowerHeroDraft from './TowerHeroDraft.jsx';
 import TowerTeamView from './TowerTeamView.jsx';
 import TowerBattle from './TowerBattle.jsx';
@@ -19,6 +20,7 @@ import {
 // Tower mode screens
 const SCREEN = {
   MENU: 'menu',
+  INTRO: 'intro',
   DRAFT: 'draft',
   TEAM_VIEW: 'team_view',
   BATTLE: 'battle'
@@ -27,6 +29,12 @@ const SCREEN = {
 export default function TowerMode({ onExit }) {
   const [screen, setScreen] = useState(SCREEN.MENU);
   const [runState, setRunState] = useState(null);
+
+  const shouldShowTowerIntro = (state) => {
+    if (!state) return false;
+    const hasTeam = Array.isArray(state.selectedHeroes) && state.selectedHeroes.length >= 1;
+    return hasTeam && Number(state.currentLevel || 1) === 1 && state.towerIntroSeen !== true;
+  };
 
   // Load existing run on mount
   useEffect(() => {
@@ -54,7 +62,7 @@ export default function TowerMode({ onExit }) {
   const handleContinueRun = () => {
     // selectedHeroes is array of { heroId, augments: [...] }
     if (runState && Array.isArray(runState.selectedHeroes) && runState.selectedHeroes.length >= 1) {
-      setScreen(SCREEN.BATTLE);
+      setScreen(shouldShowTowerIntro(runState) ? SCREEN.INTRO : SCREEN.BATTLE);
     } else if (runState) {
       // Has run but no team selected yet, go to draft
       setScreen(SCREEN.DRAFT);
@@ -90,7 +98,26 @@ export default function TowerMode({ onExit }) {
   const handleDraftConfirm = (updatedRun) => {
     saveTowerRun(updatedRun);
     setRunState(updatedRun);
+    setScreen(shouldShowTowerIntro(updatedRun) ? SCREEN.INTRO : SCREEN.BATTLE);
+  };
+
+  const handleBeginTowerIntro = () => {
+    if (!runState) {
+      setScreen(SCREEN.BATTLE);
+      return;
+    }
+    const updatedRun = {
+      ...runState,
+      towerIntroSeen: true,
+      lastPlayedAt: Date.now()
+    };
+    saveTowerRun(updatedRun);
+    setRunState(updatedRun);
     setScreen(SCREEN.BATTLE);
+  };
+
+  const handleTowerIntroBack = () => {
+    setScreen(SCREEN.MENU);
   };
 
   // Team view handler
@@ -112,6 +139,14 @@ export default function TowerMode({ onExit }) {
 
   // Render appropriate screen
   switch (screen) {
+    case SCREEN.INTRO:
+      return (
+        <TowerIntro
+          onBegin={handleBeginTowerIntro}
+          onBack={handleTowerIntroBack}
+        />
+      );
+
     case SCREEN.DRAFT:
       return (
         <TowerHeroDraft

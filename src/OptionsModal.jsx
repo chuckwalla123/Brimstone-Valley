@@ -48,6 +48,10 @@ export default function OptionsModal({ onClose }) {
   const [volume, setVolume] = useState(musicManager.getVolume());
   const [sfxVolume, setSfxVolume] = useState(sfxManager.getVolume());
   const [uiScale, setUiScale] = useState(getInitialScale());
+  const [showCombatLog, setShowCombatLog] = useState(() => {
+    const saved = localStorage.getItem('showBattleCombatLog');
+    return saved == null ? true : saved === 'true';
+  });
 
   // Update music manager when settings change
   const handleMusicTypeChange = (type) => {
@@ -70,6 +74,14 @@ export default function OptionsModal({ onClose }) {
   const handleScaleChange = (scale) => {
     setUiScale(scale);
     applyScale(scale);
+  };
+
+  const handleCombatLogToggle = () => {
+    setShowCombatLog(prev => {
+      const next = !prev;
+      localStorage.setItem('showBattleCombatLog', String(next));
+      return next;
+    });
   };
 
   const modalOverlayStyle = {
@@ -301,6 +313,20 @@ export default function OptionsModal({ onClose }) {
           </div>
           <div style={{ marginTop: '8px', fontSize: '0.8rem', color: '#888' }}>
             Increase scale for high-resolution (4K) displays
+          </div>
+        </div>
+
+        {/* Battle Combat Log */}
+        <div style={sectionStyle}>
+          <label style={labelStyle}>📜 Battle Combat Log</label>
+          <button
+            style={toggleButtonStyle(showCombatLog)}
+            onClick={handleCombatLogToggle}
+          >
+            {showCombatLog ? 'Enabled' : 'Disabled'}
+          </button>
+          <div style={{ marginTop: '8px', fontSize: '0.8rem', color: '#888' }}>
+            Show or hide the status-impact combat log under the hero readout.
           </div>
         </div>
 

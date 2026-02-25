@@ -138,6 +138,8 @@ const io = new SocketIOServer(server, {
 
 const isDraftableHero = (hero) => hero && hero.draftable !== false;
 const DRAFTABLE_HEROES = HEROES.filter(isDraftableHero);
+const CLASSIC_DRAFT_POOL_SIZE = 30;
+const FFA3_DRAFT_POOL_SIZE = 26;
 
 // Sample n heroes from source array (Fisher-Yates shuffle)
 const sampleHeroes = (source, n) => {
@@ -190,7 +192,7 @@ let gameState = {
   p1Reserve: makeReserve('player1'),
   p2Main: makeEmptyMain('player2'),
   p2Reserve: makeReserve('player2'),
-  availableHeroes: DRAFTABLE_HEROES,
+  availableHeroes: sampleHeroes(DRAFTABLE_HEROES, CLASSIC_DRAFT_POOL_SIZE),
   bans: [],
   step: 0,
   roundNumber: 0,
@@ -293,6 +295,12 @@ const normalizePrioritySide = (prio) => (
 );
 
 const sideToPlayerKey = (side) => (side === 'p1' ? 'player1' : (side === 'p2' ? 'player2' : 'player3'));
+
+const markHeroMovedThisPhase = (tile) => {
+  try {
+    if (tile && tile.hero) tile.hero._movedThisMovementPhase = true;
+  } catch (e) {}
+};
 
 const getNextPriorityPlayer = (state) => {
   const active = getActiveOrder(state);
@@ -750,9 +758,27 @@ io.on('connection', (socket) => {
 
       const boardA = getBoardRef(src.boardName);
       const boardB = getBoardRef(dst.boardName);
+
+      const sourceTileState = (src.tile && src.tile._tileState) ? src.tile._tileState : null;
+      const sourceMineMeta = (src.tile && src.tile._mine) ? { ...src.tile._mine } : null;
+      const destinationTileState = (dst.tile && dst.tile._tileState) ? dst.tile._tileState : null;
+      const destinationMineMeta = (dst.tile && dst.tile._mine) ? { ...dst.tile._mine } : null;
+
       const tmp = boardA[src.index];
       boardA[src.index] = boardB[dst.index];
       boardB[dst.index] = tmp;
+
+      if (boardA[src.index]) {
+        boardA[src.index]._tileState = sourceTileState;
+        boardA[src.index]._mine = sourceMineMeta;
+      }
+      if (boardB[dst.index]) {
+        boardB[dst.index]._tileState = destinationTileState;
+        boardB[dst.index]._mine = destinationMineMeta;
+      }
+
+      markHeroMovedThisPhase(boardA[src.index]);
+      markHeroMovedThisPhase(boardB[dst.index]);
 
       const nextIndex = mp.index + 1;
       if (nextIndex >= mp.sequence.length) {
@@ -813,7 +839,9 @@ io.on('connection', (socket) => {
     console.log('Resetting game state');
     const gameMode = payload && payload.gameMode ? payload.gameMode : 'classic';
     const isFfa3 = gameMode === 'ffa3';
-    const availableHeroes = isFfa3 ? sampleHeroes(DRAFTABLE_HEROES, 26) : DRAFTABLE_HEROES;
+    const availableHeroes = isFfa3
+      ? sampleHeroes(DRAFTABLE_HEROES, FFA3_DRAFT_POOL_SIZE)
+      : sampleHeroes(DRAFTABLE_HEROES, CLASSIC_DRAFT_POOL_SIZE);
     gameState = {
       p1Main: makeEmptyMain('player1'),
       p1Reserve: makeReserve('player1'),
@@ -971,7 +999,9 @@ io.on('connection', (socket) => {
       p2Main: makeEmptyMain('player2'),
       p2Reserve: makeReserve('player2'),
       ...(gameMode === 'ffa3' ? { p3Main: makeEmptyMain('player3'), p3Reserve: makeReserve('player3') } : {}),
-      availableHeroes: gameMode === 'ffa3' ? sampleHeroes(DRAFTABLE_HEROES, 26) : DRAFTABLE_HEROES,
+      availableHeroes: gameMode === 'ffa3'
+        ? sampleHeroes(DRAFTABLE_HEROES, FFA3_DRAFT_POOL_SIZE)
+        : sampleHeroes(DRAFTABLE_HEROES, CLASSIC_DRAFT_POOL_SIZE),
       bans: [],
       step: 0,
       roundNumber: 0,

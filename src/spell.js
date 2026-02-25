@@ -7,6 +7,47 @@ import { EFFECTS, getEffectByName } from './effects.js';
 import { getSpellById } from './spells.js';
 import { recomputeModifiers, ensureHeroInstanceId } from '../shared/gameLogic.js';
 
+export const HEALING_DURATION_CAP_ROUNDS = 7;
+
+const hasHealingInSpellSpec = (spec) => {
+  if (!spec || typeof spec !== 'object') return false;
+  try {
+    if (spec.formula && (spec.formula.type === 'heal' || spec.formula.type === 'healPower')) return true;
+    if (spec.post && spec.post.secondaryHeal) return true;
+    const extras = Array.isArray(spec.perTargetExtras) ? spec.perTargetExtras : (Array.isArray(spec.perTargetPayloadExtras) ? spec.perTargetPayloadExtras : []);
+    if (extras.some(extra => extra && (extra.action === 'heal' || (extra.formula && (extra.formula.type === 'heal' || extra.formula.type === 'healPower'))))) return true;
+  } catch (e) {}
+  return false;
+};
+
+export function effectCanHeal(effect) {
+  if (!effect || typeof effect !== 'object') return false;
+  try {
+    if (effect.pulse && effect.pulse.type === 'heal') return true;
+    if (effect.healApplierOnPulse) return true;
+    if (effect.healPerDamagedEnemy || effect.healPerEnemyTargetWithEffect) return true;
+    if (effect.onDamaged && /^heal/i.test(String(effect.onDamaged.type || ''))) return true;
+    if (effect.onDeath && /^heal/i.test(String(effect.onDeath.type || ''))) return true;
+    if (effect.onKill && typeof effect.onKill.heal === 'number' && effect.onKill.heal > 0) return true;
+    if (effect.post && typeof effect.post.healCasterAmount === 'number' && effect.post.healCasterAmount > 0) return true;
+    if (effect.trigger === 'onRoundStart' && hasHealingInSpellSpec(effect.spellSpec)) return true;
+  } catch (e) {}
+  return false;
+}
+
+export function capHealingEffectDuration(effect, capRounds = HEALING_DURATION_CAP_ROUNDS) {
+  if (!effect || typeof effect !== 'object') return effect;
+  if (!effectCanHeal(effect)) return effect;
+  const capped = { ...effect };
+  const cap = Math.max(1, Number(capRounds || HEALING_DURATION_CAP_ROUNDS));
+  if (typeof capped.duration === 'number' && Number.isFinite(capped.duration)) {
+    capped.duration = Math.max(1, Math.min(cap, Math.floor(Number(capped.duration))));
+  } else {
+    capped.duration = cap;
+  }
+  return capped;
+}
+
 export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, ownerRef = null, options = {}) {
   if (!spec) return null;
   const payload = {};
@@ -33,7 +74,46 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
   const casterSpellPower = (casterRef && casterRef.tile && typeof casterRef.tile.currentSpellPower === 'number')
     ? Number(casterRef.tile.currentSpellPower) + bonusSpellPower
     : bonusSpellPower;
-  const casterIgnoresArmor = !!(casterRef && casterRef.tile && casterRef.tile.hero && casterRef.tile.hero._towerIgnoreArmor);
+  const casterEffectsAndPassives = (
+    casterRef && casterRef.tile
+      ? [
+          ...((Array.isArray(casterRef.tile.effects) ? casterRef.tile.effects : [])),
+          ...((Array.isArray(casterRef.tile._passives)
+            ? casterRef.tile._passives
+            : ((casterRef.tile.hero && Array.isArray(casterRef.tile.hero.passives)) ? casterRef.tile.hero.passives : [])))
+        ]
+      : []
+  );
+  const casterIgnoresArmor = !!(
+    (casterRef && casterRef.tile && casterRef.tile.hero && casterRef.tile.hero._towerIgnoreArmor)
+    || casterEffectsAndPassives.some(e => e && (e.casterSpellsIgnoreArmor === true || e.name === 'Field Upgrade' || e.name === 'Ghost'))
+  );
+  const spellPowerVsMonster = casterEffectsAndPassives.reduce((sum, effect) => {
+    return sum + Number((effect && effect.spellPowerVsMonster) || 0);
+  }, 0);
+  const formulaUsesSpellPowerForDamage = !!(
+    useSpec
+    && useSpec.formula
+    && (useSpec.formula.type === 'attackPower' || useSpec.formula.type === 'roll')
+    && !useSpec.formula.ignoreSpellPower
+  );
+  const getTargetTile = (targetToken) => {
+    if (!targetToken || typeof targetToken.index !== 'number') return null;
+    const boardArr = targetToken.board === 'p1'
+      ? (boards.p1Board || [])
+      : (targetToken.board === 'p2')
+        ? (boards.p2Board || [])
+        : (boards.p3Board || []);
+    return (boardArr || [])[targetToken.index] || null;
+  };
+  const applyMonsterSlayerBonus = (frag, targetToken) => {
+    if (!frag || frag.action !== 'damage') return frag;
+    if (!spellPowerVsMonster || !formulaUsesSpellPowerForDamage) return frag;
+    const targetTile = getTargetTile(targetToken);
+    const isMonsterTarget = !!(targetTile && targetTile.hero && targetTile.hero.monster === true);
+    if (!isMonsterTarget) return frag;
+    return { ...frag, value: Number(frag.value || 0) + Number(spellPowerVsMonster) };
+  };
 
   // Build canonical attack/heal payload fragments to be used per-target
   const buildAttackFragment = () => {
@@ -79,13 +159,15 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
       const base = Number(useSpec.formula.base || 0);
       const roll = Math.floor(Math.random() * die) + 1;
       const val = (useSpec.formula && useSpec.formula.ignoreSpellPower) ? (base + roll) : (base + roll + casterSpellPower);
-      // Include roll details for dice animation
-      return {
+      const frag = {
         action: 'damage',
         value: val + bonusDamage,
         ...(casterIgnoresArmor ? { ignoreArmor: true } : {}),
-        rollInfo: { die, base, roll, total: val + bonusDamage }
       };
+      if (!(useSpec.formula.suppressRollInfo === true || useSpec.formula.showRollInfo === false)) {
+        frag.rollInfo = { die, base, roll, total: val + bonusDamage };
+      }
+      return frag;
     }
     // healPower: healing that scales with spell power (used by most healing spells)
     if (useSpec.formula.type === 'healPower') {
@@ -178,7 +260,9 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
   
   // Blood Drain conditional: compare caster health to target health
   const conditionalHealthCheck = useSpec.post && useSpec.post.conditionalOnCasterVsTargetHealth;
+  const conditionalTargetVsCasterHealth = useSpec.post && useSpec.post.conditionalOnTargetVsCasterHealth;
   const casterHealth = casterRef && casterRef.tile ? (casterRef.tile.currentHealth != null ? casterRef.tile.currentHealth : (casterRef.tile.hero && casterRef.tile.hero.health) || 0) : 0;
+  const rollPerTarget = !!(useSpec.formula && useSpec.formula.type === 'roll' && (useSpec.formula.rollPerTarget || useSpec.formula.perTarget));
   for (let i = 0; i < (payload.targets || []).length; i++) {
     const t = payload.targets[i];
     const targetBoard = t && t.board ? t.board : null;
@@ -215,6 +299,32 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
         continue;
       }
     }
+
+    // Conditional damage where bonus applies if target health is less than caster health (Titan - Flex)
+    if (conditionalTargetVsCasterHealth && t && !isAlly) {
+      try {
+        const boardArr = t.board === 'p1' ? (boards.p1Board || []) : (t.board === 'p2' ? (boards.p2Board || []) : (boards.p3Board || []));
+        const targetTile = (boardArr || [])[t.index];
+        const targetHealth = targetTile ? (targetTile.currentHealth != null ? targetTile.currentHealth : (targetTile.hero && targetTile.hero.health) || 0) : 0;
+        const targetLessThanCaster = targetHealth < casterHealth;
+
+        const selected = targetLessThanCaster
+          ? (conditionalTargetVsCasterHealth.targetLessThanCaster || conditionalTargetVsCasterHealth.lessThan)
+          : (conditionalTargetVsCasterHealth.otherwise || conditionalTargetVsCasterHealth.greaterOrEqual);
+
+        const baseDamage = (selected && (selected.damage ?? selected.attackPower))
+          ?? (targetLessThanCaster ? 5 : 3);
+        const frag = { action: 'damage', value: Number(baseDamage) + casterSpellPower, armorMultiplier: 1 };
+        if (typeof selected?.healCaster === 'number' && selected.healCaster > 0) {
+          frag.post = { healCasterAmount: Number(selected.healCaster) + casterSpellPower };
+        }
+        payload.perTargetPayloads.push(frag);
+        continue;
+      } catch (e) {
+        payload.perTargetPayloads.push({ ...attackFrag });
+        continue;
+      }
+    }
     
     if (isAlly && secondary) {
       // build heal fragment from secondary specification
@@ -225,8 +335,9 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
       const frag = { action: 'heal', value: secAmt + addSpellPower };
       payload.perTargetPayloads.push(frag);
     } else if (attackFrag) {
+      const attackFragForTarget = rollPerTarget ? buildAttackFragment() : attackFrag;
       // If the formula requests adding the target's missing health, compute it per-target
-      if (attackFrag.addTargetMissingHealth) {
+      if (attackFragForTarget && attackFragForTarget.addTargetMissingHealth) {
         const maxFormulaValue = (useSpec && useSpec.formula && typeof useSpec.formula.maxValue === 'number')
           ? Number(useSpec.formula.maxValue)
           : null;
@@ -238,7 +349,7 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
             const maxHp = tile.hero.health || 0;
             const curHp = (tile.currentHealth != null) ? tile.currentHealth : maxHp;
             const missingHp = Math.max(0, maxHp - curHp);
-            const fragCopy = { ...attackFrag };
+            const fragCopy = { ...attackFragForTarget };
             fragCopy.value = Number(fragCopy.value || 0) + missingHp;
             delete fragCopy.addTargetMissingHealth; // Remove the marker
             if (maxFormulaValue != null) {
@@ -247,7 +358,7 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
             payload.perTargetPayloads.push(fragCopy);
           } else {
             // No valid target, use base damage
-            const fragCopy = { ...attackFrag };
+            const fragCopy = { ...attackFragForTarget };
             delete fragCopy.addTargetMissingHealth;
             if (maxFormulaValue != null) {
               fragCopy.value = Math.min(Number(fragCopy.value || 0), maxFormulaValue);
@@ -256,7 +367,7 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
           }
         } catch (err) {
           // Fallback to base damage on error
-          const fragCopy = { ...attackFrag };
+          const fragCopy = { ...attackFragForTarget };
           delete fragCopy.addTargetMissingHealth;
           if (maxFormulaValue != null) {
             fragCopy.value = Math.min(Number(fragCopy.value || 0), maxFormulaValue);
@@ -269,11 +380,45 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
           const boardArr = (tgt && tgt.board === 'p1') ? (boards.p1Board || []) : (tgt && tgt.board === 'p2') ? (boards.p2Board || []) : (boards.p3Board || []);
           const tile = (boardArr || [])[tgt && typeof tgt.index === 'number' ? tgt.index : -1];
           const targetArmor = (tile && typeof tile.currentArmor === 'number') ? Number(tile.currentArmor) : 0;
-          const fragCopy = { ...attackFrag };
+          const fragCopy = { ...attackFragForTarget };
           fragCopy.value = Number(fragCopy.value || 0) + targetArmor;
           payload.perTargetPayloads.push(fragCopy);
         } catch (e) {
-          payload.perTargetPayloads.push({ ...attackFrag });
+          payload.perTargetPayloads.push({ ...attackFragForTarget });
+        }
+      } else if (useSpec.formula && typeof useSpec.formula.addTargetCurrentHealthDivisor === 'number') {
+        try {
+          const tgt = payload.targets[i];
+          const boardArr = (tgt && tgt.board === 'p1') ? (boards.p1Board || []) : (tgt && tgt.board === 'p2') ? (boards.p2Board || []) : (boards.p3Board || []);
+          const tile = (boardArr || [])[tgt && typeof tgt.index === 'number' ? tgt.index : -1];
+          const currentHealth = (tile && typeof tile.currentHealth === 'number')
+            ? Number(tile.currentHealth)
+            : (tile && tile.hero && typeof tile.hero.health === 'number' ? Number(tile.hero.health) : 0);
+          const divisor = Math.max(1, Number(useSpec.formula.addTargetCurrentHealthDivisor || 1));
+          const added = Math.floor(Math.max(0, currentHealth) / divisor);
+          const fragCopy = { ...attackFragForTarget };
+          fragCopy.value = Number(fragCopy.value || 0) + added;
+          payload.perTargetPayloads.push(fragCopy);
+        } catch (e) {
+          payload.perTargetPayloads.push({ ...attackFragForTarget });
+        }
+      } else if (useSpec.formula && useSpec.formula.addTargetCurrentRowCasts) {
+        try {
+          const tgt = payload.targets[i];
+          const boardArr = (tgt && tgt.board === 'p1') ? (boards.p1Board || []) : (tgt && tgt.board === 'p2') ? (boards.p2Board || []) : (boards.p3Board || []);
+          const tile = (boardArr || [])[tgt && typeof tgt.index === 'number' ? tgt.index : -1];
+          const targetSide = (tgt && tgt.board) || null;
+          const rowKey = (typeof tgt?.index === 'number' && targetSide) ? indexToRow(tgt.index, targetSide) : null;
+          const rowCastsRemaining = (rowKey && tile && tile._castsRemaining && typeof tile._castsRemaining[rowKey] === 'number')
+            ? Number(tile._castsRemaining[rowKey])
+            : (rowKey && tile && tile.hero && tile.hero.spells && tile.hero.spells[rowKey] && typeof tile.hero.spells[rowKey].casts === 'number')
+              ? Number(tile.hero.spells[rowKey].casts)
+              : 0;
+          const fragCopy = { ...attackFragForTarget };
+          fragCopy.value = Number(fragCopy.value || 0) + Math.max(0, rowCastsRemaining);
+          payload.perTargetPayloads.push(fragCopy);
+        } catch (e) {
+          payload.perTargetPayloads.push({ ...attackFragForTarget });
         }
       } else if (useSpec.formula && useSpec.formula.addTargetSpeed) {
         try {
@@ -283,11 +428,11 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
           const targetSpeed = (tile && typeof tile.currentSpeed === 'number')
             ? Number(tile.currentSpeed)
             : (tile && tile.hero && typeof tile.hero.speed === 'number' ? Number(tile.hero.speed) : 0);
-          const fragCopy = { ...attackFrag };
+          const fragCopy = { ...attackFragForTarget };
           fragCopy.value = Number(fragCopy.value || 0) + targetSpeed;
           payload.perTargetPayloads.push(fragCopy);
         } catch (e) {
-          payload.perTargetPayloads.push({ ...attackFrag });
+          payload.perTargetPayloads.push({ ...attackFragForTarget });
         }
       } else if (useSpec.formula && useSpec.formula.divideByTargetSpeed) {
         try {
@@ -298,13 +443,13 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
             ? Number(tile.currentSpeed)
             : (tile && tile.hero && typeof tile.hero.speed === 'number' ? Number(tile.hero.speed) : 0);
           const targetSpeed = Math.max(1, targetSpeedRaw);
-          const numerator = Number(attackFrag.value || 0);
+          const numerator = Number(attackFragForTarget.value || 0);
           const quotient = numerator / targetSpeed;
-          const fragCopy = { ...attackFrag };
+          const fragCopy = { ...attackFragForTarget };
           fragCopy.value = useSpec.formula.roundUp ? Math.ceil(quotient) : Math.floor(quotient);
           payload.perTargetPayloads.push(fragCopy);
         } catch (e) {
-          payload.perTargetPayloads.push({ ...attackFrag });
+          payload.perTargetPayloads.push({ ...attackFragForTarget });
         }
       } else if (useSpec.formula && useSpec.formula.addTargetEffectNameCount) {
         try {
@@ -314,11 +459,11 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
           const effectName = useSpec.formula.addTargetEffectNameCount;
           const mult = (typeof useSpec.formula.addTargetEffectCountMultiplier === 'number') ? Number(useSpec.formula.addTargetEffectCountMultiplier) : 1;
           const count = (tile && tile.effects) ? tile.effects.filter(e => e && e.name === effectName).length : 0;
-          const fragCopy = { ...attackFrag };
+          const fragCopy = { ...attackFragForTarget };
           fragCopy.value = Number(fragCopy.value || 0) + (count * mult);
           payload.perTargetPayloads.push(fragCopy);
         } catch (e) {
-          payload.perTargetPayloads.push({ ...attackFrag });
+          payload.perTargetPayloads.push({ ...attackFragForTarget });
         }
       } else if (useSpec.formula && useSpec.formula.addTargetAugmentCount) {
         try {
@@ -331,11 +476,11 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
           const augmentCount = Array.isArray(tile && tile.hero && tile.hero._towerAugments)
             ? tile.hero._towerAugments.length
             : (Array.isArray(tile && tile.hero && tile.hero.augments) ? tile.hero.augments.length : 0);
-          const fragCopy = { ...attackFrag };
+          const fragCopy = { ...attackFragForTarget };
           fragCopy.value = Number(fragCopy.value || 0) + (Number(augmentCount || 0) * multiplier);
           payload.perTargetPayloads.push(fragCopy);
         } catch (e) {
-          payload.perTargetPayloads.push({ ...attackFrag });
+          payload.perTargetPayloads.push({ ...attackFragForTarget });
         }
       } else if (useSpec.formula && typeof useSpec.formula.addTargetEffectsMultiplier === 'number') {
         try {
@@ -343,18 +488,20 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
           const boardArr = (tgt && tgt.board === 'p1') ? (boards.p1Board || []) : (tgt && tgt.board === 'p2') ? (boards.p2Board || []) : (boards.p3Board || []);
           const tile = (boardArr || [])[tgt && typeof tgt.index === 'number' ? tgt.index : -1];
           const buffCount = (tile && tile.effects) ? (tile.effects.filter(e => e && e.kind === 'buff').length) : 0;
-          const fragCopy = { ...attackFrag };
+          const fragCopy = { ...attackFragForTarget };
           fragCopy.value = Number(fragCopy.value || 0) + (buffCount * Number(useSpec.formula.addTargetEffectsMultiplier || 0));
           payload.perTargetPayloads.push(fragCopy);
         } catch (e) {
-          payload.perTargetPayloads.push({ ...attackFrag });
+          payload.perTargetPayloads.push({ ...attackFragForTarget });
         }
       } else {
-        payload.perTargetPayloads.push({ ...attackFrag });
+        payload.perTargetPayloads.push({ ...attackFragForTarget });
       }
     } else {
       payload.perTargetPayloads.push({ action: null });
     }
+
+    payload.perTargetPayloads[i] = applyMonsterSlayerBonus(payload.perTargetPayloads[i], t);
 
     // Merge any per-target extras into the perTargetPayload entry
     // Use the descriptor index (not target index) to look up the correct perTargetExtras entry
@@ -384,10 +531,11 @@ export function applyEffectsToTile(tile, effects = [], addLog, ownerRef = null) 
   tile.effects = tile.effects || [];
   for (const e of effects) {
     // normalize explicit permanent markers to a non-numeric sentinel (null)
-    const copy = { ...e };
+    let copy = { ...e };
     if (copy.duration === 'permanent' || copy.duration === 'forever' || copy.duration === Infinity || copy.duration === -1) {
       copy.duration = null;
     }
+    copy = capHealingEffectDuration(copy);
     // annotate who applied this effect when available (used by triggered spellSpecs)
     if (ownerRef) {
       copy.appliedBy = ownerRef;

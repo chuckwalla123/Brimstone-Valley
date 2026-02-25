@@ -97,17 +97,21 @@ export function recomputeModifiers(tile) {
   let modSpellPower = 0;
   // Consider both transient effects and hidden passives when computing modifiers
   const sourceEffects = [ ...(tile._passives || []), ...(tile.effects || []) ];
+  const lockSpeedFromEffects = sourceEffects.some(e => e && (e.lockSpeedFromEffects === true || e.name === 'Awaken'));
   sourceEffects.forEach(e => {
     if (!e || !e.modifiers) return;
     const m = e.modifiers || {};
     if (typeof m.armor === 'number') modArmor += Number(m.armor);
-    if (typeof m.speed === 'number') modSpeed += Number(m.speed);
+    if (!lockSpeedFromEffects && typeof m.speed === 'number') modSpeed += Number(m.speed);
     if (typeof m.spellPower === 'number') modSpellPower += Number(m.spellPower);
   });
 
   tile.currentArmor = baseArmor + modArmor;
   tile.currentSpeed = baseSpeed + modSpeed;
   tile.currentSpellPower = baseSpellPower + modSpellPower;
+  if (lockSpeedFromEffects) {
+    tile.currentSpeed = baseSpeed;
+  }
   // Positional modifiers defined on the hero (e.g., front:+armor, middle:+speed)
   try {
     if (tile && tile.hero && tile.hero.positionalModifiers) {
@@ -139,7 +143,7 @@ export function recomputeModifiers(tile) {
       if (rowName && tile.hero.positionalModifiers && tile.hero.positionalModifiers[rowName]) {
         const pm = tile.hero.positionalModifiers[rowName] || {};
         if (typeof pm.armor === 'number') tile.currentArmor = Number(tile.currentArmor || 0) + Number(pm.armor);
-        if (typeof pm.speed === 'number') tile.currentSpeed = Number(tile.currentSpeed || 0) + Number(pm.speed);
+        if (!lockSpeedFromEffects && typeof pm.speed === 'number') tile.currentSpeed = Number(tile.currentSpeed || 0) + Number(pm.speed);
         if (typeof pm.spellPower === 'number') tile.currentSpellPower = Number(tile.currentSpellPower || 0) + Number(pm.spellPower);
       }
       // If the hero has a reserve starting energy bonus defined in positionalModifiers.reserve.energy
@@ -161,7 +165,7 @@ export function recomputeModifiers(tile) {
     if (forces && forces.length > 0) {
       const last = forces[forces.length - 1];
       if (typeof last.armor === 'number') tile.currentArmor = Number(last.armor);
-      if (typeof last.speed === 'number') tile.currentSpeed = Number(last.speed);
+      if (!lockSpeedFromEffects && typeof last.speed === 'number') tile.currentSpeed = Number(last.speed);
       if (typeof last.spellPower === 'number') tile.currentSpellPower = Number(last.spellPower);
     }
   } catch (e) {}
@@ -171,6 +175,23 @@ export function recomputeModifiers(tile) {
   try {
     const canZero = tile && tile.hero && tile.hero.allowZeroSpeed === true;
     tile.currentSpeed = canZero ? Number(tile.currentSpeed || 0) : Math.max(1, Number(tile.currentSpeed || 0));
+  } catch (e) {}
+  // Optional speed floor/cap from effects/passives (e.g., Awaken min/max speed).
+  try {
+    const minSpeeds = sourceEffects
+      .map(e => (e && typeof e.minSpeed === 'number') ? Number(e.minSpeed) : null)
+      .filter(v => v != null && Number.isFinite(v));
+    if (minSpeeds.length > 0) {
+      const minSpeed = Math.max(...minSpeeds);
+      tile.currentSpeed = Math.max(Number(tile.currentSpeed || 0), minSpeed);
+    }
+    const maxSpeeds = sourceEffects
+      .map(e => (e && typeof e.maxSpeed === 'number') ? Number(e.maxSpeed) : null)
+      .filter(v => v != null && Number.isFinite(v));
+    if (maxSpeeds.length > 0) {
+      const maxSpeed = Math.min(...maxSpeeds);
+      tile.currentSpeed = Math.min(Number(tile.currentSpeed || 0), maxSpeed);
+    }
   } catch (e) {}
   // Enforce armor floor at 0 so modifiers/augments cannot make armor negative.
   try {
@@ -280,8 +301,9 @@ export function applyPayloadToTarget(payload, targetRef, addLog, boards = {}, on
   if (!payload || !payload.action) return;
   if (payload.action === 'damage') {
     let v = Number(payload.value || 0);    
-    // Soul Link: Check if any adjacent allies have Soul Link effect to redirect half damage
+    // Soul Link: resolve adjacent Soul Link ally target (split is applied after damage calculation)
     let soulLinkRedirect = null;
+    let soulLinkTargetRef = null;
     try {
       if (!shouldBypass) {
         const { p1Board = [], p2Board = [], p3Board = [] } = boards;
@@ -312,36 +334,19 @@ export function applyPayloadToTarget(payload, targetRef, addLog, boards = {}, on
           }
         }
       }
-      
-        // If Soul Link ally found, split damage
+
+        // Store Soul Link ally if present; split happens after full target damage calculation
         if (adjacentIndices.length > 0) {
           const soulLinkIndex = adjacentIndices[0];
           const soulLinkTile = targetBoard[soulLinkIndex];
-          const halfDamage = Math.ceil(v / 2); // Round up
-          const remainingDamage = v - halfDamage;
-          
-          // Calculate Soul Link damage after armor (but don't apply yet if deferred)
-          const soulLinkArmor = Math.max(0, Number((soulLinkTile.currentArmor != null ? soulLinkTile.currentArmor : soulLinkTile.hero && soulLinkTile.hero.armor || 0) || 0));
-          const soulLinkDamageAfterArmor = Math.max(0, halfDamage - soulLinkArmor);
-          
-          if (applyImmediately) {
-            // Apply immediately only when called in immediate mode
-            applyHealthDelta(soulLinkTile, -soulLinkDamageAfterArmor);
-            addLog && addLog(`  > Soul Link: ${targetBoardName}Board[${soulLinkIndex}] absorbed ${soulLinkDamageAfterArmor} damage (${halfDamage} - ${soulLinkArmor} armor)`);
-          } else {
-            // Store redirect info to return to caller for deferred processing
-            soulLinkRedirect = {
+          if (soulLinkTile && soulLinkTile.hero && !soulLinkTile._dead) {
+            soulLinkTargetRef = {
               boardName: targetBoardKey,
               index: soulLinkIndex,
-              damage: soulLinkDamageAfterArmor,
-              rawDamage: halfDamage
+              tile: soulLinkTile,
+              sideName: targetBoardName
             };
-            addLog && addLog(`  > Soul Link: ${targetBoardName}Board[${soulLinkIndex}] will absorb ${soulLinkDamageAfterArmor} damage (deferred)`);
           }
-          
-          // Reduce damage to original target
-          v = remainingDamage;
-          addLog && addLog(`  > Soul Link: damage to ${targetRef.boardName}[${targetRef.index}] reduced to ${v}`);
         }
       }
     } catch (e) {
@@ -421,6 +426,30 @@ export function applyPayloadToTarget(payload, targetRef, addLog, boards = {}, on
     } catch (e) {}
     
     try { ensureTileHealthInitialized(tile); } catch (e) {}
+
+    // Soul Link split should occur after all damage calculations on the original target
+    try {
+      if (!shouldBypass && soulLinkTargetRef && v > 0) {
+        const redirectDamage = Math.ceil(v / 2);
+        const targetDamage = Math.max(0, v - redirectDamage);
+        v = targetDamage;
+        soulLinkRedirect = {
+          boardName: soulLinkTargetRef.boardName,
+          index: soulLinkTargetRef.index,
+          damage: redirectDamage,
+          rawDamage: redirectDamage
+        };
+
+        if (applyImmediately) {
+          applyHealthDelta(soulLinkTargetRef.tile, -redirectDamage);
+          addLog && addLog(`  > Soul Link: ${soulLinkTargetRef.sideName}Board[${soulLinkTargetRef.index}] absorbed ${redirectDamage} post-calculation damage`);
+        } else {
+          addLog && addLog(`  > Soul Link: ${soulLinkTargetRef.sideName}Board[${soulLinkTargetRef.index}] will absorb ${redirectDamage} post-calculation damage (deferred)`);
+        }
+        addLog && addLog(`  > Soul Link: damage to ${targetRef.boardName}[${targetRef.index}] reduced to ${v}`);
+      }
+    } catch (e) {}
+
     if (applyImmediately) {
       applyHealthDelta(tile, -v);
       addLog && addLog(`  > ${payload.source || 'Spell'} dealt ${v} to ${targetRef.boardName}[${targetRef.index}]`);
@@ -701,6 +730,7 @@ export async function processMove(gameState, action, io = null, options = {}) {
       if (typeof newState.roundNumber !== 'number') newState.roundNumber = 0;
       // Increment round number at the start of each round
       newState.roundNumber = (newState.roundNumber || 0) + 1;
+      const speedMultiplier = Math.max(1, Number(action.speedMultiplier || 1));
       let actionSeq = 0;
       stepQueue = [];
       try {
@@ -749,7 +779,8 @@ export async function processMove(gameState, action, io = null, options = {}) {
             },
             postEffectDelayMs: 0,
             reactionDelayMs: 0,
-            postCastDelayMs: 500
+            postCastDelayMs: 500,
+            speedMultiplier
           }
         );
         if (result && result.lastCastActionBySide) {

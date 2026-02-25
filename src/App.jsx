@@ -291,7 +291,7 @@ function App() {
       setAutoPlayLocal(true);
       if (onlineSocket) {
         setSocket(onlineSocket);
-        onlineSocket.emit('resetGame');
+        onlineSocket.emit('resetGame', { gameMode: 'classic' });
       }
       setCurrentScreen('draft');
       setAiDifficulty(null);

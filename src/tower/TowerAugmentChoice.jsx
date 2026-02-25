@@ -5,7 +5,7 @@ import React, { useState, useEffect } from 'react';
 import { HEROES } from '../heroes.js';
 import getAssetPath from '../utils/assetPath.js';
 import { getRandomAugments, AUGMENT_TIERS, AUGMENTS } from './augments.js';
-import { addAugmentToHero, saveTowerRun, getAugmentCap } from './towerState.js';
+import { addAugmentToHero, saveTowerRun, getAugmentCap, removeAugmentFromHero } from './towerState.js';
 
 const TIER_COLORS = {
   common: { bg: '#374151', border: '#6b7280', glow: 'rgba(107, 114, 128, 0.4)', text: '#9ca3af' },
@@ -197,6 +197,40 @@ const styles = {
     textShadow: '0 0 20px rgba(0,0,0,0.5)',
     pointerEvents: 'none',
     zIndex: 10
+  },
+  heroAugmentsList: {
+    marginTop: '6px',
+    width: '100%',
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '4px'
+  },
+  heroAugmentItem: {
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    fontSize: '0.62rem',
+    color: '#d1d5db',
+    background: 'rgba(0, 0, 0, 0.35)',
+    borderRadius: '6px',
+    padding: '3px 6px'
+  },
+  removeAugmentBtn: {
+    marginLeft: '6px',
+    border: '1px solid rgba(239, 68, 68, 0.8)',
+    borderRadius: '50%',
+    width: '16px',
+    height: '16px',
+    padding: 0,
+    lineHeight: 1,
+    textAlign: 'center',
+    fontSize: '0.72rem',
+    background: 'rgba(127, 29, 29, 0.9)',
+    color: '#fca5a5',
+    cursor: 'pointer',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center'
   }
 };
 
@@ -217,6 +251,7 @@ export default function TowerAugmentChoice({ runState, onConfirm, onSkip, onExit
   const [augmentChoices, setAugmentChoices] = useState(() => (
     Array.isArray(runState?.pendingAugmentChoice) ? runState.pendingAugmentChoice : []
   ));
+  const [, setRefreshNonce] = useState(0);
 
   // Generate or restore 3 augment choices based on current level
   useEffect(() => {
@@ -283,6 +318,19 @@ export default function TowerAugmentChoice({ runState, onConfirm, onSkip, onExit
     // Show continue/exit options without applying augment
     setAppliedRunState(runState);
     setAugmentApplied(true);
+  };
+
+  const handleRemoveAugment = (heroIndex, augmentIndex) => {
+    try {
+      const updated = removeAugmentFromHero(runState, heroIndex, augmentIndex);
+      setRefreshNonce(v => v + 1);
+      setAppliedRunState(updated);
+      if (selectedHeroIndex === heroIndex && !canHeroReceiveAugment(heroIndex)) {
+        setSelectedHeroIndex(null);
+      }
+    } catch (e) {
+      console.error('Failed to remove augment:', e);
+    }
   };
 
   const handleContinue = () => {
@@ -434,6 +482,7 @@ export default function TowerAugmentChoice({ runState, onConfirm, onSkip, onExit
               const augmentCount = getHeroAugmentCount(idx);
               const canReceive = canHeroReceiveAugment(idx);
               const isSelected = selectedHeroIndex === idx;
+              const heroAugments = Array.isArray(entry?.augments) ? entry.augments : [];
 
               return (
                 <div
@@ -460,6 +509,29 @@ export default function TowerAugmentChoice({ runState, onConfirm, onSkip, onExit
                   }}>
                     {augmentCount}/{getAugmentCap(runState)} augments
                   </div>
+                  {heroAugments.length > 0 && (
+                    <div style={styles.heroAugmentsList}>
+                      {heroAugments.map((augEntry, augIdx) => {
+                        const augDef = AUGMENTS[augEntry?.augmentId];
+                        const augName = augDef?.name || augEntry?.augmentId || 'Augment';
+                        return (
+                          <div key={`${idx}-aug-${augIdx}`} style={styles.heroAugmentItem}>
+                            <span>{augName}</span>
+                            <button
+                              style={styles.removeAugmentBtn}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleRemoveAugment(idx, augIdx);
+                              }}
+                              title="Remove augment"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               );
             })}

@@ -69,6 +69,18 @@ const styles = {
     fontSize: '0.9rem',
     color: '#a78bfa'
   },
+  speedControl: {
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px',
+    color: '#d8b4fe',
+    fontSize: '0.8rem',
+    minWidth: '220px',
+    justifyContent: 'flex-end'
+  },
+  speedSlider: {
+    width: '120px'
+  },
   defeatScreen: {
     display: 'flex',
     flexDirection: 'column',
@@ -143,6 +155,7 @@ const styles = {
 // Battle phases
 const PHASE = {
   PRE_BATTLE: 'pre_battle',
+  PRE_BATTLE_DIALOGUE: 'pre_battle_dialogue',
   BATTLE: 'battle',
   AUGMENT_CHOICE: 'augment_choice',
   RECRUIT_CHOICE: 'recruit_choice',
@@ -161,8 +174,27 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
   const [battleData, setBattleData] = useState(null);
   const [socket, setSocket] = useState(null);
   const [gameState, setGameState] = useState(null);
+  const [battleSpeedMultiplier, setBattleSpeedMultiplier] = useState(() => {
+    const saved = Number(localStorage.getItem('towerBattleSpeedMultiplier') || 1);
+    if (!Number.isFinite(saved)) return 1;
+    return Math.min(4, Math.max(1, saved));
+  });
   const socketRef = useRef(null);
   const battleEndHandledRef = useRef(false);
+  const pendingBattleStateRef = useRef(null);
+  const [preBattleDialogueIndex, setPreBattleDialogueIndex] = useState(0);
+  const [preBattleDialogueActive, setPreBattleDialogueActive] = useState(false);
+  const [preBattleTypedText, setPreBattleTypedText] = useState('');
+
+  const getActivePreBattleDialogue = () => {
+    if (Array.isArray(battleData?.fixedBattle?.dialogue) && battleData.fixedBattle.dialogue.length > 0) {
+      return battleData.fixedBattle.dialogue;
+    }
+    if (Array.isArray(battleData?.bossDialogue) && battleData.bossDialogue.length > 0) {
+      return battleData.bossDialogue;
+    }
+    return [];
+  };
 
   // Ensure boss spells are registered in the global spell registry
   useEffect(() => {
@@ -226,6 +258,7 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
 
   const prepareBattle = () => {
     if (!socket) return;
+    setGameState(null);
     
     const level = runState.currentLevel;
     const isBoss = isBossLevel(level);
@@ -263,14 +296,10 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
       if (!tile || !tile.hero) return;
       const row = indexToRow(battleIndex, 'p1'); // 0=front,1=middle,2=back
       if (row === 0 && tile.hero._towerFrontlineVanguard) {
-        if (tile.hero.spells?.front) tile.hero.spells.front.casts += 1;
-        tile.hero.energy = (tile.hero.energy || 0) + 1;
-        tile.hero.currentEnergy = (tile.hero.currentEnergy || tile.hero.energy || 0) + 1;
+        tile.hero._towerFrontlineVanguardActive = true;
       }
       if (row === 2 && tile.hero._towerRearguard) {
-        if (tile.hero.spells?.back) tile.hero.spells.back.casts += 1;
-        tile.hero.energy = (tile.hero.energy || 0) + 1;
-        tile.hero.currentEnergy = (tile.hero.currentEnergy || tile.hero.energy || 0) + 1;
+        tile.hero._towerRearguardActive = true;
       }
     };
     
@@ -295,12 +324,38 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
         applyTowerEffectsToTile(p1Main[battleIndex]);
         usedPositions.add(battleIndex);
       } else {
-        unassigned.push(hero);
+        unassigned.push({ hero, preferredReserve: heroEntry.position === null || heroEntry.position === undefined });
       }
     });
 
-    // Auto-assign remaining heroes to open main slots then reserve
-    unassigned.forEach((hero) => {
+    // Respect explicit reserve placement first.
+    unassigned
+      .filter(entry => entry && entry.preferredReserve)
+      .forEach((entry) => {
+        const hero = entry.hero;
+        if (!hero) return;
+        if (reserveIndex < 2) {
+          p1Reserve[reserveIndex].hero = { ...hero };
+          applyTowerEffectsToTile(p1Reserve[reserveIndex]);
+          reserveIndex++;
+          return;
+        }
+        const mainCount = p1Main.filter(t => t && t.hero).length;
+        if (mainCount < 5) {
+          const openIdx = p1Main.findIndex(t => t && !t.hero);
+          if (openIdx >= 0) {
+            p1Main[openIdx].hero = { ...hero };
+            applyRowAugments(p1Main[openIdx], openIdx);
+            applyTowerEffectsToTile(p1Main[openIdx]);
+          }
+        }
+      });
+
+    // Auto-assign remaining heroes to open main slots then reserve.
+    unassigned
+      .filter(entry => entry && !entry.preferredReserve)
+      .forEach((entry) => {
+      const hero = entry.hero;
       if (!hero) return;
       const mainCount = p1Main.filter(t => t && t.hero).length;
       if (mainCount < 5) {
@@ -339,14 +394,40 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
         p2Reserve,
         difficulty: bossData.difficulty
       };
+      const bossDialogue = Array.isArray(bossData?.bossConfig?.preFightDialogue)
+        ? bossData.bossConfig.preFightDialogue
+        : [];
       setBattleData({
         aiDifficulty: bossData.difficulty,
         level: level,
         isBoss: true,
-        bossId: bossData?.bossConfig?.id || null
+        bossId: bossData?.bossConfig?.id || null,
+        fixedBattle: null,
+        bossDialogue,
+        bossPortrait: {
+          name: bossData?.boss?.name || bossData?.bossConfig?.name || 'Boss',
+          image: bossData?.boss?.image || bossData?.bossConfig?.imageOverride || null
+        }
       });
+
+      if (bossDialogue.length > 0) {
+        pendingBattleStateRef.current = {
+          p1Main,
+          p1Reserve,
+          p2Main,
+          p2Reserve,
+          phase: 'battle',
+          priorityPlayer: 'player1',
+          round: 1
+        };
+        setPreBattleDialogueIndex(0);
+        setPreBattleDialogueActive(true);
+        setPhase(PHASE.PRE_BATTLE_DIALOGUE);
+        return;
+      }
     } else {
       const teamData = generateEnemyTeam(level, { playerMainBoard: p1Main });
+      const fixedBattleMeta = teamData.fixedBattle || null;
       // Convert to board format: { hero, boardName, index }
       const p2Main = makeEmptyMain('p2');
       teamData.mainBoard.forEach(entry => {
@@ -375,8 +456,25 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
         aiDifficulty: teamData.difficulty,
         level: level,
         isBoss: false,
-        bossId: null
+        bossId: null,
+        fixedBattle: fixedBattleMeta
       });
+
+      if (!isBoss && fixedBattleMeta?.dialogue?.length > 0) {
+        pendingBattleStateRef.current = {
+          p1Main,
+          p1Reserve,
+          p2Main,
+          p2Reserve,
+          phase: 'battle',
+          priorityPlayer: 'player1',
+          round: 1
+        };
+        setPreBattleDialogueIndex(0);
+        setPreBattleDialogueActive(true);
+        setPhase(PHASE.PRE_BATTLE_DIALOGUE);
+        return;
+      }
     }
     // Create game state for the battle
     const battleState = {
@@ -389,17 +487,76 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
       round: 1
     };
 
+    pendingBattleStateRef.current = battleState;
+
     // Initialize battle via socket
     socket.emit('setTestState', battleState);
     setPhase(PHASE.BATTLE);
   };
+
+  const launchPreparedBattle = () => {
+    if (!socket || !pendingBattleStateRef.current) return;
+    socket.emit('setTestState', pendingBattleStateRef.current);
+    setPhase(PHASE.BATTLE);
+  };
+
+  const handlePreBattleDialogueAdvance = () => {
+    const dialogue = getActivePreBattleDialogue();
+    if (!dialogue.length) {
+      setPreBattleDialogueActive(false);
+      launchPreparedBattle();
+      return;
+    }
+    if (preBattleDialogueIndex >= dialogue.length - 1) {
+      setPreBattleDialogueActive(false);
+      launchPreparedBattle();
+      return;
+    }
+    setPreBattleDialogueIndex(prev => prev + 1);
+  };
+
+  const handlePreBattleDialogueSkip = () => {
+    setPreBattleDialogueActive(false);
+    launchPreparedBattle();
+  };
+
+  useEffect(() => {
+    if (!preBattleDialogueActive || phase !== PHASE.PRE_BATTLE_DIALOGUE) {
+      setPreBattleTypedText('');
+      return;
+    }
+
+    const dialogue = getActivePreBattleDialogue();
+    const step = dialogue[preBattleDialogueIndex];
+    if (!step?.text) {
+      setPreBattleTypedText('');
+      return;
+    }
+
+    const fullText = step.text;
+    const baseMsPerChar = 40;
+    const durationMs = Math.min(3200, Math.max(1400, fullText.length * baseMsPerChar));
+    const intervalMs = Math.max(16, Math.floor(durationMs / Math.max(1, fullText.length)));
+    let index = 0;
+    setPreBattleTypedText('');
+
+    const timer = setInterval(() => {
+      index += 1;
+      setPreBattleTypedText(fullText.slice(0, index));
+      if (index >= fullText.length) {
+        clearInterval(timer);
+      }
+    }, intervalMs);
+
+    return () => clearInterval(timer);
+  }, [phase, preBattleDialogueActive, preBattleDialogueIndex, battleData]);
 
   const handleBattleEnd = (result) => {
     // result is 'player1', 'player2', or 'draw'
     // In tower mode, player is always player1
     if (result === 'player1') {
       // Player won
-      if (runState.currentLevel >= 100) {
+      if (runState.currentLevel >= 40) {
         // Tower complete!
         setPhase(PHASE.TOWER_COMPLETE);
         return;
@@ -474,6 +631,12 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
     if (onExit) onExit();
   };
 
+  const handleSpeedChange = (event) => {
+    const value = Math.min(4, Math.max(1, Number(event.target.value || 1)));
+    setBattleSpeedMultiplier(value);
+    localStorage.setItem('towerBattleSpeedMultiplier', String(value));
+  };
+
   // Render based on phase
   if (phase === PHASE.BATTLE && battleData && socket && gameState) {
     return (
@@ -487,6 +650,18 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
             )}
           </div>
           <div style={styles.towerName}>Tower of Shattered Champions</div>
+          <div style={styles.speedControl}>
+            <span>Battle Speed {battleSpeedMultiplier.toFixed(1)}x</span>
+            <input
+              type="range"
+              min="1"
+              max="4"
+              step="0.1"
+              value={battleSpeedMultiplier}
+              onChange={handleSpeedChange}
+              style={styles.speedSlider}
+            />
+          </div>
         </div>
 
         {/* The actual battle component */}
@@ -495,9 +670,118 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
           socket={socket}
           onGameEnd={handleBattleEnd}
           aiDifficulty={battleData.aiDifficulty}
+          towerLevel={battleData.level}
           autoPlay={true}
           showReturnToMenu={false}
+          battleSpeedMultiplier={battleSpeedMultiplier}
         />
+      </div>
+    );
+  }
+
+  if (phase === PHASE.PRE_BATTLE_DIALOGUE && preBattleDialogueActive) {
+    const dialogue = getActivePreBattleDialogue();
+    const step = dialogue[preBattleDialogueIndex] || null;
+    const enemyPortraits = battleData?.fixedBattle
+      ? (battleData.fixedBattle.enemyHeroIds || [])
+          .map(heroId => HEROES.find(hero => hero.id === heroId))
+          .filter(Boolean)
+          .map(hero => ({ name: hero.name, image: hero.image }))
+      : (battleData?.bossPortrait ? [battleData.bossPortrait] : []);
+
+    const portraitCount = enemyPortraits.length;
+    const portraitGap = portraitCount >= 7 ? 8 : 12;
+    const portraitRowMaxWidth = 860;
+    const portraitSize = portraitCount > 0
+      ? Math.max(88, Math.min(120, Math.floor((portraitRowMaxWidth - (portraitGap * Math.max(0, portraitCount - 1))) / portraitCount)))
+      : 120;
+    const portraitRowWidth = portraitCount > 0
+      ? (portraitCount * portraitSize) + (Math.max(0, portraitCount - 1) * portraitGap)
+      : 0;
+    const portraitRowOffset = Math.max(0, (900 - portraitRowWidth) / 2);
+    const allPortraits = enemyPortraits;
+    const normalizedSpeaker = step?.speaker?.toLowerCase?.() || '';
+    const speakerIndex = allPortraits.findIndex(p => (p?.name || '').toLowerCase() === normalizedSpeaker);
+    const safeSpeakerIndex = speakerIndex >= 0 ? speakerIndex : 0;
+    const speakerPortraitLeft = portraitRowOffset + (safeSpeakerIndex * (portraitSize + portraitGap));
+    const speakerPortraitCenter = speakerPortraitLeft + portraitSize / 2;
+    const primaryLabel = preBattleDialogueIndex >= Math.max(0, dialogue.length - 1) ? 'Engage' : 'Continue';
+    const estimatedDialogueLines = Math.ceil(((step?.text || '').length) / 52);
+    const dialogueContainerMinHeight = Math.max(160, 74 + estimatedDialogueLines * 28);
+
+    return (
+      <div
+        className="story-scene"
+        style={{
+          ...styles.container,
+          backgroundImage: `url(${getAssetPath('/images/background/BSVBackground.png')})`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        }}
+      >
+        <div className="story-scene__overlay" />
+        <div className="story-scene__content">
+          <div className="story-scene__panel">
+            <div className="story-dialogue__row">
+              <div className="story-dialogue__stack">
+                <div className="story-dialogue__bubble-container" style={{ minHeight: `${dialogueContainerMinHeight}px` }}>
+                  <div
+                    className="story-dialogue__bubble story-dialogue__bubble--above"
+                    style={{
+                      '--bubble-center': `${speakerPortraitCenter}px`,
+                      width: 'min(520px, calc(100% - 24px))'
+                    }}
+                  >
+                    <div className="story-dialogue__speaker">{step?.speaker || 'Tower Guardian'}</div>
+                    <div className="story-dialogue__text-wrap">
+                      <div className="story-dialogue__text story-dialogue__text--ghost">{step?.text || ''}</div>
+                      <div className="story-dialogue__text story-dialogue__text--typed">{preBattleTypedText}</div>
+                    </div>
+                  </div>
+                </div>
+                <div className="story-dialogue__portraits">
+                  <div className="story-dialogue__portrait-group left" />
+                  <div
+                    className="story-dialogue__portrait-group right"
+                    style={{
+                      marginLeft: 0,
+                      width: '100%',
+                      justifyContent: 'center',
+                      gap: `${portraitGap}px`
+                    }}
+                  >
+                    {enemyPortraits.map((portrait, index) => (
+                      <div className="story-dialogue__media" key={`tower-right-${index}-${portrait.name}`}>
+                        {portrait?.image ? (
+                          <img
+                            className="story-dialogue__avatar"
+                            style={{ width: `${portraitSize}px`, height: `${portraitSize}px` }}
+                            src={getAssetPath(encodeURI(portrait.image))}
+                            alt={portrait.name || 'Enemy'}
+                          />
+                        ) : (
+                          <div
+                            className="story-dialogue__avatar story-dialogue__avatar--fallback"
+                            style={{ width: `${portraitSize}px`, height: `${portraitSize}px` }}
+                          >
+                            {(portrait?.name || '?').charAt(0)}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="story-scene__actions">
+              <button className="story-scene__button" onClick={handlePreBattleDialogueSkip}>Skip</button>
+              <button className="story-scene__button story-scene__button--primary" onClick={handlePreBattleDialogueAdvance}>
+                {primaryLabel}
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
     );
   }
@@ -569,12 +853,12 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
       <div style={styles.victoryScreen}>
         <h1 style={styles.victoryTitle}>🏆 Tower Conquered!</h1>
         <p style={{ fontSize: '1.3rem', color: '#a78bfa', marginBottom: '30px' }}>
-          Your champions have conquered all 100 levels!
+          Your champions have conquered all 40 levels!
         </p>
         
         <div style={styles.defeatStats}>
           <div style={styles.defeatStat}>
-            <div style={styles.defeatStatValue}>100</div>
+            <div style={styles.defeatStatValue}>40</div>
             <div style={styles.defeatStatLabel}>Levels Cleared</div>
           </div>
           <div style={styles.defeatStat}>

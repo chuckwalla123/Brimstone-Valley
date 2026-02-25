@@ -102,7 +102,7 @@ export const AUGMENTS = {
     description: '+{value} Armor',
     tier: 'uncommon',
     type: 'stat',
-    valueRange: [1, 2],
+    valueRange: [2, 2],
     apply: (hero, value) => { hero.armor += value; hero.currentArmor = (hero.currentArmor || hero.armor) + value; }
   },
   armorBoostLarge: {
@@ -111,7 +111,7 @@ export const AUGMENTS = {
     description: '+{value} Armor',
     tier: 'rare',
     type: 'stat',
-    valueRange: [2, 3],
+    valueRange: [3, 3],
     apply: (hero, value) => { hero.armor += value; hero.currentArmor = (hero.currentArmor || hero.armor) + value; }
   },
   armorBoostHuge: {
@@ -120,7 +120,7 @@ export const AUGMENTS = {
     description: '+{value} Armor',
     tier: 'epic',
     type: 'stat',
-    valueRange: [3, 4],
+    valueRange: [4, 4],
     apply: (hero, value) => { hero.armor += value; hero.currentArmor = (hero.currentArmor || hero.armor) + value; }
   },
   armorBoostMassive: {
@@ -129,7 +129,7 @@ export const AUGMENTS = {
     description: '+{value} Armor',
     tier: 'legendary',
     type: 'stat',
-    valueRange: [4, 5],
+    valueRange: [5, 5],
     apply: (hero, value) => { hero.armor += value; hero.currentArmor = (hero.currentArmor || hero.armor) + value; }
   },
 
@@ -149,7 +149,7 @@ export const AUGMENTS = {
     description: '+{value} Speed',
     tier: 'uncommon',
     type: 'stat',
-    valueRange: [1, 2],
+    valueRange: [2, 2],
     apply: (hero, value) => { hero.speed += value; hero.currentSpeed = (hero.currentSpeed || hero.speed) + value; }
   },
   speedBoostLarge: {
@@ -158,7 +158,7 @@ export const AUGMENTS = {
     description: '+{value} Speed',
     tier: 'rare',
     type: 'stat',
-    valueRange: [2, 3],
+    valueRange: [3, 3],
     apply: (hero, value) => { hero.speed += value; hero.currentSpeed = (hero.currentSpeed || hero.speed) + value; }
   },
   speedBoostHuge: {
@@ -167,7 +167,7 @@ export const AUGMENTS = {
     description: '+{value} Speed',
     tier: 'epic',
     type: 'stat',
-    valueRange: [3, 4],
+    valueRange: [4, 4],
     apply: (hero, value) => { hero.speed += value; hero.currentSpeed = (hero.currentSpeed || hero.speed) + value; }
   },
   speedBoostMassive: {
@@ -176,7 +176,7 @@ export const AUGMENTS = {
     description: '+{value} Speed',
     tier: 'legendary',
     type: 'stat',
-    valueRange: [4, 5],
+    valueRange: [5, 5],
     apply: (hero, value) => { hero.speed += value; hero.currentSpeed = (hero.currentSpeed || hero.speed) + value; }
   },
 
@@ -196,7 +196,7 @@ export const AUGMENTS = {
     description: '+{value} Spell Power',
     tier: 'uncommon',
     type: 'stat',
-    valueRange: [1, 2],
+    valueRange: [2, 2],
     apply: (hero, value) => { hero.spellPower = (hero.spellPower || 0) + value; hero.currentSpellPower = (hero.currentSpellPower || hero.spellPower || 0) + value; }
   },
   spellPowerBoostLarge: {
@@ -205,7 +205,7 @@ export const AUGMENTS = {
     description: '+{value} Spell Power',
     tier: 'rare',
     type: 'stat',
-    valueRange: [2, 3],
+    valueRange: [3, 3],
     apply: (hero, value) => { hero.spellPower = (hero.spellPower || 0) + value; hero.currentSpellPower = (hero.currentSpellPower || hero.spellPower || 0) + value; }
   },
   spellPowerBoostHuge: {
@@ -214,7 +214,7 @@ export const AUGMENTS = {
     description: '+{value} Spell Power',
     tier: 'epic',
     type: 'stat',
-    valueRange: [3, 4],
+    valueRange: [4, 4],
     apply: (hero, value) => { hero.spellPower = (hero.spellPower || 0) + value; hero.currentSpellPower = (hero.currentSpellPower || hero.spellPower || 0) + value; }
   },
   spellPowerBoostMassive: {
@@ -223,7 +223,7 @@ export const AUGMENTS = {
     description: '+{value} Spell Power',
     tier: 'legendary',
     type: 'stat',
-    valueRange: [4, 5],
+    valueRange: [5, 5],
     apply: (hero, value) => { hero.spellPower = (hero.spellPower || 0) + value; hero.currentSpellPower = (hero.currentSpellPower || hero.spellPower || 0) + value; }
   },
 
@@ -339,11 +339,35 @@ export const AUGMENTS = {
   },
   keenStrike: {
     id: 'keenStrike',
-    name: 'Keen Strike',
-    description: 'Basic Attack deals +1 damage.',
+    name: 'Keen Strike I',
+    description: 'Basic Attack deals +2 damage.',
     tier: 'common',
     type: 'special',
-    apply: (hero) => { hero._towerKeenStrike = 1; }
+    apply: (hero) => { hero._towerKeenStrike = Math.max(Number(hero._towerKeenStrike || 0), 2); }
+  },
+  keenStrikeII: {
+    id: 'keenStrikeII',
+    name: 'Keen Strike II',
+    description: 'Basic Attack deals +4 damage.',
+    tier: 'uncommon',
+    type: 'special',
+    apply: (hero) => { hero._towerKeenStrike = Math.max(Number(hero._towerKeenStrike || 0), 4); }
+  },
+  keenStrikeIII: {
+    id: 'keenStrikeIII',
+    name: 'Keen Strike III',
+    description: 'Basic Attack deals +6 damage.',
+    tier: 'rare',
+    type: 'special',
+    apply: (hero) => { hero._towerKeenStrike = Math.max(Number(hero._towerKeenStrike || 0), 6); }
+  },
+  keenStrikeIV: {
+    id: 'keenStrikeIV',
+    name: 'Keen Strike IV',
+    description: 'Basic Attack deals +8 damage.',
+    tier: 'epic',
+    type: 'special',
+    apply: (hero) => { hero._towerKeenStrike = Math.max(Number(hero._towerKeenStrike || 0), 8); }
   },
 
   momentum: {
@@ -402,95 +426,81 @@ export const AUGMENTS = {
     type: 'special',
     apply: (hero) => { hero._towerPredatorPace = true; }
   },
+  cinderTaxI: {
+    id: 'cinderTaxI',
+    name: 'Cinder Tax I',
+    description: 'First time each round you apply Burn, also reduce that target\'s Energy by 1.',
+    tier: 'uncommon',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerCinderTax = hero._towerCinderTax || { energyDrain: 0, bonusDamage: 0 };
+      hero._towerCinderTax.energyDrain = Number(hero._towerCinderTax.energyDrain || 0) + 1;
+    }
+  },
+  cinderTaxII: {
+    id: 'cinderTaxII',
+    name: 'Cinder Tax II',
+    description: 'First time each round you apply Burn, reduce that target\'s Energy by 1 and deal +2 damage (armor applies).',
+    tier: 'rare',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerCinderTax = hero._towerCinderTax || { energyDrain: 0, bonusDamage: 0 };
+      hero._towerCinderTax.energyDrain = Number(hero._towerCinderTax.energyDrain || 0) + 1;
+      hero._towerCinderTax.bonusDamage = Number(hero._towerCinderTax.bonusDamage || 0) + 2;
+    }
+  },
+  hemorrhageTaxI: {
+    id: 'hemorrhageTaxI',
+    name: 'Hemorrhage Tax I',
+    description: 'First time each round you apply Bleed, also reduce that target\'s Energy by 1.',
+    tier: 'uncommon',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerHemorrhageTax = hero._towerHemorrhageTax || { energyDrain: 0, bonusDamage: 0 };
+      hero._towerHemorrhageTax.energyDrain = Number(hero._towerHemorrhageTax.energyDrain || 0) + 1;
+    }
+  },
+  hemorrhageTaxII: {
+    id: 'hemorrhageTaxII',
+    name: 'Hemorrhage Tax II',
+    description: 'First time each round you apply Bleed, reduce that target\'s Energy by 1 and deal +2 damage (armor applies).',
+    tier: 'rare',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerHemorrhageTax = hero._towerHemorrhageTax || { energyDrain: 0, bonusDamage: 0 };
+      hero._towerHemorrhageTax.energyDrain = Number(hero._towerHemorrhageTax.energyDrain || 0) + 1;
+      hero._towerHemorrhageTax.bonusDamage = Number(hero._towerHemorrhageTax.bonusDamage || 0) + 2;
+    }
+  },
+  severanceI: {
+    id: 'severanceI',
+    name: 'Severance I',
+    description: 'When your spell removes an enemy buff/debuff, gain +1 Speed and your next damage spell gets +1 damage.',
+    tier: 'rare',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerSeverance = hero._towerSeverance || { speedGain: 0, empowerDamage: 0 };
+      hero._towerSeverance.speedGain = Number(hero._towerSeverance.speedGain || 0) + 1;
+      hero._towerSeverance.empowerDamage = Number(hero._towerSeverance.empowerDamage || 0) + 1;
+    }
+  },
+  severanceII: {
+    id: 'severanceII',
+    name: 'Severance II',
+    description: 'When your spell removes an enemy buff/debuff, gain +2 Speed and your next damage spell gets +2 damage.',
+    tier: 'epic',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerSeverance = hero._towerSeverance || { speedGain: 0, empowerDamage: 0 };
+      hero._towerSeverance.speedGain = Number(hero._towerSeverance.speedGain || 0) + 2;
+      hero._towerSeverance.empowerDamage = Number(hero._towerSeverance.empowerDamage || 0) + 2;
+    }
+  },
 
   // ============================================
   // SPELL CAST AUGMENTS - Extra spell uses
   // ============================================
   
-  frontCastsSmall: {
-    id: 'frontCastsSmall',
-    name: 'Front Line Expertise I',
-    description: '+{value} Front Spell Casts',
-    tier: 'uncommon',
-    type: 'spell',
-    valueRange: [1, 1],
-    apply: (hero, value) => { if (hero.spells?.front) hero.spells.front.casts += value; }
-  },
-  frontCastsMedium: {
-    id: 'frontCastsMedium',
-    name: 'Front Line Expertise II',
-    description: '+{value} Front Spell Casts',
-    tier: 'rare',
-    type: 'spell',
-    valueRange: [1, 2],
-    apply: (hero, value) => { if (hero.spells?.front) hero.spells.front.casts += value; }
-  },
-  frontCastsLarge: {
-    id: 'frontCastsLarge',
-    name: 'Front Line Expertise III',
-    description: '+{value} Front Spell Casts',
-    tier: 'epic',
-    type: 'spell',
-    valueRange: [2, 3],
-    apply: (hero, value) => { if (hero.spells?.front) hero.spells.front.casts += value; }
-  },
-
-  middleCastsSmall: {
-    id: 'middleCastsSmall',
-    name: 'Mid Line Expertise I',
-    description: '+{value} Middle Spell Casts',
-    tier: 'uncommon',
-    type: 'spell',
-    valueRange: [1, 1],
-    apply: (hero, value) => { if (hero.spells?.middle) hero.spells.middle.casts += value; }
-  },
-  middleCastsMedium: {
-    id: 'middleCastsMedium',
-    name: 'Mid Line Expertise II',
-    description: '+{value} Middle Spell Casts',
-    tier: 'rare',
-    type: 'spell',
-    valueRange: [1, 2],
-    apply: (hero, value) => { if (hero.spells?.middle) hero.spells.middle.casts += value; }
-  },
-  middleCastsLarge: {
-    id: 'middleCastsLarge',
-    name: 'Mid Line Expertise III',
-    description: '+{value} Middle Spell Casts',
-    tier: 'epic',
-    type: 'spell',
-    valueRange: [2, 3],
-    apply: (hero, value) => { if (hero.spells?.middle) hero.spells.middle.casts += value; }
-  },
-
-  backCastsSmall: {
-    id: 'backCastsSmall',
-    name: 'Back Line Expertise I',
-    description: '+{value} Back Spell Casts',
-    tier: 'uncommon',
-    type: 'spell',
-    valueRange: [1, 1],
-    apply: (hero, value) => { if (hero.spells?.back) hero.spells.back.casts += value; }
-  },
-  backCastsMedium: {
-    id: 'backCastsMedium',
-    name: 'Back Line Expertise II',
-    description: '+{value} Back Spell Casts',
-    tier: 'rare',
-    type: 'spell',
-    valueRange: [1, 2],
-    apply: (hero, value) => { if (hero.spells?.back) hero.spells.back.casts += value; }
-  },
-  backCastsLarge: {
-    id: 'backCastsLarge',
-    name: 'Back Line Expertise III',
-    description: '+{value} Back Spell Casts',
-    tier: 'epic',
-    type: 'spell',
-    valueRange: [2, 3],
-    apply: (hero, value) => { if (hero.spells?.back) hero.spells.back.casts += value; }
-  },
-
   allCastsSmall: {
     id: 'allCastsSmall',
     name: 'Spell Mastery I',
@@ -510,7 +520,7 @@ export const AUGMENTS = {
     description: '+{value} to All Spell Casts',
     tier: 'epic',
     type: 'spell',
-    valueRange: [1, 2],
+    valueRange: [2, 2],
     apply: (hero, value) => {
       if (hero.spells?.front) hero.spells.front.casts += value;
       if (hero.spells?.middle) hero.spells.middle.casts += value;
@@ -523,7 +533,7 @@ export const AUGMENTS = {
     description: '+{value} to All Spell Casts',
     tier: 'legendary',
     type: 'spell',
-    valueRange: [2, 3],
+    valueRange: [3, 3],
     apply: (hero, value) => {
       if (hero.spells?.front) hero.spells.front.casts += value;
       if (hero.spells?.middle) hero.spells.middle.casts += value;
@@ -550,14 +560,86 @@ export const AUGMENTS = {
   },
   regenAugment: {
     id: 'regenAugment',
-    name: 'Regeneration',
-    description: 'Starts with Regen (heal 1 each round)',
+    name: 'Regeneration I',
+    description: 'Starts with Regen I (heal 1 each round)',
     tier: 'uncommon',
     type: 'effect',
-    effectName: 'Regen',
+    effectName: 'RegenI',
     apply: (hero) => {
       hero._towerEffects = hero._towerEffects || [];
-      hero._towerEffects.push({ ...EFFECTS.Regen, _hidden: true });
+      hero._towerEffects.push({ ...EFFECTS.Regen, name: 'Regen I', pulse: { type: 'heal', value: 1 }, _hidden: true });
+    }
+  },
+  regenAugmentII: {
+    id: 'regenAugmentII',
+    name: 'Regeneration II',
+    description: 'Starts with Regen II (heal 2 each round)',
+    tier: 'rare',
+    type: 'effect',
+    effectName: 'RegenII',
+    apply: (hero) => {
+      hero._towerEffects = hero._towerEffects || [];
+      hero._towerEffects.push({ ...EFFECTS.Regen, name: 'Regen II', pulse: { type: 'heal', value: 2 }, _hidden: true });
+    }
+  },
+  regenAugmentIII: {
+    id: 'regenAugmentIII',
+    name: 'Regeneration III',
+    description: 'Starts with Regen III (heal 3 each round)',
+    tier: 'epic',
+    type: 'effect',
+    effectName: 'RegenIII',
+    apply: (hero) => {
+      hero._towerEffects = hero._towerEffects || [];
+      hero._towerEffects.push({ ...EFFECTS.Regen, name: 'Regen III', pulse: { type: 'heal', value: 3 }, _hidden: true });
+    }
+  },
+  regenAugmentIV: {
+    id: 'regenAugmentIV',
+    name: 'Regeneration IV',
+    description: 'Starts with Regen IV (heal 4 each round)',
+    tier: 'legendary',
+    type: 'effect',
+    effectName: 'RegenIV',
+    apply: (hero) => {
+      hero._towerEffects = hero._towerEffects || [];
+      hero._towerEffects.push({ ...EFFECTS.Regen, name: 'Regen IV', pulse: { type: 'heal', value: 4 }, _hidden: true });
+    }
+  },
+  regenAugmentV: {
+    id: 'regenAugmentV',
+    name: 'Regeneration V',
+    description: 'Starts with Regen V (heal 5 each round)',
+    tier: 'legendary',
+    type: 'effect',
+    effectName: 'RegenV',
+    apply: (hero) => {
+      hero._towerEffects = hero._towerEffects || [];
+      hero._towerEffects.push({ ...EFFECTS.Regen, name: 'Regen V', pulse: { type: 'heal', value: 5 }, _hidden: true });
+    }
+  },
+  quicknessAugment: {
+    id: 'quicknessAugment',
+    name: 'Quickness I',
+    description: 'Starts with Quickness I (+1 Speed, +1 Spell Power)',
+    tier: 'uncommon',
+    type: 'effect',
+    effectName: 'QuicknessI',
+    apply: (hero) => {
+      hero._towerEffects = hero._towerEffects || [];
+      hero._towerEffects.push({ ...EFFECTS.Quickness, name: 'Quickness I', modifiers: { speed: 1, spellPower: 1 }, _hidden: true });
+    }
+  },
+  quicknessAugmentII: {
+    id: 'quicknessAugmentII',
+    name: 'Quickness II',
+    description: 'Starts with Quickness II (+2 Speed, +2 Spell Power)',
+    tier: 'rare',
+    type: 'effect',
+    effectName: 'QuicknessII',
+    apply: (hero) => {
+      hero._towerEffects = hero._towerEffects || [];
+      hero._towerEffects.push({ ...EFFECTS.Quickness, name: 'Quickness II', modifiers: { speed: 2, spellPower: 2 }, _hidden: true });
     }
   },
   dexterityAugment: {
@@ -572,16 +654,60 @@ export const AUGMENTS = {
       hero._towerEffects.push({ ...EFFECTS.Dexterity, _hidden: true });
     }
   },
-  deathPactAugment: {
-    id: 'deathPactAugment',
-    name: 'Soul Mirror',
-    description: 'Starts with Death Pact (reflects damage taken)',
+  dexterityAugmentII: {
+    id: 'dexterityAugmentII',
+    name: 'Natural Agility II',
+    description: 'Starts with Dexterity II (+2 Armor, +2 Speed)',
     tier: 'epic',
     type: 'effect',
-    effectName: 'DeathPact',
+    effectName: 'DexterityII',
     apply: (hero) => {
       hero._towerEffects = hero._towerEffects || [];
-      hero._towerEffects.push({ ...EFFECTS.DeathPact, _hidden: true });
+      hero._towerEffects.push({ ...EFFECTS.DexterityII, _hidden: true });
+    }
+  },
+  deathPactAugment: {
+    id: 'deathPactAugment',
+    name: 'Soul Mirror I',
+    description: 'When damaged by an enemy spell, reflect 25% of that damage to the attacker.',
+    tier: 'uncommon',
+    type: 'special',
+    effectName: 'DeathPact25',
+    apply: (hero) => {
+      hero._towerDeathPactPercent = Math.max(Number(hero._towerDeathPactPercent || 0), 0.25);
+    }
+  },
+  deathPactAugmentII: {
+    id: 'deathPactAugmentII',
+    name: 'Soul Mirror II',
+    description: 'When damaged by an enemy spell, reflect 50% of that damage to the attacker.',
+    tier: 'rare',
+    type: 'special',
+    effectName: 'DeathPact50',
+    apply: (hero) => {
+      hero._towerDeathPactPercent = Math.max(Number(hero._towerDeathPactPercent || 0), 0.5);
+    }
+  },
+  deathPactAugmentIII: {
+    id: 'deathPactAugmentIII',
+    name: 'Soul Mirror III',
+    description: 'When damaged by an enemy spell, reflect 75% of that damage to the attacker.',
+    tier: 'epic',
+    type: 'special',
+    effectName: 'DeathPact75',
+    apply: (hero) => {
+      hero._towerDeathPactPercent = Math.max(Number(hero._towerDeathPactPercent || 0), 0.75);
+    }
+  },
+  deathPactAugmentIV: {
+    id: 'deathPactAugmentIV',
+    name: 'Soul Mirror IV',
+    description: 'When damaged by an enemy spell, reflect 100% of that damage to the attacker.',
+    tier: 'legendary',
+    type: 'special',
+    effectName: 'DeathPact100',
+    apply: (hero) => {
+      hero._towerDeathPactPercent = Math.max(Number(hero._towerDeathPactPercent || 0), 1);
     }
   },
   soulLinkAugment: {
@@ -594,6 +720,18 @@ export const AUGMENTS = {
     apply: (hero) => {
       hero._towerEffects = hero._towerEffects || [];
       hero._towerEffects.push({ ...EFFECTS.SoulLink, _hidden: true });
+    }
+  },
+  tetheredLinkAugment: {
+    id: 'tetheredLinkAugment',
+    name: 'Tethered Link',
+    description: 'Starts with Link (gain 1 Energy whenever another ally, not this hero, casts a spell).',
+    tier: 'legendary',
+    type: 'effect',
+    effectName: 'Link',
+    apply: (hero) => {
+      hero._towerEffects = hero._towerEffects || [];
+      hero._towerEffects.push({ ...EFFECTS.Link, _hidden: true });
     }
   },
   lieInWaitAugment: {
@@ -614,6 +752,7 @@ export const AUGMENTS = {
     description: 'Starts with Lie In Wait for 1 round (+2 Spell Power, untargetable by single-target)',
     tier: 'legendary',
     type: 'effect',
+    bossExclusive: true,
     effectName: 'LieInWaitLevel5',
     apply: (hero) => {
       hero._towerEffects = hero._towerEffects || [];
@@ -644,6 +783,18 @@ export const AUGMENTS = {
       hero._towerEffects.push({ ...EFFECTS.Prayer, _hidden: true });
     }
   },
+  prayerAugmentII: {
+    id: 'prayerAugmentII',
+    name: 'Divine Connection II',
+    description: 'Starts with Prayer II (heals allies for 2 when damaged)',
+    tier: 'epic',
+    type: 'effect',
+    effectName: 'PrayerII',
+    apply: (hero) => {
+      hero._towerEffects = hero._towerEffects || [];
+      hero._towerEffects.push({ ...EFFECTS.PrayerII, _hidden: true });
+    }
+  },
   ironForgeAugment: {
     id: 'ironForgeAugment',
     name: 'Forged Soul',
@@ -656,6 +807,18 @@ export const AUGMENTS = {
       hero._towerEffects.push({ ...EFFECTS.IronForge, _hidden: true });
     }
   },
+  ironForgeAugmentII: {
+    id: 'ironForgeAugmentII',
+    name: 'Forged Soul II',
+    description: 'Starts with Iron Forge II (+2 Armor, +2 Spell Power)',
+    tier: 'epic',
+    type: 'effect',
+    effectName: 'IronForgeII',
+    apply: (hero) => {
+      hero._towerEffects = hero._towerEffects || [];
+      hero._towerEffects.push({ ...EFFECTS.IronForgeII, _hidden: true });
+    }
+  },
 
   // ============================================
   // DEBUFF AUGMENTS - Spells apply debuffs
@@ -665,7 +828,7 @@ export const AUGMENTS = {
     id: 'burningSpellsFront',
     name: 'Scorching Front',
     description: 'Front spell applies Burn to enemies',
-    tier: 'uncommon',
+    tier: 'common',
     type: 'debuff',
     slot: 'front',
     debuffName: 'Burn',
@@ -675,39 +838,11 @@ export const AUGMENTS = {
       hero._towerDebuffAugments.front.push('Burn');
     }
   },
-  burningSpellsMiddle: {
-    id: 'burningSpellsMiddle',
-    name: 'Scorching Middle',
-    description: 'Middle spell applies Burn to enemies',
-    tier: 'uncommon',
-    type: 'debuff',
-    slot: 'middle',
-    debuffName: 'Burn',
-    apply: (hero) => {
-      hero._towerDebuffAugments = hero._towerDebuffAugments || {};
-      hero._towerDebuffAugments.middle = hero._towerDebuffAugments.middle || [];
-      hero._towerDebuffAugments.middle.push('Burn');
-    }
-  },
-  burningSpellsBack: {
-    id: 'burningSpellsBack',
-    name: 'Scorching Back',
-    description: 'Back spell applies Burn to enemies',
-    tier: 'uncommon',
-    type: 'debuff',
-    slot: 'back',
-    debuffName: 'Burn',
-    apply: (hero) => {
-      hero._towerDebuffAugments = hero._towerDebuffAugments || {};
-      hero._towerDebuffAugments.back = hero._towerDebuffAugments.back || [];
-      hero._towerDebuffAugments.back.push('Burn');
-    }
-  },
   burningSpellsAll: {
     id: 'burningSpellsAll',
     name: 'Infernal Touch',
     description: 'All spells apply Burn to enemies',
-    tier: 'rare',
+    tier: 'uncommon',
     type: 'debuff',
     slot: 'all',
     debuffName: 'Burn',
@@ -717,21 +852,6 @@ export const AUGMENTS = {
         hero._towerDebuffAugments[slot] = hero._towerDebuffAugments[slot] || [];
         hero._towerDebuffAugments[slot].push('Burn');
       });
-    }
-  },
-
-  poisonSpellsFront: {
-    id: 'poisonSpellsFront',
-    name: 'Venomous Front',
-    description: 'Front spell applies Poison to enemies',
-    tier: 'uncommon',
-    type: 'debuff',
-    slot: 'front',
-    debuffName: 'Poison',
-    apply: (hero) => {
-      hero._towerDebuffAugments = hero._towerDebuffAugments || {};
-      hero._towerDebuffAugments.front = hero._towerDebuffAugments.front || [];
-      hero._towerDebuffAugments.front.push('Poison');
     }
   },
   poisonSpellsMiddle: {
@@ -765,39 +885,25 @@ export const AUGMENTS = {
     }
   },
 
-  bleedSpellsFront: {
-    id: 'bleedSpellsFront',
-    name: 'Serrated Front',
-    description: 'Front spell applies Bleed to enemies',
-    tier: 'uncommon',
+  bleedSpellsBack: {
+    id: 'bleedSpellsBack',
+    name: 'Serrated Back',
+    description: 'Back spell applies Bleed to enemies',
+    tier: 'common',
     type: 'debuff',
-    slot: 'front',
+    slot: 'back',
     debuffName: 'Bleed',
     apply: (hero) => {
       hero._towerDebuffAugments = hero._towerDebuffAugments || {};
-      hero._towerDebuffAugments.front = hero._towerDebuffAugments.front || [];
-      hero._towerDebuffAugments.front.push('Bleed');
-    }
-  },
-  bleedSpellsMiddle: {
-    id: 'bleedSpellsMiddle',
-    name: 'Serrated Middle',
-    description: 'Middle spell applies Bleed to enemies',
-    tier: 'uncommon',
-    type: 'debuff',
-    slot: 'middle',
-    debuffName: 'Bleed',
-    apply: (hero) => {
-      hero._towerDebuffAugments = hero._towerDebuffAugments || {};
-      hero._towerDebuffAugments.middle = hero._towerDebuffAugments.middle || [];
-      hero._towerDebuffAugments.middle.push('Bleed');
+      hero._towerDebuffAugments.back = hero._towerDebuffAugments.back || [];
+      hero._towerDebuffAugments.back.push('Bleed');
     }
   },
   bleedSpellsAll: {
     id: 'bleedSpellsAll',
     name: 'Hemorrhage',
     description: 'All spells apply Bleed to enemies',
-    tier: 'rare',
+    tier: 'uncommon',
     type: 'debuff',
     slot: 'all',
     debuffName: 'Bleed',
@@ -814,7 +920,7 @@ export const AUGMENTS = {
     id: 'curseSpellsFront',
     name: 'Cursed Front',
     description: 'Front spell applies Curse (-1 Spell Power) to enemies',
-    tier: 'rare',
+    tier: 'common',
     type: 'debuff',
     slot: 'front',
     debuffName: 'Curse',
@@ -828,7 +934,7 @@ export const AUGMENTS = {
     id: 'curseSpellsAll',
     name: 'Hex Master',
     description: 'All spells apply Curse (-1 Spell Power) to enemies',
-    tier: 'epic',
+    tier: 'uncommon',
     type: 'debuff',
     slot: 'all',
     debuffName: 'Curse',
@@ -878,23 +984,83 @@ export const AUGMENTS = {
   
   vampiric: {
     id: 'vampiric',
-    name: 'Vampiric',
+    name: 'Vampiric I',
     description: 'Heal for 25% of damage dealt (rounded down)',
+    tier: 'uncommon',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerVampiricPercent = Math.max(Number(hero._towerVampiricPercent || 0), 0.25);
+    }
+  },
+  vampiricII: {
+    id: 'vampiricII',
+    name: 'Vampiric II',
+    description: 'Heal for 50% of damage dealt (rounded down)',
+    tier: 'rare',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerVampiricPercent = Math.max(Number(hero._towerVampiricPercent || 0), 0.5);
+    }
+  },
+  vampiricIII: {
+    id: 'vampiricIII',
+    name: 'Vampiric III',
+    description: 'Heal for 75% of damage dealt (rounded down)',
     tier: 'epic',
     type: 'special',
     apply: (hero) => {
-      hero._towerVampiric = true;
+      hero._towerVampiricPercent = Math.max(Number(hero._towerVampiricPercent || 0), 0.75);
+    }
+  },
+  vampiricIV: {
+    id: 'vampiricIV',
+    name: 'Vampiric IV',
+    description: 'Heal for 100% of damage dealt (rounded down)',
+    tier: 'legendary',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerVampiricPercent = Math.max(Number(hero._towerVampiricPercent || 0), 1);
     }
   },
   
   executioner: {
     id: 'executioner',
-    name: 'Executioner',
+    name: 'Executioner I',
+    description: '+25% damage to targets below 50% health',
+    tier: 'uncommon',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerExecutionerPercent = Math.max(Number(hero._towerExecutionerPercent || 0), 0.25);
+    }
+  },
+  executionerII: {
+    id: 'executionerII',
+    name: 'Executioner II',
     description: '+50% damage to targets below 50% health',
+    tier: 'rare',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerExecutionerPercent = Math.max(Number(hero._towerExecutionerPercent || 0), 0.5);
+    }
+  },
+  executionerIII: {
+    id: 'executionerIII',
+    name: 'Executioner III',
+    description: '+75% damage to targets below 50% health',
     tier: 'epic',
     type: 'special',
     apply: (hero) => {
-      hero._towerExecutioner = true;
+      hero._towerExecutionerPercent = Math.max(Number(hero._towerExecutionerPercent || 0), 0.75);
+    }
+  },
+  executionerIV: {
+    id: 'executionerIV',
+    name: 'Executioner IV',
+    description: '+100% damage to targets below 50% health',
+    tier: 'legendary',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerExecutionerPercent = Math.max(Number(hero._towerExecutionerPercent || 0), 1);
     }
   },
 
@@ -912,7 +1078,7 @@ export const AUGMENTS = {
   lastStand: {
     id: 'lastStand',
     name: 'Last Stand',
-    description: '+3 Spell Power when below 25% health',
+    description: '+8 Spell Power when below 25% health',
     tier: 'rare',
     type: 'special',
     apply: (hero) => {
@@ -922,12 +1088,54 @@ export const AUGMENTS = {
 
   firstStrike: {
     id: 'firstStrike',
-    name: 'First Strike',
+    name: 'First Strike I',
+    description: '+25% damage on first spell cast each battle',
+    tier: 'uncommon',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerFirstStrikePercent = Math.max(Number(hero._towerFirstStrikePercent || 0), 0.25);
+    }
+  },
+  firstStrikeII: {
+    id: 'firstStrikeII',
+    name: 'First Strike II',
     description: '+50% damage on first spell cast each battle',
     tier: 'rare',
     type: 'special',
     apply: (hero) => {
-      hero._towerFirstStrike = true;
+      hero._towerFirstStrikePercent = Math.max(Number(hero._towerFirstStrikePercent || 0), 0.5);
+    }
+  },
+  firstStrikeIII: {
+    id: 'firstStrikeIII',
+    name: 'First Strike III',
+    description: '+75% damage on first spell cast each battle',
+    tier: 'epic',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerFirstStrikePercent = Math.max(Number(hero._towerFirstStrikePercent || 0), 0.75);
+    }
+  },
+  firstStrikeIV: {
+    id: 'firstStrikeIV',
+    name: 'First Strike IV',
+    description: '+100% damage on first spell cast each battle',
+    tier: 'legendary',
+    type: 'special',
+    apply: (hero) => {
+      hero._towerFirstStrikePercent = Math.max(Number(hero._towerFirstStrikePercent || 0), 1);
+    }
+  },
+
+  energySurgeStrike: {
+    id: 'energySurgeStrike',
+    name: 'Energy Surge Strike',
+    description: 'Basic Attack deals +{value} damage per Energy spent.',
+    tier: 'rare',
+    type: 'special',
+    valueRange: [1, 1],
+    apply: (hero, value) => {
+      hero._towerBasicAttackPerEnergy = Math.max(Number(hero._towerBasicAttackPerEnergy || 0), Number(value || 0));
     }
   },
 
@@ -1026,7 +1234,7 @@ export const AUGMENTS = {
   spellEcho: {
     id: 'spellEcho',
     name: 'Spell Echo',
-    description: 'Back spell casts twice (uses 2 casts)',
+    description: 'Back spell casts twice (second cast is free)',
     tier: 'legendary',
     type: 'special',
     apply: (hero) => {
@@ -1044,6 +1252,19 @@ export const AUGMENTS = {
     valueRange: [3, 3],
     apply: (hero, value) => {
       hero._towerRoundCleanseHealPerDebuff = Number(value || 0);
+    }
+  },
+
+  astralDominion: {
+    id: 'astralDominion',
+    name: 'Astral Dominion',
+    description: 'At end of round: each debuffed enemy loses 1 Energy and takes {value} true damage; gain 1 Energy per enemy affected.',
+    tier: 'legendary',
+    type: 'special',
+    bossExclusive: true,
+    valueRange: [3, 3],
+    apply: (hero, value) => {
+      hero._towerAstralDominionDamage = Number(value || 0);
     }
   }
 };

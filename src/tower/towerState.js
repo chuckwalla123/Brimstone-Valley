@@ -12,6 +12,7 @@ import {
   isBossLevel,
   BOSS_SPELLS
 } from './towerLevels.js';
+import { getFixedBattleForLevel } from './fixedBattles.js';
 
 // Re-export isBossLevel for convenience
 export { isBossLevel } from './towerLevels.js';
@@ -105,6 +106,155 @@ function pickEnemyBattleIndex(hero, occupiedEnemyMain = [], playerMainBoard = []
   return topCandidates[Math.floor(Math.random() * topCandidates.length)]?.index ?? scored[0]?.index ?? openSlots[0];
 }
 
+function createEnemyHero(heroId) {
+  const baseHero = HEROES.find(h => h.id === heroId);
+  if (!baseHero) {
+    console.error(`Enemy hero ${heroId} not found`);
+    return null;
+  }
+
+  const hero = JSON.parse(JSON.stringify(baseHero));
+  hero.towerNoHealthCap = true;
+  hero.currentHealth = hero.health;
+  hero.currentEnergy = hero.energy;
+  hero.currentSpeed = hero.speed;
+  hero.currentArmor = hero.armor;
+  hero.currentSpellPower = hero.spellPower || 0;
+  return hero;
+}
+
+function formatAppliedAugmentForDisplay(augment, value, augmentIdFallback = null) {
+  if (!augment && !augmentIdFallback) return null;
+  const id = augment?.id || augmentIdFallback;
+  const name = augment?.name || augmentIdFallback || id;
+  const description = augment?.description
+    ? augment.description.replace('{value}', value != null ? value : '')
+    : '';
+  return { id, name, rolledValue: value, description };
+}
+
+function getFixedAugmentValue(augment, providedValue = null) {
+  if (providedValue != null) return providedValue;
+  if (!augment?.valueRange) return null;
+  const [min, max] = augment.valueRange;
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return null;
+  return Math.max(min, max);
+}
+
+function applyFixedAugment(hero, augmentEntry, appliedAugments = []) {
+  const augmentId = augmentEntry?.augmentId;
+  const augment = AUGMENTS[augmentId];
+  if (!augment || !augment.apply) return;
+
+  const repeat = Math.max(1, Number(augmentEntry?.count || 1));
+  for (let i = 0; i < repeat; i++) {
+    const value = getFixedAugmentValue(augment, augmentEntry?.rolledValue ?? null);
+    augment.apply(hero, value);
+    const display = formatAppliedAugmentForDisplay(augment, value, augmentId);
+    if (display) appliedAugments.push(display);
+  }
+}
+
+function buildFixedEnemyTeam(level, difficulty, augmentCount, playerMainBoard, fixedBattleConfig) {
+  const entries = Array.isArray(fixedBattleConfig?.heroes) ? fixedBattleConfig.heroes : [];
+  if (entries.length === 0) return null;
+
+  const perHeroAugments = Array(entries.length).fill(0);
+  for (let i = 0; i < augmentCount; i++) {
+    perHeroAugments[i % perHeroAugments.length] += 1;
+  }
+  for (let i = perHeroAugments.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [perHeroAugments[i], perHeroAugments[j]] = [perHeroAugments[j], perHeroAugments[i]];
+  }
+
+  const drafted = entries
+    .map((entry, idx) => {
+      const hero = createEnemyHero(entry.heroId);
+      if (!hero) return null;
+
+      const displayAugments = [];
+
+      const randomAugments = getRandomAugments(level, perHeroAugments[idx] || 0);
+      randomAugments.forEach(aug => {
+        if (!aug || !aug.apply) return;
+        aug.apply(hero, aug.rolledValue);
+        const display = formatAppliedAugmentForDisplay(aug, aug.rolledValue, aug.id);
+        if (display) displayAugments.push(display);
+      });
+
+      (entry.fixedAugments || []).forEach(fixedAug => {
+        applyFixedAugment(hero, fixedAug, displayAugments);
+      });
+
+      hero._towerAugments = displayAugments;
+      return { hero, slot: Number(entry.slot), heroId: entry.heroId };
+    })
+    .filter(Boolean);
+
+  const occupiedEnemyMain = Array(9).fill(null);
+  const reserveSlots = [null, null];
+  const overflow = [];
+
+  drafted.forEach(entry => {
+    if (!entry || !entry.hero) return;
+    const slot = Number(entry.slot);
+    if (Number.isFinite(slot) && slot >= 0 && slot <= 8 && !occupiedEnemyMain[slot]) {
+      occupiedEnemyMain[slot] = entry.hero;
+      return;
+    }
+    if (Number.isFinite(slot) && slot >= 9 && slot <= 10) {
+      const reserveIndex = slot - 9;
+      if (!reserveSlots[reserveIndex]) {
+        reserveSlots[reserveIndex] = entry.hero;
+        return;
+      }
+    }
+    overflow.push(entry.hero);
+  });
+
+  overflow.forEach(hero => {
+    const pickedIndex = pickEnemyBattleIndex(hero, occupiedEnemyMain, playerMainBoard);
+    if (pickedIndex != null && !occupiedEnemyMain[pickedIndex]) {
+      occupiedEnemyMain[pickedIndex] = hero;
+      return;
+    }
+
+    const fallbackMain = occupiedEnemyMain.findIndex(tileHero => !tileHero);
+    if (fallbackMain >= 0) {
+      occupiedEnemyMain[fallbackMain] = hero;
+      return;
+    }
+
+    const reserveOpen = reserveSlots.findIndex(tileHero => !tileHero);
+    if (reserveOpen >= 0) reserveSlots[reserveOpen] = hero;
+  });
+
+  const mainBoard = occupiedEnemyMain
+    .map((hero, battleIndex) => {
+      if (!hero) return null;
+      return {
+        hero,
+        position: indexToTowerPosition(battleIndex, 'p2')
+      };
+    })
+    .filter(Boolean);
+
+  const reserve = reserveSlots.filter(Boolean);
+
+  return {
+    mainBoard,
+    reserve,
+    difficulty,
+    fixedBattle: {
+      level,
+      title: fixedBattleConfig.title || `Fixed Encounter ${level}`,
+      dialogue: Array.isArray(fixedBattleConfig.dialogue) ? fixedBattleConfig.dialogue : [],
+      enemyHeroIds: entries.map(entry => entry.heroId).filter(Boolean)
+    }
+  };
+}
+
 function migrateRunAugments(runState) {
   if (!runState || !Array.isArray(runState.selectedHeroes)) return runState;
   let changed = false;
@@ -144,12 +294,13 @@ function migrateRunAugments(runState) {
 /**
  * Tower run state structure:
  * {
- *   currentLevel: number (1-100),
+ *   currentLevel: number (1-40),
  *   selectedHeroes: [{ heroId, augments: [{ augmentId, rolledValue }], position: number|null }],
  *   pendingAugmentChoice: [augment, augment, augment] | null,
  *   pendingRecruitOptions: [heroId, heroId, heroId] | null,
  *   pendingBossId: string | null,
  *   pendingRecruitChoice: boolean,
+ *   towerIntroSeen: boolean,
  *   completedLevels: number[],
  *   bossesDefeated: string[],
  *   startedAt: timestamp,
@@ -175,6 +326,7 @@ export function createNewRun() {
     pendingRecruitOptions: null,
     pendingBossId: null,
     pendingRecruitChoice: false,
+    towerIntroSeen: false,
     completedLevels: [],
     bossesDefeated: [],
     startedAt: Date.now(),
@@ -211,6 +363,9 @@ export function loadTowerRun() {
       }
       if (run && typeof run.pendingBossId === 'undefined') {
         run.pendingBossId = null;
+      }
+      if (run && typeof run.towerIntroSeen !== 'boolean') {
+        run.towerIntroSeen = Number(run.currentLevel || 1) > 1;
       }
       return migrateRunAugments(run);
     }
@@ -397,6 +552,27 @@ export function addAugmentToHero(runState, heroIndex, augmentId, rolledValue = n
 }
 
 /**
+ * Remove an augment from a hero by hero/augment index
+ */
+export function removeAugmentFromHero(runState, heroIndex, augmentIndex) {
+  if (!runState || !Array.isArray(runState.selectedHeroes)) return runState;
+  if (heroIndex < 0 || heroIndex >= runState.selectedHeroes.length) {
+    throw new Error(`Invalid hero index ${heroIndex}`);
+  }
+
+  const heroEntry = runState.selectedHeroes[heroIndex];
+  if (!heroEntry || !Array.isArray(heroEntry.augments)) return runState;
+  if (augmentIndex < 0 || augmentIndex >= heroEntry.augments.length) {
+    throw new Error(`Invalid augment index ${augmentIndex}`);
+  }
+
+  heroEntry.augments.splice(augmentIndex, 1);
+  runState.lastPlayedAt = Date.now();
+  saveTowerRun(runState);
+  return runState;
+}
+
+/**
  * Generate augment choices after winning a level
  */
 export function generateAugmentChoices(runState) {
@@ -533,8 +709,15 @@ export function getPlayerHeroesForBattle(runState) {
 export function generateEnemyTeam(level, options = {}) {
   const augmentCount = getEnemyAugmentCount(level);
   const difficulty = getAIDifficultyForLevel(level);
-  const enemyCount = Math.min(7, Math.max(3, level + 2));
   const playerMainBoard = Array.isArray(options.playerMainBoard) ? options.playerMainBoard : [];
+
+  const fixedBattleConfig = getFixedBattleForLevel(level);
+  if (fixedBattleConfig) {
+    const fixedTeam = buildFixedEnemyTeam(level, difficulty, augmentCount, playerMainBoard, fixedBattleConfig);
+    if (fixedTeam) return fixedTeam;
+  }
+
+  const enemyCount = Math.min(7, Math.max(3, level + 2));
   
   // Draft heroes from the full non-minion roster with pure random selection.
   const selectedIds = draftRandomEnemyHeroIds(enemyCount);
@@ -552,21 +735,8 @@ export function generateEnemyTeam(level, options = {}) {
 
   // Generate heroes with augments
   const enemies = selectedIds.map((heroId, idx) => {
-    const baseHero = HEROES.find(h => h.id === heroId);
-    if (!baseHero) {
-      console.error(`Enemy hero ${heroId} not found`);
-      return null;
-    }
-    
-    const hero = JSON.parse(JSON.stringify(baseHero));
-    hero.towerNoHealthCap = true;
-    
-    // Initialize current stats
-    hero.currentHealth = hero.health;
-    hero.currentEnergy = hero.energy;
-    hero.currentSpeed = hero.speed;
-    hero.currentArmor = hero.armor;
-    hero.currentSpellPower = hero.spellPower || 0;
+    const hero = createEnemyHero(heroId);
+    if (!hero) return null;
     
     // Apply random augments based on level
     const heroAugmentCount = perHeroAugments[idx] || 0;
@@ -632,6 +802,14 @@ export function generateBossLevel(level) {
     console.error(`No boss found for level ${level}`);
     return null;
   }
+
+  const DEFAULT_BOSS_SPRITE = {
+    chromaKey: true,
+    fit: 'contain',
+    offsetY: -10,
+    offsetYPx: -20,
+    scale: 1.2
+  };
   
   // Create boss hero from config
   const bossPassives = bossConfig.passives
@@ -646,6 +824,19 @@ export function generateBossLevel(level) {
     image: bossConfig.imageOverride
       || HEROES.find(h => h.id === bossConfig.baseHeroId)?.image
       || '/images/heroes/default.jpg',
+    spriteChromaKey: typeof bossConfig.spriteChromaKey === 'boolean'
+      ? bossConfig.spriteChromaKey
+      : DEFAULT_BOSS_SPRITE.chromaKey,
+    spriteFit: bossConfig.spriteFit || DEFAULT_BOSS_SPRITE.fit,
+    spriteOffsetY: Number.isFinite(bossConfig.spriteOffsetY)
+      ? bossConfig.spriteOffsetY
+      : DEFAULT_BOSS_SPRITE.offsetY,
+    spriteOffsetYPx: Number.isFinite(bossConfig.spriteOffsetYPx)
+      ? bossConfig.spriteOffsetYPx
+      : DEFAULT_BOSS_SPRITE.offsetYPx,
+    spriteScale: Number.isFinite(bossConfig.spriteScale)
+      ? bossConfig.spriteScale
+      : DEFAULT_BOSS_SPRITE.scale,
     health: bossConfig.stats.health,
     armor: bossConfig.stats.armor,
     speed: bossConfig.stats.speed,
@@ -663,13 +854,22 @@ export function generateBossLevel(level) {
     towerNoHealthCap: true
   };
 
+  if (bossConfig.phaseRevive && typeof bossConfig.phaseRevive === 'object') {
+    boss._towerPhaseRevive = JSON.parse(JSON.stringify(bossConfig.phaseRevive));
+  }
+
   // Apply boss augments (fixed + weighted random by level)
   const bossAugments = [];
   const configuredAugments = Array.isArray(bossConfig.augments) ? bossConfig.augments : [];
   const randomAugmentCount = configuredAugments.filter(id => id === 'randomAugment').length;
   const fixedAugmentIds = configuredAugments.filter(id => id !== 'randomAugment');
+  const prayerAugmentIds = Object.values(AUGMENTS)
+    .filter(aug => aug && (aug.id === 'prayerAugment' || aug.effectName === 'Prayer' || aug.effectName === 'PrayerII'))
+    .map(aug => aug.id);
+  const bossRandomBlockedAugmentIds = ['lieInWaitAugment']; // Predator Instinct
+  const randomExclusions = [...new Set([...fixedAugmentIds, ...prayerAugmentIds, ...bossRandomBlockedAugmentIds])];
   const randomAugments = randomAugmentCount > 0
-    ? getRandomAugments(level, randomAugmentCount, [...new Set(fixedAugmentIds)])
+    ? getRandomAugments(level, randomAugmentCount, randomExclusions)
     : [];
 
   const applyBossAugment = (augment, valueOverride = null, augmentIdFallback = null) => {
@@ -798,6 +998,7 @@ export default {
   addHeroToRun,
   getRecruitChoices,
   addAugmentToHero,
+  removeAugmentFromHero,
   generateAugmentChoices,
   completeLevel,
   advanceLevel,
