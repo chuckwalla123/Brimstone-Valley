@@ -191,10 +191,12 @@ function triggerAllyCastEnergyPassives(casterRef, spellId, p1Board, p2Board, p3B
     const casterIndex = Number(casterRef.index);
     const boardArr = casterSide === 'p1' ? p1Board : (casterSide === 'p2' ? p2Board : p3Board);
     if (!Array.isArray(boardArr)) return;
+    const casterBoardName = String(casterRef.boardName || '');
     const casterTile = Number.isFinite(casterIndex) ? boardArr[casterIndex] : null;
     const casterHero = (casterTile && casterTile.hero)
       ? casterTile.hero
       : ((casterRef && casterRef.tile && casterRef.tile.hero) ? casterRef.tile.hero : null);
+    const casterInstanceId = casterHero && casterHero._instanceId ? String(casterHero._instanceId) : null;
 
     for (let i = 0; i < boardArr.length; i++) {
       const tile = boardArr[i];
@@ -207,11 +209,20 @@ function triggerAllyCastEnergyPassives(casterRef, spellId, p1Board, p2Board, p3B
       ];
       const passive = allEffects.find(e => e && (e.onAllyCastGainEnergy || e.name === 'Link'));
       if (!passive) continue;
+      const tileInstanceId = (tile.hero && tile.hero._instanceId) ? String(tile.hero._instanceId) : null;
+      const sameBoardAndIndex = (
+        String(tile.boardName || (casterSide === 'p1' ? 'p1Board' : (casterSide === 'p2' ? 'p2Board' : 'p3Board'))) === casterBoardName
+        && Number(i) === Number(casterIndex)
+      );
       const recipientIsCaster =
+        sameBoardAndIndex ||
         (Number.isFinite(casterIndex) && i === casterIndex) ||
         (casterTile && tile === casterTile) ||
-        (casterHero && tile.hero === casterHero);
-      const onlyOtherAlliesCast = passive.onlyOtherAlliesCast !== false;
+        (casterHero && tile.hero === casterHero) ||
+        (!!casterInstanceId && !!tileInstanceId && casterInstanceId === tileInstanceId);
+      const onlyOtherAlliesCast = (passive && passive.name === 'Link')
+        ? true
+        : (passive.onlyOtherAlliesCast !== false);
       if (onlyOtherAlliesCast && recipientIsCaster) continue;
       const gain = Math.max(0, Number(passive.onAllyCastGainEnergy || 0));
       if (gain <= 0) continue;
@@ -1153,10 +1164,10 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
             return;
           }
           tile._dead = true;
-          tile.effects = [];
-          tile.spellCasts = [];
+          // Keep effects/spell queue until after onRoundStart processing so
+          // onRoundStart triggers can still resolve before final death cleanup.
           tile.currentEnergy = 0;
-          addLog && addLog(`  > Marked ${boardName}[${index}] as dead and cleared effects (start-of-round)`);
+          addLog && addLog(`  > Marked ${boardName}[${index}] as dead (start-of-round, cleanup deferred)`);
         } catch (e) {}
       });
       if (deadNow.length > 0 && typeof onStep === 'function') {
@@ -1767,9 +1778,9 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       // (meaning they are out of casts across all slots), allow a basic attack while energy permits.
       try {
         let energyForBasic = tile.currentEnergy || 0;
-        const heroSlotExhausted = slotRemainingAtStart <= 0;
-        if ((!spec || !spec.id) || heroSlotExhausted) {
-          if (heroSlotExhausted) addLog && addLog(`  > ${boardName}[${idx}] slotRemainingAtStart=0 — basic attack eligible for slot ${slot}`);
+        const heroOutOfCasts = totalCastsRemaining <= 0;
+        if ((!spec || !spec.id) || heroOutOfCasts) {
+          if (heroOutOfCasts) addLog && addLog(`  > ${boardName}[${idx}] no casts remaining across all slots — basic attack eligible`);
           if (energyForBasic >= 1 && !basicQueued) {
               // basic attack consumes all current energy at resolution time; attach queuedCost
               tile.spellCasts = tile.spellCasts || [];
@@ -1794,8 +1805,10 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       try {
         // Only enqueue fallback basic attack when this slot truly has no casts remaining
         // and nothing else was queued for this tile.
-        const slotRemainingAtStartForFallback = (tile._castsRemaining && Number(tile._castsRemaining[slot] || 0)) || 0;
-        if ((tile.spellCasts || []).length === 0 && slotRemainingAtStartForFallback <= 0) {
+        const totalRemainingForFallback = (tile._castsRemaining
+          ? (Number(tile._castsRemaining.front || 0) + Number(tile._castsRemaining.middle || 0) + Number(tile._castsRemaining.back || 0))
+          : 0);
+        if ((tile.spellCasts || []).length === 0 && totalRemainingForFallback <= 0) {
           const eNow = tile.currentEnergy || 0;
           if (eNow >= 1 && !basicQueued) {
             tile.spellCasts = tile.spellCasts || [];
@@ -2351,23 +2364,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         if (energyDrain > 0) {
           pendingCastChanges.push({ boardName: targetRef.boardName, index: targetRef.index, deltaEnergy: -energyDrain, phase });
         }
-        const casterPassivesAndEffects = (src && src.tile)
-          ? [
-              ...((Array.isArray(src.tile.effects) ? src.tile.effects : [])),
-              ...((Array.isArray(src.tile._passives)
-                ? src.tile._passives
-                : ((src.tile.hero && Array.isArray(src.tile.hero.passives)) ? src.tile.hero.passives : [])))
-            ]
-          : [];
-        const casterIgnoresArmor = !!(
-          (src && src.tile && src.tile.hero && src.tile.hero._towerIgnoreArmor)
-          || casterPassivesAndEffects.some(e => e && (e.casterSpellsIgnoreArmor === true || e.name === 'Field Upgrade' || e.name === 'Ghost'))
-        );
         let bonusDamage = Math.max(0, Number(cinder.bonusDamage || 0));
-        if (bonusDamage > 0 && !casterIgnoresArmor) {
-          const armor = Math.max(0, Number((targetRef.tile.currentArmor != null ? targetRef.tile.currentArmor : (targetRef.tile.hero && targetRef.tile.hero.armor) || 0) || 0));
-          bonusDamage = Math.max(0, Math.round(bonusDamage - armor));
-        }
         if (bonusDamage > 0) {
           pendingCastChanges.push({ boardName: targetRef.boardName, index: targetRef.index, deltaHealth: -bonusDamage, amount: bonusDamage, source: 'Cinder Tax', phase });
         }
@@ -4464,94 +4461,151 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
           moveAllBackApplied.add(boardName);
           const boardArr = (boardName === 'p1') ? cP1 : (boardName === 'p2' ? cP2 : cP3);
           const boardKey = boardName === 'p1' ? 'p1Board' : (boardName === 'p2' ? 'p2Board' : 'p3Board');
+          const redirectedSingleTarget = !!(tdesc && typeof tdesc === 'object' && tdesc._redirectedMultiTarget);
           addLog && addLog(`  > post.moveAllBack triggered on ${tref.boardName}[${tref.index}]`);
-          for (let col = 0; col < 3; col++) {
-            const indices = columnIndicesForBoard(col, boardName); // front->middle->back
-            const heroIndices = indices.filter(i => boardArr[i] && boardArr[i].hero && !boardArr[i]._dead);
-            const n = heroIndices.length;
-            if (n === 0) continue;
-            const dest = indices.slice(indices.length - n);
-            const columnMoved = heroIndices.some((idx, pos) => idx !== dest[pos]);
-            // capture entries
-            const entries = heroIndices.map(i => {
-              const s = boardArr[i];
-              return {
-                fromIdx: i,
-                data: {
-                  hero: s.hero && { ...s.hero },
-                  effects: Array.isArray(s.effects) ? s.effects.map(e => ({ ...e })) : [],
-                  _castsRemaining: s._castsRemaining ? { ...s._castsRemaining } : undefined,
-                  _lastAutoCastEnergy: s._lastAutoCastEnergy,
-                  currentEnergy: s.currentEnergy,
-                  currentHealth: s.currentHealth,
-                  currentArmor: s.currentArmor,
-                  currentSpeed: s.currentSpeed,
-                  currentSpellPower: s.currentSpellPower,
-                  spellCasts: Array.isArray(s.spellCasts) ? s.spellCasts.map(c => ({ ...c })) : []
+          if (redirectedSingleTarget) {
+            const fromIdx = Number(tref.index);
+            const fromSlot = boardArr[fromIdx];
+            if (fromSlot && fromSlot.hero && !fromSlot._dead) {
+              const col = indexToColumn(fromIdx, boardName);
+              const indices = columnIndicesForBoard(col, boardName);
+              let toIdx = fromIdx;
+              for (let i = indices.length - 1; i >= 0; i--) {
+                const candidate = indices[i];
+                const slot = boardArr[candidate];
+                if (candidate === fromIdx || !slot || !slot.hero || slot._dead) {
+                  toIdx = candidate;
+                  break;
                 }
-              };
-            });
-            // clear sources
-            for (const e of entries) {
-              try {
-                const fs = boardArr[e.fromIdx];
-                fs.hero = null; fs._dead = false; fs.effects = []; fs._castsRemaining = undefined; fs._lastAutoCastEnergy = undefined;
-                fs.currentEnergy = undefined; fs.currentHealth = undefined; fs.currentArmor = undefined; fs.currentSpeed = undefined; fs.currentSpellPower = undefined;
-                try { fs.spellCasts = []; } catch (ee) {}
-                try { recomputeModifiers(fs); } catch (ee) {}
-              } catch (ee) {}
-            }
-            // place into destinations preserving order
-            for (let j = 0; j < entries.length; j++) {
-              const toIdx = dest[j];
-              const ent = entries[j];
-              const toSlot = boardArr[toIdx];
-              const d = ent.data;
-              toSlot.hero = d.hero;
-              toSlot._dead = false;
-              toSlot.effects = d.effects || [];
-              toSlot._castsRemaining = d._castsRemaining ? { ...d._castsRemaining } : undefined;
-              // Reset _lastAutoCastEnergy so auto-cast will re-evaluate the moved hero
-              // at their new position (new row = new spell slot with potentially different cost)
-              toSlot._lastAutoCastEnergy = Number.NEGATIVE_INFINITY;
-              toSlot.currentEnergy = d.currentEnergy;
-              toSlot.currentHealth = d.currentHealth;
-              toSlot.currentArmor = d.currentArmor;
-              toSlot.currentSpeed = d.currentSpeed;
-              toSlot.currentSpellPower = d.currentSpellPower;
-              try {
-                const movedCasts = (Array.isArray(d.spellCasts) ? d.spellCasts.map(c => ({ ...c })) : []);
-                const newSlot = slotForIndex(boardKey, toIdx);
-                for (const mc of movedCasts) {
-                  if (mc && mc.slot && mc.slot !== 'basic') mc.slot = newSlot;
-                  try { if (toSlot && toSlot.hero && toSlot.hero.spells && toSlot.hero.spells[newSlot] && toSlot.hero.spells[newSlot].id) mc.spellId = toSlot.hero.spells[newSlot].id; } catch (e) {}
-                }
-                toSlot.spellCasts = (Array.isArray(toSlot.spellCasts) ? toSlot.spellCasts : []).concat(movedCasts);
-                pruneInvalidQueuedCastsForCurrentSlot(toSlot, boardKey, toIdx);
-                if (movedCasts.length > 0) addLog && addLog(`  > Moved ${movedCasts.length} queued cast(s) into ${boardName}[${toIdx}] due to moveAllBack`);
+              }
+              if (toIdx !== fromIdx && boardArr[toIdx] && (!boardArr[toIdx].hero || boardArr[toIdx]._dead)) {
+                const toSlot = boardArr[toIdx];
+                toSlot.hero = fromSlot.hero;
+                toSlot._dead = false;
+                toSlot.effects = fromSlot.effects || [];
+                toSlot._castsRemaining = fromSlot._castsRemaining ? { ...fromSlot._castsRemaining } : undefined;
+                toSlot._lastAutoCastEnergy = Number.NEGATIVE_INFINITY;
+                toSlot.currentEnergy = fromSlot.currentEnergy;
+                toSlot.currentHealth = fromSlot.currentHealth;
+                toSlot.currentArmor = fromSlot.currentArmor;
+                toSlot.currentSpeed = fromSlot.currentSpeed;
+                toSlot.currentSpellPower = fromSlot.currentSpellPower;
                 try {
-                  if (typeof pendingCasts !== 'undefined' && Array.isArray(pendingCasts)) {
-                    for (const pc of pendingCasts) {
-                      if (!pc || !pc.caster || typeof pc.caster.index !== 'number' || !pc.caster.boardName) continue;
-                      const expectedBoard = boardKey;
-                      if (pc.caster.boardName === expectedBoard && Number(pc.caster.index) === ent.fromIdx) {
-                        const match = movedCasts.find(mc => mc && mc.queuedId === (pc.payload && pc.payload.queuedId));
-                        if (match) {
-                          if (match.slot && match.slot !== 'basic') {
-                            pc.payload.slot = match.slot; pc.payload.spellId = match.spellId;
+                  const movedCasts = (Array.isArray(fromSlot.spellCasts) ? fromSlot.spellCasts.map(c => ({ ...c })) : []);
+                  const newSlot = slotForIndex(boardKey, toIdx);
+                  for (const mc of movedCasts) {
+                    if (mc && mc.slot && mc.slot !== 'basic') mc.slot = newSlot;
+                    try { if (toSlot && toSlot.hero && toSlot.hero.spells && toSlot.hero.spells[newSlot] && toSlot.hero.spells[newSlot].id) mc.spellId = toSlot.hero.spells[newSlot].id; } catch (e) {}
+                  }
+                  toSlot.spellCasts = movedCasts;
+                  pruneInvalidQueuedCastsForCurrentSlot(toSlot, boardKey, toIdx);
+                } catch (e) {}
+                fromSlot.hero = null;
+                fromSlot._dead = false;
+                fromSlot.effects = [];
+                fromSlot._castsRemaining = undefined;
+                fromSlot._lastAutoCastEnergy = undefined;
+                fromSlot.currentEnergy = undefined;
+                fromSlot.currentHealth = undefined;
+                fromSlot.currentArmor = undefined;
+                fromSlot.currentSpeed = undefined;
+                fromSlot.currentSpellPower = undefined;
+                try { fromSlot.spellCasts = []; } catch (e) {}
+                postImpactOccurred = true;
+                addLog && addLog(`  > post.moveAllBack redirected: moved ${boardName}[${fromIdx}] -> ${boardName}[${toIdx}]`);
+              } else {
+                addLog && addLog(`  > post.moveAllBack redirected: ${boardName}[${fromIdx}] already at backmost available tile`);
+              }
+            }
+          } else {
+            for (let col = 0; col < 3; col++) {
+              const indices = columnIndicesForBoard(col, boardName); // front->middle->back
+              const heroIndices = indices.filter(i => boardArr[i] && boardArr[i].hero && !boardArr[i]._dead);
+              const n = heroIndices.length;
+              if (n === 0) continue;
+              const dest = indices.slice(indices.length - n);
+              const columnMoved = heroIndices.some((idx, pos) => idx !== dest[pos]);
+              // capture entries
+              const entries = heroIndices.map(i => {
+                const s = boardArr[i];
+                return {
+                  fromIdx: i,
+                  data: {
+                    hero: s.hero && { ...s.hero },
+                    effects: Array.isArray(s.effects) ? s.effects.map(e => ({ ...e })) : [],
+                    _castsRemaining: s._castsRemaining ? { ...s._castsRemaining } : undefined,
+                    _lastAutoCastEnergy: s._lastAutoCastEnergy,
+                    currentEnergy: s.currentEnergy,
+                    currentHealth: s.currentHealth,
+                    currentArmor: s.currentArmor,
+                    currentSpeed: s.currentSpeed,
+                    currentSpellPower: s.currentSpellPower,
+                    spellCasts: Array.isArray(s.spellCasts) ? s.spellCasts.map(c => ({ ...c })) : []
+                  }
+                };
+              });
+              // clear sources
+              for (const e of entries) {
+                try {
+                  const fs = boardArr[e.fromIdx];
+                  fs.hero = null; fs._dead = false; fs.effects = []; fs._castsRemaining = undefined; fs._lastAutoCastEnergy = undefined;
+                  fs.currentEnergy = undefined; fs.currentHealth = undefined; fs.currentArmor = undefined; fs.currentSpeed = undefined; fs.currentSpellPower = undefined;
+                  try { fs.spellCasts = []; } catch (ee) {}
+                  try { recomputeModifiers(fs); } catch (ee) {}
+                } catch (ee) {}
+              }
+              // place into destinations preserving order
+              for (let j = 0; j < entries.length; j++) {
+                const toIdx = dest[j];
+                const ent = entries[j];
+                const toSlot = boardArr[toIdx];
+                const d = ent.data;
+                toSlot.hero = d.hero;
+                toSlot._dead = false;
+                toSlot.effects = d.effects || [];
+                toSlot._castsRemaining = d._castsRemaining ? { ...d._castsRemaining } : undefined;
+                // Reset _lastAutoCastEnergy so auto-cast will re-evaluate the moved hero
+                // at their new position (new row = new spell slot with potentially different cost)
+                toSlot._lastAutoCastEnergy = Number.NEGATIVE_INFINITY;
+                toSlot.currentEnergy = d.currentEnergy;
+                toSlot.currentHealth = d.currentHealth;
+                toSlot.currentArmor = d.currentArmor;
+                toSlot.currentSpeed = d.currentSpeed;
+                toSlot.currentSpellPower = d.currentSpellPower;
+                try {
+                  const movedCasts = (Array.isArray(d.spellCasts) ? d.spellCasts.map(c => ({ ...c })) : []);
+                  const newSlot = slotForIndex(boardKey, toIdx);
+                  for (const mc of movedCasts) {
+                    if (mc && mc.slot && mc.slot !== 'basic') mc.slot = newSlot;
+                    try { if (toSlot && toSlot.hero && toSlot.hero.spells && toSlot.hero.spells[newSlot] && toSlot.hero.spells[newSlot].id) mc.spellId = toSlot.hero.spells[newSlot].id; } catch (e) {}
+                  }
+                  toSlot.spellCasts = (Array.isArray(toSlot.spellCasts) ? toSlot.spellCasts : []).concat(movedCasts);
+                  pruneInvalidQueuedCastsForCurrentSlot(toSlot, boardKey, toIdx);
+                  if (movedCasts.length > 0) addLog && addLog(`  > Moved ${movedCasts.length} queued cast(s) into ${boardName}[${toIdx}] due to moveAllBack`);
+                  try {
+                    if (typeof pendingCasts !== 'undefined' && Array.isArray(pendingCasts)) {
+                      for (const pc of pendingCasts) {
+                        if (!pc || !pc.caster || typeof pc.caster.index !== 'number' || !pc.caster.boardName) continue;
+                        const expectedBoard = boardKey;
+                        if (pc.caster.boardName === expectedBoard && Number(pc.caster.index) === ent.fromIdx) {
+                          const match = movedCasts.find(mc => mc && mc.queuedId === (pc.payload && pc.payload.queuedId));
+                          if (match) {
+                            if (match.slot && match.slot !== 'basic') {
+                              pc.payload.slot = match.slot; pc.payload.spellId = match.spellId;
+                            }
                           }
+                          pc.caster.index = toIdx; pc.caster.tile = toSlot;
+                          addLog && addLog(`  > Updated pending cast caster ref from ${boardName}[${ent.fromIdx}] to ${boardName}[${toIdx}]`);
                         }
-                        pc.caster.index = toIdx; pc.caster.tile = toSlot;
-                        addLog && addLog(`  > Updated pending cast caster ref from ${boardName}[${ent.fromIdx}] to ${boardName}[${toIdx}]`);
                       }
                     }
-                  }
+                  } catch (e) {}
                 } catch (e) {}
-              } catch (e) {}
-              try { recomputeModifiers(toSlot); } catch (e) {}
+                try { recomputeModifiers(toSlot); } catch (e) {}
+              }
+              if (columnMoved) postImpactOccurred = true;
+              try { if (typeof onStep === 'function') onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'moveAllBack', source: runtimePayload.source || null, column: col } }); } catch (e) {}
             }
-            if (columnMoved) postImpactOccurred = true;
-            try { if (typeof onStep === 'function') onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'moveAllBack', source: runtimePayload.source || null, column: col } }); } catch (e) {}
           }
         }
       } catch (e) {}
@@ -4776,6 +4830,21 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             addLog && addLog(`  > Increased ${boardName}[${idx}]._castsRemaining.${slotKey} ${before} -> ${slot._castsRemaining[slotKey]}`);
             try { if (typeof onStep === 'function') onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'increaseRowCasts', board: boardName, index: idx, slot: slotKey, before, after: slot._castsRemaining[slotKey] } }); } catch (e) {}
           }
+        }
+      } catch (e) {}
+
+      // Optional post-processing: increase casts for only the targeted hero's active row slot
+      try {
+        const increaseBySingle = (per && per.post && typeof per.post.increaseCastsBy === 'number') ? Number(per.post.increaseCastsBy) : (runtimePayload && runtimePayload.post && typeof runtimePayload.post.increaseCastsBy === 'number' ? Number(runtimePayload.post.increaseCastsBy) : 0);
+        if (increaseBySingle && tref && tref.boardName && tref.tile && tref.tile.hero) {
+          const boardName = (tref.boardName === 'p1Board') ? 'p1' : (tref.boardName === 'p2Board' ? 'p2' : 'p3');
+          const row = indexToRow(tref.index, boardName);
+          const slotKey = row === 0 ? 'front' : (row === 1 ? 'middle' : 'back');
+          if (!tref.tile._castsRemaining) tref.tile._castsRemaining = { front: 0, middle: 0, back: 0 };
+          const before = Number(tref.tile._castsRemaining[slotKey] || 0);
+          tref.tile._castsRemaining[slotKey] = before + increaseBySingle;
+          addLog && addLog(`  > post.increaseCastsBy ${increaseBySingle} on ${tref.boardName}[${tref.index}] slot ${slotKey}: ${before} -> ${tref.tile._castsRemaining[slotKey]}`);
+          try { if (typeof onStep === 'function') onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'increaseCasts', board: boardName, index: tref.index, slot: slotKey, before, after: tref.tile._castsRemaining[slotKey] } }); } catch (e) {}
         }
       } catch (e) {}
 
@@ -5256,7 +5325,8 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         if (!post) return false;
         const inc = Number(post.increaseRowCastsBy || 0);
         const dec = Number(post.reduceRowCastsBy || 0);
-        if (inc === 0 && dec === 0) return false;
+        const incSingle = Number(post.increaseCastsBy || 0);
+        if (inc === 0 && dec === 0 && incSingle === 0) return false;
         return Array.isArray(targetTokens) && targetTokens.length > 0;
       })();
       const hasPendingCastImpact = Array.isArray(pendingCastChanges) && pendingCastChanges.some(ch => {
@@ -5495,9 +5565,9 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
     // Process any reaction effects (collected from damage resolution) AFTER the cast animation
     try {
       const reactions = [];
-      actionResults.forEach(r => {
+      actionResults.forEach((r, resultIdx) => {
         if (r && r.applied && Array.isArray(r.applied.reactions)) {
-          r.applied.reactions.forEach(rx => reactions.push({ ...rx, ownerTarget: r.target }));
+          r.applied.reactions.forEach((rx, rxIdx) => reactions.push({ ...rx, ownerTarget: r.target, _originResultIndex: resultIdx, _originReactionIndex: rxIdx }));
         }
       });
       if (reactions.length > 0) {
@@ -5506,7 +5576,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         const seenReactionKeys = new Set();
         reactions.forEach(rx => {
           if (!rx) return;
-          const key = `${rx.type || ''}:${rx.effectName || ''}:${rx.effectIndex ?? ''}:${rx.attackerBoard || ''}:${rx.attackerIndex || ''}:${rx.ownerBoardName || ''}:${rx.ownerIndex || ''}:${rx.value || ''}`;
+          const key = `${rx.type || ''}:${rx.effectName || ''}:${rx.effectIndex ?? ''}:${rx.attackerBoard || ''}:${rx.attackerIndex || ''}:${rx.ownerBoardName || ''}:${rx.ownerIndex || ''}:${rx.value || ''}:${rx._originResultIndex ?? ''}`;
           if (seenReactionKeys.has(key)) return;
           seenReactionKeys.add(key);
           dedupedReactions.push(rx);

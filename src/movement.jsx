@@ -110,6 +110,16 @@ export function useMovement({
   // high-level swap by tile ids - always send to server when in online mode
   const handleSwapById = useCallback((sourceId, targetId) => {
     if (!movementPhase) return;
+
+    const mover = movementPhase.sequence[movementPhase.index];
+    const attemptAiFallbackSkip = () => {
+      if (!onServerMove) return false;
+      if (!aiDifficulty || mover !== 'p2') return false;
+      const fallbackId = `${mover}:0`;
+      onServerMove(fallbackId, fallbackId);
+      addLog && addLog('[Movement] AI move blocked by shackle, forcing skip');
+      return true;
+    };
     
     // Check if either tile is shackled (has preventMovement effect)
     const src = findTileById(sourceId);
@@ -119,6 +129,7 @@ export function useMovement({
       const srcHasShackle = src.tile.effects.some(e => e && e.preventMovement);
       if (srcHasShackle) {
         addLog && addLog('[Movement] Cannot move shackled tile!');
+        attemptAiFallbackSkip();
         return;
       }
     }
@@ -127,6 +138,7 @@ export function useMovement({
       const dstHasShackle = dst.tile.effects.some(e => e && e.preventMovement);
       if (dstHasShackle) {
         addLog && addLog('[Movement] Cannot swap with shackled tile!');
+        attemptAiFallbackSkip();
         return;
       }
     }
@@ -151,7 +163,7 @@ export function useMovement({
       setGameState('ready');
       addLog && addLog('[Movement] Movement phase complete, switching to ready');
     }
-  }, [movementPhase, onServerMove, findTileById, swapTileContents, priorityPlayer, setPriorityPlayer, setGameState, addLog]);
+  }, [movementPhase, onServerMove, aiDifficulty, findTileById, swapTileContents, priorityPlayer, setPriorityPlayer, setGameState, addLog]);
 
   // drag/drop helpers exposed to BattlePhase/TileView:
   const canDrag = useCallback((tile) => {

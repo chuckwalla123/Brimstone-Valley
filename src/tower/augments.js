@@ -440,7 +440,7 @@ export const AUGMENTS = {
   cinderTaxII: {
     id: 'cinderTaxII',
     name: 'Cinder Tax II',
-    description: 'First time each round you apply Burn, reduce that target\'s Energy by 1 and deal +2 damage (armor applies).',
+    description: 'First time each round you apply Burn, reduce that target\'s Energy by 1 and deal +2 damage (ignores armor).',
     tier: 'rare',
     type: 'special',
     apply: (hero) => {

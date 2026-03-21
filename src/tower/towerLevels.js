@@ -1131,6 +1131,13 @@ export const BOSSES = {
       imageOverride: '/images/heroes/Boss Cropped.png',
       title: 'Lord of the Tower',
       description: 'The final ruler of the Shattered Champions, forged by every floor below.',
+      preFightDialogue: [
+        { speaker: 'The Boss', side: 'right', text: 'I half expected that arrogant Nephilim to be the first to climb this far. I\'ve never witnessed such swollen pride in a mortal.' },
+        { speaker: 'The Boss', side: 'right', text: 'They call me \'the boss\' of this tower, yet all I\'ve done is rot away up here, shackled to these relics. That wretched necromancer\'s curse bound me—unable to leave, unable to die.' },
+        { speaker: 'The Boss', side: 'right', text: 'I\'ve dreamed of walking out of this place more times than I can count… but if I\'m to fall, I\'d rather fall in battle. Selfish, I know.' },
+        { speaker: 'The Boss', side: 'right', text: 'Still… something else gnaws at me. Ever since the curse took hold, I\'ve felt myself thinning, unraveling—less man, more… something else.' },
+        { speaker: 'The Boss', side: 'right', text: 'So tell me, challenger: will our clash awaken whatever humanity I have left… or will it drag the curse to the surface instead?' }
+      ],
       stats: {
         health: 220,
         armor: 6,
@@ -1140,7 +1147,7 @@ export const BOSSES = {
       },
       spells: {
         front: { id: 'level40Overrule', cost: 2, casts: 7 },
-        middle: { id: 'level40WarMandate', cost: 4, casts: 2 },
+        middle: { id: 'level40WarMandate', cost: 6, casts: 1 },
         back: { id: 'level40Kingslaw', cost: 3, casts: 4 }
       },
       passives: [],

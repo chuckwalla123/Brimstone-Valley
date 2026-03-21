@@ -639,6 +639,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   const prayerEmoteRef = useRef({});
   const [gameOver, setGameOver] = useState(null);
   const [victoryOverlayVisible, setVictoryOverlayVisible] = useState(false);
+  const pendingWinnerRef = useRef(null);
   // Dice roll animation state
   const [diceRoll, setDiceRoll] = useState(null); // { die, base, roll, total }
 
@@ -752,7 +753,12 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     const lastAction = gameState.lastAction || null;
     const winner = lastAction && (lastAction.winner || (lastAction.type === 'gameEnd' ? lastAction.winner : null));
     if (winner && !gameOver) {
-      setGameOver(winner);
+      const queueBusy = processingQueueRef.current || (eventQueueRef.current && eventQueueRef.current.length > 0);
+      if (socket && queueBusy) {
+        pendingWinnerRef.current = winner;
+      } else {
+        setGameOver(winner);
+      }
     }
     const applyState = () => {
       setP1Board(gameState.p1Main || []);
@@ -917,7 +923,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     const canScrollY = panel.scrollHeight > panel.clientHeight;
     const canScrollX = panel.scrollWidth > panel.clientWidth;
     if (!canScrollY && !canScrollX) return;
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     e.stopPropagation();
     if (dy) panel.scrollTop += dy;
     if (dx) panel.scrollLeft += dx;
@@ -931,10 +937,22 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     const canScrollY = panel.scrollHeight > panel.clientHeight;
     const canScrollX = panel.scrollWidth > panel.clientWidth;
     if (!canScrollY && !canScrollX) return;
-    e.preventDefault();
+    if (e.cancelable) e.preventDefault();
     e.stopPropagation();
     if (dy) panel.scrollTop += dy;
     if (dx) panel.scrollLeft += dx;
+  }, []);
+
+  const isStepProcessingRef = useRef(false);
+  const isHiddenRef = useRef(typeof document !== 'undefined' ? document.hidden : false);
+
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const onVisibilityChange = () => {
+      isHiddenRef.current = !!document.hidden;
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
   }, []);
 
   const movement = useMovement({
@@ -945,6 +963,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     localSide,
     serverMovementPhase: gameState?.movementPhase || null,
     onServerMove: socket ? ((sourceId, targetId) => {
+      if (isStepProcessingRef.current || isHiddenRef.current) return;
       socket.emit('movementMove', { sourceId, targetId });
     }) : null
   });
@@ -1015,7 +1034,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     }
   };
 
-  const handleAnimationAction = async (lastAction) => {
+  const handleAnimationAction = async (lastAction, options = {}) => {
+    const skipVisuals = !!options.skipVisuals;
     
 
     if (!lastAction || !lastAction.type) return;
@@ -1032,6 +1052,13 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
 
     if (lastAction.state) {
       applyStateSnapshot(lastAction.state);
+    }
+
+    if (skipVisuals) {
+      if (lastAction.winner) {
+        setGameOver(lastAction.winner);
+      }
+      return;
     }
 
     // Helper for deduplication: returns a unique key for each emote/pulse
@@ -1915,14 +1942,21 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   const processQueue = async () => {
     if (processingQueueRef.current) return;
     processingQueueRef.current = true;
+    isStepProcessingRef.current = true;
     while (eventQueueRef.current.length > 0) {
       const action = eventQueueRef.current.shift();
-      try { await handleAnimationAction(action); } catch (e) { console.error('Error handling animation action', e); }
+      const shouldFastForward = typeof document !== 'undefined' && (document.hidden || !document.hasFocus());
+      try { await handleAnimationAction(action, { skipVisuals: shouldFastForward }); } catch (e) { console.error('Error handling animation action', e); }
       if (socket && action && typeof action.seq === 'number') {
         socket.emit('stepAck', { seq: action.seq });
       }
     }
     processingQueueRef.current = false;
+    isStepProcessingRef.current = false;
+    if (!gameOver && pendingWinnerRef.current) {
+      setGameOver(pendingWinnerRef.current);
+      pendingWinnerRef.current = null;
+    }
   };
 
   const enqueueAnimation = useCallback((action) => {

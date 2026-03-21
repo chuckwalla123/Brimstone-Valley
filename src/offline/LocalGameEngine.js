@@ -385,13 +385,15 @@ class LocalGameEngine {
     const src = findTileById(srcId);
     const dst = findTileById(dstId);
     if (!src || !dst) {
-      
+      console.log('[LocalGameEngine] movementMove: Invalid source/target, advancing as skip');
+      this._advanceMovementPhase();
       return;
     }
 
     const srcPlayer = src.boardName.startsWith('p1') ? 'p1' : (src.boardName.startsWith('p2') ? 'p2' : 'p3');
     if (srcPlayer !== mover) {
       console.log('[LocalGameEngine] movementMove: Wrong player trying to move', srcPlayer, 'vs', mover);
+      this._advanceMovementPhase();
       return;
     }
 

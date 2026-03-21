@@ -13,6 +13,7 @@ COPY src/heroes.js ./src/heroes.js
 COPY src/spell.js ./src/spell.js
 COPY src/spells.js ./src/spells.js
 COPY src/targeting.js ./src/targeting.js
+COPY src/tower/augments.js ./src/tower/augments.js
 
 EXPOSE 3002
 

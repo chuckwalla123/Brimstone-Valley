@@ -15,6 +15,7 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
   const [showLocalMenu, setShowLocalMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [playerStats, setPlayerStats] = useState(null);
+  const [pendingMatchRequest, setPendingMatchRequest] = useState(null); // { payload, searchingMessage }
 
   // Fetch player stats when session changes or online menu is shown
   useEffect(() => {
@@ -79,6 +80,15 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
   }, [socket]);
 
   useEffect(() => {
+    if (!socket || !pendingMatchRequest) return;
+    if (!socket.connected || !playFabUser) return;
+
+    setMatchStatus(pendingMatchRequest.searchingMessage || 'Searching for match...');
+    socket.emit('findMatch', pendingMatchRequest.payload || {});
+    setPendingMatchRequest(null);
+  }, [socket, pendingMatchRequest, playFabUser]);
+
+  useEffect(() => {
     if (!socket) return;
     const emitAuth = () => {
       if (session?.sessionTicket) {
@@ -123,6 +133,59 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
     color: '#888',
     cursor: 'not-allowed',
     opacity: 0.6,
+  };
+
+  const requestMatch = (payload, searchingMessage) => {
+    setMatchInfo(null);
+
+    if (!socket) {
+      setMatchStatus('Socket unavailable.');
+      return;
+    }
+
+    const doRequest = () => {
+      if (!playFabUser) {
+        setPendingMatchRequest({ payload: payload || {}, searchingMessage });
+        setMatchStatus('Waiting for server auth...');
+        const s = getStoredSession();
+        if (s && s.sessionTicket) socket.emit('auth', { sessionTicket: s.sessionTicket });
+        return;
+      }
+      setMatchStatus(searchingMessage);
+      socket.emit('findMatch', payload || {});
+    };
+
+    if (socket.connected) {
+      doRequest();
+      return;
+    }
+
+    setMatchStatus('Reconnecting to server...');
+    let settled = false;
+    const cleanup = () => {
+      socket.off('connect', onConnect);
+      socket.off('connect_error', onConnectError);
+    };
+    const onConnect = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      doRequest();
+    };
+    const onConnectError = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      setMatchStatus('Could not connect to server.');
+    };
+
+    socket.once('connect', onConnect);
+    socket.once('connect_error', onConnectError);
+    try {
+      socket.connect();
+    } catch (e) {
+      onConnectError();
+    }
   };
 
   return (
@@ -511,20 +574,7 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
             style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
             disabled={!session || !socket}
             onClick={() => {
-              setMatchInfo(null);
-              
-              if (!socket || !socket.connected) {
-                setMatchStatus('Socket not connected.');
-                return;
-              }
-              if (!playFabUser) {
-                setMatchStatus('Waiting for server auth...');
-                const s = getStoredSession();
-                if (s && s.sessionTicket) socket.emit('auth', { sessionTicket: s.sessionTicket });
-                return;
-              }
-              setMatchStatus('Searching for match...');
-              socket.emit('findMatch');
+              requestMatch({}, 'Searching for match...');
             }}
           >
             Find a 1v1 match
@@ -533,23 +583,19 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
             style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
             disabled={!session || !socket}
             onClick={() => {
-              setMatchInfo(null);
-
-              if (!socket || !socket.connected) {
-                setMatchStatus('Socket not connected.');
-                return;
-              }
-              if (!playFabUser) {
-                setMatchStatus('Waiting for server auth...');
-                const s = getStoredSession();
-                if (s && s.sessionTicket) socket.emit('auth', { sessionTicket: s.sessionTicket });
-                return;
-              }
-              setMatchStatus('Searching for 1v1v1 match...');
-              socket.emit('findMatch', { gameMode: 'ffa3' });
+              requestMatch({ gameMode: 'ffa3' }, 'Searching for 1v1v1 match...');
             }}
           >
             Find a 1v1v1 match
+          </button>
+          <button
+            style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
+            disabled={!session || !socket}
+            onClick={() => {
+              requestMatch({ gameMode: 'league4' }, 'Searching for 4-player league...');
+            }}
+          >
+            Find 4P League match
           </button>
           <button
             style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
@@ -557,6 +603,13 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
             onClick={() => socket.emit('cancelMatch')}
           >
             Cancel
+          </button>
+          <button
+            style={{ ...buttonStyle, height: 46, width: 'auto', fontSize: '0.9rem' }}
+            disabled={!session || !socket}
+            onClick={() => onSelectMode('bettingOnline')}
+          >
+            Open Betting Lobbies
           </button>
         </div>
       </div>

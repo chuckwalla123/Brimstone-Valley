@@ -883,8 +883,8 @@ Current status notes:
 - Confirmed missing (or not clearly defined as heroes): Shield Maiden, Stonecased King, Queen Aralyn, Prince Rowan, Halbrecht, Varric.
 
 1) Character portraits / speaker art (high priority)
-- Core cast portraits: Queen Aralyn, Prince Rowan, Stonecased King, Halbrecht, Varric.
-- Battle/support portraits: Shield Maiden, Outcast Assassin, Rogue Mage, Werewolf, Specter, Tethered Spirit, Garruk the Red (if used as named miniboss).
+- Core cast portraits: Queen Aralyn (same as queen hero), Prince Rowan (same as prince hero), Stonecased King, Halbrecht, Varric.
+- Battle/support portraits: Shield Maiden, Outcast Assassin, Rogue Mage, Werewolf, Specter, Tethered Spirit, Garruk the Red (if used as named miniboss) (Garruk the Red is the axeman hero portrait).
 - Export format for dialogue compatibility: `/images/heroes/<Name> Cropped.jpg`.
 
 2) Playable/enemy unit definitions (high priority)
@@ -899,7 +899,7 @@ Current status notes:
 - Ruined Vault variant.
 - Lightning Road mountain pass (storm variant).
 - Capital Eastern Gate siege wall.
-- Throne Room final battle (with petrified king visual).
+- Throne Room final battle (with petrified king visual). 
 
 4) VFX / encounter-specific animation needs (medium priority)
 - Illusion fog / phantom silhouettes (Dark Mage encounters).

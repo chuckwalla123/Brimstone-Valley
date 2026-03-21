@@ -92,7 +92,7 @@ async function runCinderTaxTest() {
 
   const target = result.p2Board[0];
   assert(cinderEnergyPulses.some(v => Number(v) === -1), `Expected Cinder Tax to emit energy drain pulse -1, got ${JSON.stringify(cinderEnergyPulses)}`);
-  assert(target.currentHealth === 13, `Expected target health 13 after Fire Bolt + Cinder Tax bonus, got ${target.currentHealth}`);
+  assert(target.currentHealth === 12, `Expected target health 12 after Fire Bolt + Cinder Tax bonus (ignores armor), got ${target.currentHealth}`);
   assert(Array.isArray(target.effects) && target.effects.some(e => e && e.name === 'Burn'), 'Target should have Burn applied');
 }
 

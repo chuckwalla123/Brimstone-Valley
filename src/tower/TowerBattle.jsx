@@ -4,6 +4,7 @@
 import React, { useState, useCallback, useEffect, useRef } from 'react';
 import BattlePhase from '../BattlePhase.jsx';
 import { HEROES } from '../heroes.js';
+import { stripBackgroundFromImageData, BG_TRANSPARENCY_TOLERANCE } from '../animations/utils.js';
 import { createOfflineSocket } from '../offline/LocalGameEngine.js';
 import { makeEmptyMain, makeReserve } from '../../shared/gameLogic.js';
 import { towerPositionToIndex, indexToRow } from '../targeting.js';
@@ -22,6 +23,63 @@ import { SPELLS } from '../spells.js';
 import getAssetPath from '../utils/assetPath.js';
 import TowerAugmentChoice from './TowerAugmentChoice.jsx';
 import TowerRecruitChoice from './TowerRecruitChoice.jsx';
+
+const keyedDialogueSpriteCache = new Map();
+
+function ChromaKeyImage({ src, alt, className, style, enabled = false, tolerance = BG_TRANSPARENCY_TOLERANCE }) {
+  const rawSrc = getAssetPath(encodeURI(src || ''));
+  const [resolvedSrc, setResolvedSrc] = useState(rawSrc);
+
+  useEffect(() => {
+    if (!rawSrc) {
+      setResolvedSrc(rawSrc);
+      return;
+    }
+    if (!enabled) {
+      setResolvedSrc(rawSrc);
+      return;
+    }
+
+    const cacheKey = `${rawSrc}::${tolerance}`;
+    const cached = keyedDialogueSpriteCache.get(cacheKey);
+    if (cached) {
+      setResolvedSrc(cached);
+      return;
+    }
+
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.src = rawSrc;
+    img.onload = () => {
+      if (cancelled) return;
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.width;
+        canvas.height = img.height;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0);
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        stripBackgroundFromImageData(imageData, tolerance);
+        ctx.putImageData(imageData, 0, 0);
+        const keyedDataUrl = canvas.toDataURL('image/png');
+        keyedDialogueSpriteCache.set(cacheKey, keyedDataUrl);
+        if (!cancelled) setResolvedSrc(keyedDataUrl);
+      } catch (e) {
+        if (!cancelled) setResolvedSrc(rawSrc);
+      }
+    };
+    img.onerror = () => {
+      if (!cancelled) setResolvedSrc(rawSrc);
+    };
+
+    return () => {
+      cancelled = true;
+    };
+  }, [rawSrc, enabled, tolerance]);
+
+  return <img className={className} src={resolvedSrc} alt={alt} style={style} />;
+}
 
 const styles = {
   container: {
@@ -406,7 +464,12 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
         bossDialogue,
         bossPortrait: {
           name: bossData?.boss?.name || bossData?.bossConfig?.name || 'Boss',
-          image: bossData?.boss?.image || bossData?.bossConfig?.imageOverride || null
+          image: bossData?.boss?.image || bossData?.bossConfig?.imageOverride || null,
+          spriteChromaKey: !!bossData?.boss?.spriteChromaKey,
+          spriteFit: bossData?.boss?.spriteFit || 'cover',
+          spriteOffsetY: Number.isFinite(bossData?.boss?.spriteOffsetY) ? Number(bossData.boss.spriteOffsetY) : 0,
+          spriteOffsetYPx: Number.isFinite(bossData?.boss?.spriteOffsetYPx) ? Number(bossData.boss.spriteOffsetYPx) : 0,
+          spriteScale: Number.isFinite(bossData?.boss?.spriteScale) ? Number(bossData.boss.spriteScale) : 1
         }
       });
 
@@ -682,19 +745,31 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
   if (phase === PHASE.PRE_BATTLE_DIALOGUE && preBattleDialogueActive) {
     const dialogue = getActivePreBattleDialogue();
     const step = dialogue[preBattleDialogueIndex] || null;
+    const isEndBossDialogue = !!battleData?.isBoss && (Number(battleData?.level) === 35 || Number(battleData?.level) === 40);
     const enemyPortraits = battleData?.fixedBattle
       ? (battleData.fixedBattle.enemyHeroIds || [])
           .map(heroId => HEROES.find(hero => hero.id === heroId))
           .filter(Boolean)
-          .map(hero => ({ name: hero.name, image: hero.image }))
+          .map(hero => ({
+            name: hero.name,
+            image: hero.image,
+            spriteChromaKey: !!hero.spriteChromaKey,
+            spriteFit: hero.spriteFit || 'cover',
+            spriteOffsetY: Number.isFinite(hero.spriteOffsetY) ? Number(hero.spriteOffsetY) : 0,
+            spriteOffsetYPx: Number.isFinite(hero.spriteOffsetYPx) ? Number(hero.spriteOffsetYPx) : 0,
+            spriteScale: Number.isFinite(hero.spriteScale) ? Number(hero.spriteScale) : 1
+          }))
       : (battleData?.bossPortrait ? [battleData.bossPortrait] : []);
 
     const portraitCount = enemyPortraits.length;
     const portraitGap = portraitCount >= 7 ? 8 : 12;
     const portraitRowMaxWidth = 860;
-    const portraitSize = portraitCount > 0
+    const basePortraitSize = portraitCount > 0
       ? Math.max(88, Math.min(120, Math.floor((portraitRowMaxWidth - (portraitGap * Math.max(0, portraitCount - 1))) / portraitCount)))
       : 120;
+    const portraitSize = isEndBossDialogue
+      ? Math.min(260, Math.round(basePortraitSize * 2))
+      : basePortraitSize;
     const portraitRowWidth = portraitCount > 0
       ? (portraitCount * portraitSize) + (Math.max(0, portraitCount - 1) * portraitGap)
       : 0;
@@ -707,7 +782,10 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
     const speakerPortraitCenter = speakerPortraitLeft + portraitSize / 2;
     const primaryLabel = preBattleDialogueIndex >= Math.max(0, dialogue.length - 1) ? 'Engage' : 'Continue';
     const estimatedDialogueLines = Math.ceil(((step?.text || '').length) / 52);
-    const dialogueContainerMinHeight = Math.max(160, 74 + estimatedDialogueLines * 28);
+    const dialogueContainerMinHeight = isEndBossDialogue
+      ? Math.max(220, 96 + estimatedDialogueLines * 30)
+      : Math.max(160, 74 + estimatedDialogueLines * 28);
+    const dialogueBubbleVerticalNudge = isEndBossDialogue ? '-22px' : '0px';
 
     return (
       <div
@@ -729,7 +807,8 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
                     className="story-dialogue__bubble story-dialogue__bubble--above"
                     style={{
                       '--bubble-center': `${speakerPortraitCenter}px`,
-                      width: 'min(520px, calc(100% - 24px))'
+                      width: 'min(520px, calc(100% - 24px))',
+                      marginTop: dialogueBubbleVerticalNudge
                     }}
                   >
                     <div className="story-dialogue__speaker">{step?.speaker || 'Tower Guardian'}</div>
@@ -753,11 +832,27 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
                     {enemyPortraits.map((portrait, index) => (
                       <div className="story-dialogue__media" key={`tower-right-${index}-${portrait.name}`}>
                         {portrait?.image ? (
-                          <img
+                          <ChromaKeyImage
                             className="story-dialogue__avatar"
-                            style={{ width: `${portraitSize}px`, height: `${portraitSize}px` }}
-                            src={getAssetPath(encodeURI(portrait.image))}
+                            src={portrait.image}
                             alt={portrait.name || 'Enemy'}
+                            enabled={!!portrait?.spriteChromaKey}
+                            style={{
+                              width: `${portraitSize}px`,
+                              height: `${portraitSize}px`,
+                              objectFit: portrait?.spriteFit || 'cover',
+                              transform: [
+                                Number.isFinite(portrait?.spriteOffsetY) && portrait.spriteOffsetY !== 0
+                                  ? `translateY(${portrait.spriteOffsetY}%)`
+                                  : '',
+                                Number.isFinite(portrait?.spriteOffsetYPx) && portrait.spriteOffsetYPx !== 0
+                                  ? `translateY(${Math.round(portrait.spriteOffsetYPx)}px)`
+                                  : '',
+                                Number.isFinite(portrait?.spriteScale) && portrait.spriteScale !== 1
+                                  ? `scale(${portrait.spriteScale})`
+                                  : ''
+                              ].filter(Boolean).join(' ') || 'none'
+                            }}
                           />
                         ) : (
                           <div

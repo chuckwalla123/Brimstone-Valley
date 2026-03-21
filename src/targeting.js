@@ -205,7 +205,7 @@ function getTauntTargets(boardArr = [], boardSide = 'p1') {
 }
 
 function getMultiTargetRedirectTargets(boardArr = [], boardSide = 'p1') {
-  const map = boardSide === 'p2' ? P2_INDEX_TO_TILE : P1_INDEX_TO_TILE;
+  const map = boardSide === 'p2' ? P2_INDEX_TO_TILE : (boardSide === 'p3' ? P3_INDEX_TO_TILE : P1_INDEX_TO_TILE);
   const out = [];
   for (let i = 0; i < (boardArr || []).length; i++) {
     const slot = (boardArr || [])[i];
@@ -316,7 +316,7 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
 
   const enemyDescriptors = (targetDescriptors || []).filter(d => d && (d.side || 'enemy') === 'enemy' && d.type !== 'self');
   const enemyHasMulti = enemyDescriptors.some(d =>
-    ['board','column','adjacent','nearestToLastTarget','projectilePlus1','frontTwoRows','backRow','rowWithHighestSumArmor','rowContainingLowestArmor','rowWithMostHeroes','frontmostRowWithHero','backmostRowWithHero','middleRow','cornerTiles'].includes(d.type)
+    ['board','column','adjacent','nearestToLastTarget','projectilePlus1','frontTwoRows','backRow','rowWithHighestSumArmor','rowContainingHighestArmor','rowContainingLowestArmor','rowWithMostHeroes','frontmostRowWithHero','backmostRowWithHero','middleRow','cornerTiles'].includes(d.type)
       || (typeof d.max === 'number' && d.max > 1)
   );
   const hasSingleEnemyTarget = enemyDescriptors.length === 1 && !enemyHasMulti;
@@ -368,7 +368,7 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
 
     if (side === 'enemy' && multiTargetRedirect && type !== 'self') {
       if (!multiTargetRedirect._used) {
-        out.push({ board: multiTargetRedirect.board, index: multiTargetRedirect.index });
+        out.push({ board: multiTargetRedirect.board, index: multiTargetRedirect.index, _redirectedMultiTarget: true });
         multiTargetRedirect._used = true;
       }
       continue;

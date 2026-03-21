@@ -256,7 +256,11 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
   // allow per-target extras (e.g., perTargetExtras[0] = { post: { removeTopPositiveEffect: true } })
   const perTargetExtras = Array.isArray(useSpec.perTargetExtras) ? useSpec.perTargetExtras : (Array.isArray(useSpec.perTargetPayloadExtras) ? useSpec.perTargetPayloadExtras : []);
   const secondary = (useSpec.post && useSpec.post.secondaryHeal) ? useSpec.post.secondaryHeal : null;
+  const secondaryTargetsSelf = !!(secondary && String(secondary.target || '').toLowerCase() === 'self');
   const casterBoard = casterRef && casterRef.boardName && casterRef.boardName.startsWith('p1') ? 'p1' : (casterRef && casterRef.boardName && casterRef.boardName.startsWith('p2') ? 'p2' : 'p3');
+  const hasResolvedAllyTarget = !!((payload.targets || []).some(t => t && t.board === casterBoard));
+  const needsSecondarySelfFallback = secondaryTargetsSelf && !hasResolvedAllyTarget;
+  let secondarySelfApplied = false;
   
   // Blood Drain conditional: compare caster health to target health
   const conditionalHealthCheck = useSpec.post && useSpec.post.conditionalOnCasterVsTargetHealth;
@@ -496,6 +500,22 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
         }
       } else {
         payload.perTargetPayloads.push({ ...attackFragForTarget });
+      }
+
+      // Support self secondary heals even when the spec does not include an explicit self target.
+      // Example: Siphon should damage enemy target(s) and still heal caster once.
+      if (needsSecondarySelfFallback && !secondarySelfApplied) {
+        const lastIdx = payload.perTargetPayloads.length - 1;
+        const frag = payload.perTargetPayloads[lastIdx];
+        if (frag && frag.action === 'damage') {
+          const secAmt = Number(secondary.amount || 0);
+          const addSpellPower = (secondary.ignoreSpellPower === true) ? 0 : casterSpellPower;
+          const healAmount = secAmt + addSpellPower;
+          if (healAmount > 0) {
+            frag.post = { ...(frag.post || {}), healCasterAmount: healAmount };
+            secondarySelfApplied = true;
+          }
+        }
       }
     } else {
       payload.perTargetPayloads.push({ action: null });

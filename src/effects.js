@@ -147,7 +147,7 @@ export const EFFECTS = {
       animateAsCast: true,
       spellId: 'tinkererTurretAttack',
       targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
-      formula: { type: 'damage', value: 5, ignoreSpellPower: true },
+      formula: { type: 'attackPower', value: 5, ignoreSpellPower: true },
       animationMs: 500
     },
     description: 'At the start of each round, this effect targets the enemy with the highest Health and deals 5 damage.'

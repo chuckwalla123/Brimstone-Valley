@@ -731,10 +731,10 @@ export const SPELLS = {
   },
   benevolence: {
     id: 'benevolence', name: 'Benevolence',
-    description: 'Targets nearest ally and increases their number of spell casts by 1 for the row the target is in.',
+    description: 'Targets nearest ally and increases their number of spell casts by 1 for their current row.',
     spec: {
       targets: [{ type: 'nearest', side: 'ally', max: 1, excludeSelf: true }],
-      post: { increaseRowCastsBy: 1 },
+      post: { increaseCastsBy: 1 },
       animationMs: 1200
     },
     animation: 'Benevolence_2x2_4frames',
@@ -1357,7 +1357,7 @@ export const SPELLS = {
   siphon: {
     id: 'siphon', name: 'Siphon',
     description: 'Targets the enemy with the highest Health, dealing 4 Attack Power. Also heals the caster for 4.',
-    spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }, { type: 'self' }], formula: { type: 'attackPower', value: 4 }, post: { secondaryHeal: { amount: 4, side: 'ally', target: 'self' } }, animationMs: 1200 },
+    spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4 }, post: { secondaryHeal: { amount: 4, side: 'ally', target: 'self' } }, animationMs: 1200 },
     animation: 'Siphon_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames'
   },
 
@@ -2457,7 +2457,7 @@ export const SPELLS = {
     description: 'Visual attack used by Turret effect payloads.',
     spec: {
       targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
-      formula: { type: 'damage', value: 5, ignoreSpellPower: true },
+      formula: { type: 'attackPower', value: 5, ignoreSpellPower: true },
       animationMs: 500
     },
     animation: 'Turret_2x2_4frames',

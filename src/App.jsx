@@ -11,8 +11,23 @@ import { createOfflineSocket } from "./offline/LocalGameEngine";
 import getAssetPath from "./utils/assetPath";
 import { TowerMode } from "./tower";
 import { StoryMode } from "./story";
+import League4Mode from "./League4Mode";
+import BettingMode from "./BettingMode";
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
+const resolveServerUrl = () => {
+  const fromEnv = (import.meta.env.VITE_SERVER_URL || '').trim();
+  if (fromEnv) return fromEnv;
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    const isLocalHost = host === 'localhost' || host === '127.0.0.1';
+    if (!isLocalHost) {
+      return window.location.origin;
+    }
+  }
+  return 'http://localhost:3002';
+};
+
+const SERVER_URL = resolveServerUrl();
 
 // Check if we're running in Electron or offline mode
 const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron;
@@ -132,8 +147,10 @@ function App() {
     
     // Try to connect to server
     const newSocket = io(SERVER_URL, {
-      timeout: 5000,
-      reconnectionAttempts: 3
+      timeout: 15000,
+      reconnectionAttempts: 20,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000
     });
     setSocket(newSocket);
     setOnlineSocket(newSocket); // Keep reference to online socket
@@ -187,25 +204,11 @@ function App() {
       setConnectionStatus('error');
     });
 
-    // After max reconnection attempts, switch to offline mode
+    // After max reconnection attempts, remain in online mode and surface error.
+    // Automatically switching to offline can make matchmaking/auth appear broken.
     newSocket.io.on('reconnect_failed', () => {
-      
-      newSocket.close();
-      setOfflineMode(true);
       setConnectionStatus('offline');
-      
-      // Create local engine as fallback
-      const localSocket = createOfflineSocket();
-      setSocket(localSocket);
-      
-      localSocket.on('gameState', (state) => {
-        setGameState(state);
-        if (state && state.phase === 'draft') {
-          setForceDraft(false);
-        }
-      });
-      
-      localSocket._emit('connect');
+      console.warn('[App] Reconnect attempts exhausted; staying online socket for manual retry');
     });
 
     // Handle opponent disconnecting or leaving during a match
@@ -241,6 +244,15 @@ function App() {
 
   const handleSelectMode = (mode) => {
     setForceDraft(true);
+    if (mode === 'bettingOnline') {
+      setIsSinglePlayer(false);
+      isSinglePlayerRef.current = false;
+      setGameState(null);
+      setAiDifficulty(null);
+      setLocalSide(null);
+      setCurrentScreen('betting');
+      return;
+    }
     if (mode === 'ffa3Local') {
       setGameMode('ffa3');
       setIsSinglePlayer(true);
@@ -318,7 +330,8 @@ function App() {
       setMatchPlayers({
         p1: payload.players.p1 || 'Player 1',
         p2: payload.players.p2 || 'Player 2',
-        p3: payload.players.p3 || 'Player 3'
+        p3: payload.players.p3 || 'Player 3',
+        p4: payload.players.p4 || 'Player 4'
       });
     } else {
       const opponentUsername = payload?.opponent?.username || 'Opponent';
@@ -328,7 +341,11 @@ function App() {
         setMatchPlayers({ p1: opponentUsername, p2: myUsername });
       }
     }
-    setCurrentScreen('draft');
+    if ((payload?.gameMode || 'classic') === 'league4') {
+      setCurrentScreen('league4');
+    } else {
+      setCurrentScreen('draft');
+    }
   };
 
   const handleSelectDifficulty = (difficulty) => {
@@ -427,6 +444,8 @@ function App() {
         )}
         {currentScreen === 'tower' && <TowerMode onExit={handleBackToMenu} />}
         {currentScreen === 'story' && <StoryMode onExit={handleBackToMenu} />}
+        {currentScreen === 'league4' && <League4Mode gameState={gameState} socket={socket} localSide={localSide} matchPlayers={matchPlayers} onExit={handleBackToMenu} />}
+        {currentScreen === 'betting' && <BettingMode socket={socket} onExit={handleBackToMenu} />}
         {currentScreen === 'draft' && !inBattle && <DraftBoard aiDifficulty={aiDifficulty} socket={socket} gameState={gameState} localSide={localSide} matchPlayers={matchPlayers} />}
         {currentScreen === 'draft' && inBattle && (
           <BattlePhase
