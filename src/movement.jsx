@@ -22,6 +22,14 @@ export function useMovement({
   // Use serverMovementPhase directly instead of mirroring it
   const movementPhase = serverMovementPhase;
 
+  const normalizeMover = (moverCode) => {
+    const code = String(moverCode || '').toLowerCase();
+    if (code === 'p1' || code === 'player1') return 'p1';
+    if (code === 'p2' || code === 'player2') return 'p2';
+    if (code === 'p3' || code === 'player3') return 'p3';
+    return code;
+  };
+
   // helper to map 'player1'/'player2' -> 'p1'/'p2'
   const toShort = (p) => (p === 'player1' || p === 'player1' ? 'p1' : (p === 'player2' ? 'p2' : p));
 
@@ -111,7 +119,14 @@ export function useMovement({
   const handleSwapById = useCallback((sourceId, targetId) => {
     if (!movementPhase) return;
 
-    const mover = movementPhase.sequence[movementPhase.index];
+    const mover = normalizeMover(movementPhase.sequence[movementPhase.index]);
+    const sideFromBoardName = (boardName) => {
+      const name = String(boardName || '').toLowerCase();
+      if (name.startsWith('p1')) return 'p1';
+      if (name.startsWith('p2')) return 'p2';
+      if (name.startsWith('p3')) return 'p3';
+      return null;
+    };
     const attemptAiFallbackSkip = () => {
       if (!onServerMove) return false;
       if (!aiDifficulty || mover !== 'p2') return false;
@@ -124,6 +139,15 @@ export function useMovement({
     // Check if either tile is shackled (has preventMovement effect)
     const src = findTileById(sourceId);
     const dst = findTileById(targetId);
+    if (!src || !dst) return;
+
+    const srcSide = sideFromBoardName(src.boardName);
+    const dstSide = sideFromBoardName(dst.boardName);
+    if (srcSide !== mover || dstSide !== mover) {
+      addLog && addLog('[Movement] Invalid move: can only move and swap your active side.');
+      attemptAiFallbackSkip();
+      return;
+    }
     
     if (src && src.tile && src.tile.effects && Array.isArray(src.tile.effects)) {
       const srcHasShackle = src.tile.effects.some(e => e && e.preventMovement);
@@ -150,7 +174,6 @@ export function useMovement({
     }
     
     // Fallback: local swap for AI games (no server needed)
-    if (!src || !dst) return;
     
     swapTileContents(src.boardName, src.index, dst.boardName, dst.index);
     
@@ -177,7 +200,7 @@ export function useMovement({
       }
     }
     
-    const mover = movementPhase.sequence[movementPhase.index]; // 'p1' or 'p2' or 'p3'
+    const mover = normalizeMover(movementPhase.sequence[movementPhase.index]); // 'p1' or 'p2' or 'p3'
     const p = tile.player;
     const ps = String(p).toLowerCase();
     let owner;
@@ -235,7 +258,7 @@ export function useMovement({
     // Skip all remaining moves by sending same-tile swaps
     const remaining = movementPhase.sequence.length - movementPhase.index;
     for (let i = 0; i < remaining; i++) {
-      const mover = movementPhase.sequence[movementPhase.index + i];
+      const mover = normalizeMover(movementPhase.sequence[movementPhase.index + i]);
       // Send a dummy move (same source/target) to skip
       const dummyId = `${mover}:0`;
       if (onServerMove) {
@@ -247,7 +270,7 @@ export function useMovement({
   // Small UI panel (bound to this hook's state)
   const UI = useCallback(() => {
     if (!movementPhase) return null;
-    const moverCode = movementPhase.sequence[movementPhase.index];
+    const moverCode = normalizeMover(movementPhase.sequence[movementPhase.index]);
     const moverLabel = moverCode === 'p1' ? 'Player 1' : (moverCode === 'p2' ? 'Player 2' : 'Player 3');
     return (
       <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>

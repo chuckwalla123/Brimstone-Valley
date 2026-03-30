@@ -1,6 +1,7 @@
 import { makeEmptyMain, makeReserve, deepClone } from '../shared/gameLogic.js';
 import { HEROES } from '../src/heroes.js';
 import { executeRound } from '../src/battleEngine.js';
+import { makeMovementDecision } from '../src/ai/easyAI.js';
 
 const BETTING_MAX_PLAYERS = 12;
 const BETTING_MIN_PLAYERS = 2;
@@ -8,7 +9,49 @@ const BETTING_STARTING_COINS = 10;
 const BETTING_TOTAL_ROUNDS = 8;
 const BETTING_BET_MS = 60_000;
 const BETTING_BATTLE_PLAYBACK_MS = 8_000;
+const BETTING_BATTLE_VISUAL_TIMEOUT_MS = 90_000;
+const BETTING_ROUND_VISUAL_ACK_TIMEOUT_MS = 20_000;
 const BETTING_SUMMARY_MS = 15_000;
+const BETTING_SIMULATION_TIMEOUT_MS = 120_000;
+const BETTING_SETTLE_WATCHDOG_MS = 210_000;
+const BETTING_STEP_ACK_TIMEOUT_MS = 2_500;
+const BETTING_SERVER_INSTANCE_ID = process.env.FLY_ALLOC_ID || process.env.HOSTNAME || `pid:${process.pid}`;
+
+function estimateStepVisualMs(step) {
+  const type = String(step?.type || '').toLowerCase();
+  if (type === 'movementstart' || type === 'movementswap' || type === 'movementcomplete') return 180;
+  if (type === 'precast' || type === 'effectprecast') return 420;
+  if (type === 'cast' || type === 'castapplied' || type === 'effectapplied') return 300;
+  if (type === 'postcastwait') return Math.max(80, Number(step?.duration || 180));
+  if (type === 'energyapplied' || type === 'energyincrement' || type === 'posteffectdelay') return 160;
+  if (type === 'onroundstarttriggered') return 220;
+  if (type === 'roundcomplete' || type === 'gameend') return 800;
+  return 120;
+}
+
+function withTimelineMeta(step) {
+  if (!step || typeof step !== 'object') return step;
+  const out = { ...step };
+  out.timeline = {
+    emittedAt: Date.now(),
+    expectedMs: estimateStepVisualMs(step)
+  };
+  return out;
+}
+
+function buildBattleStateSnapshotFromStep(step) {
+  if (!step || typeof step !== 'object' || !step.state || typeof step.state !== 'object') return null;
+  const lastAction = toSocketSafe({ ...step });
+  if (lastAction && typeof lastAction === 'object' && Object.prototype.hasOwnProperty.call(lastAction, 'state')) {
+    delete lastAction.state;
+  }
+  const snapshot = {
+    ...step.state,
+    lastAction,
+    seq: Number(step.seq || 0)
+  };
+  return toSocketSafe(snapshot);
+}
 
 const DRAFTABLE_HEROES = HEROES.filter((hero) => hero && hero.draftable !== false);
 
@@ -105,6 +148,30 @@ const SIDE_BET_POOL = [
 
 function randomInt(min, max) {
   return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function toSocketSafe(value, depth = 0, seen = new WeakSet()) {
+  if (value == null) return value;
+  const t = typeof value;
+  if (t === 'number' || t === 'string' || t === 'boolean') return value;
+  if (t !== 'object') return undefined;
+  if (depth > 14) return null;
+  if (seen.has(value)) return null;
+
+  seen.add(value);
+  try {
+    if (Array.isArray(value)) {
+      return value.map((entry) => toSocketSafe(entry, depth + 1, seen));
+    }
+    const out = {};
+    Object.keys(value).forEach((key) => {
+      const v = toSocketSafe(value[key], depth + 1, seen);
+      if (v !== undefined) out[key] = v;
+    });
+    return out;
+  } finally {
+    seen.delete(value);
+  }
 }
 
 function sampleUnique(source, count) {
@@ -285,6 +352,23 @@ function remainingStat(snapshot, side, field) {
   }, 0), 0);
 }
 
+function countAliveTilesForSide(snapshot, side) {
+  const arrays = side === 'p1'
+    ? [snapshot?.p1Board || [], snapshot?.p1Reserve || []]
+    : [snapshot?.p2Board || [], snapshot?.p2Reserve || []];
+
+  let count = 0;
+  arrays.forEach((arr) => {
+    (arr || []).forEach((tile) => {
+      if (!tile || !tile.hero) return;
+      if (tile._dead) return;
+      const hp = tile.currentHealth != null ? Number(tile.currentHealth) : Number(tile.hero.health || 0);
+      if (hp > 0) count += 1;
+    });
+  });
+  return count;
+}
+
 function evaluateSideBetWinners(sideBet, placed, outcome) {
   const eligible = placed.filter((entry) => Number(entry.sideAmount || 0) > 0);
   if (!sideBet || eligible.length === 0) return new Set();
@@ -384,7 +468,274 @@ function evaluateSideBetWinners(sideBet, placed, outcome) {
   return winners;
 }
 
-async function simulateBattle(spec) {
+function computeTeamPower(main, reserve) {
+  const all = [...(main || []), ...(reserve || [])];
+  return all.reduce((sum, tile) => {
+    if (!tile || !tile.hero) return sum;
+    const h = tile.hero;
+    return sum
+      + Number(h.health || 0)
+      + Number(h.armor || 0)
+      + Number(h.speed || 0)
+      + Number(h.spellPower || 0)
+      + Number(h.energy || 0);
+  }, 0);
+}
+
+function buildFallbackBattleOutcome(spec) {
+  const p1Power = computeTeamPower(spec.p1Main, spec.p1Reserve);
+  const p2Power = computeTeamPower(spec.p2Main, spec.p2Reserve);
+  const winnerSide = p1Power >= p2Power ? 'p1' : 'p2';
+  const losingSide = winnerSide === 'p1' ? 'p2' : 'p1';
+
+  return {
+    winnerSide,
+    losingSide,
+    endRound: 1,
+    winningTeamHealth: 0,
+    winningTeamEnergy: 0,
+    mostDamageHeroes: [],
+    leastCastsAliveHeroes: [],
+    mostCastsAliveHeroes: [],
+    firstToDieHeroes: [],
+    lastDieOnLosingTeamHeroes: [],
+    roundsWithMostDeaths: [1],
+    heroNameByUid: {},
+    castsByHero: {},
+    damageByHero: {},
+    playback: ['Battle simulation timeout fallback applied.'],
+    replayInitialState: toSocketSafe({
+      p1Main: deepClone(spec.p1Main),
+      p2Main: deepClone(spec.p2Main),
+      p1Reserve: deepClone(spec.p1Reserve),
+      p2Reserve: deepClone(spec.p2Reserve),
+      phase: 'battle',
+      gameMode: 'classic',
+      roundNumber: 0,
+      priorityPlayer: 'player1'
+    }),
+    replaySteps: []
+  };
+}
+
+function parseMoveToken(token) {
+  const raw = String(token || '');
+  if (raw.startsWith('p1Reserve:')) {
+    const idx = Number(raw.split(':')[1]);
+    return Number.isFinite(idx) ? { side: 'p1', isReserve: true, index: idx } : null;
+  }
+  if (raw.startsWith('p2Reserve:')) {
+    const idx = Number(raw.split(':')[1]);
+    return Number.isFinite(idx) ? { side: 'p2', isReserve: true, index: idx } : null;
+  }
+  if (raw.startsWith('p1:')) {
+    const idx = Number(raw.split(':')[1]);
+    return Number.isFinite(idx) ? { side: 'p1', isReserve: false, index: idx } : null;
+  }
+  if (raw.startsWith('p2:')) {
+    const idx = Number(raw.split(':')[1]);
+    return Number.isFinite(idx) ? { side: 'p2', isReserve: false, index: idx } : null;
+  }
+  return null;
+}
+
+function normalizeDecisionForSide(decision, side) {
+  if (!decision || !decision.sourceId || !decision.destinationId) return null;
+  if (side === 'p2') return decision;
+  const map = (id) => String(id || '').replace(/^p2Reserve:/, 'p1Reserve:').replace(/^p2:/, 'p1:');
+  return {
+    sourceId: map(decision.sourceId),
+    destinationId: map(decision.destinationId)
+  };
+}
+
+function applyMoveDecisionToBoards(boards, decision) {
+  const src = parseMoveToken(decision?.sourceId);
+  const dst = parseMoveToken(decision?.destinationId);
+  if (!src || !dst || src.side !== dst.side) return false;
+
+  const mainKey = src.side === 'p1' ? 'p1Main' : 'p2Main';
+  const reserveKey = src.side === 'p1' ? 'p1Reserve' : 'p2Reserve';
+  const srcArr = src.isReserve ? boards[reserveKey] : boards[mainKey];
+  const dstArr = dst.isReserve ? boards[reserveKey] : boards[mainKey];
+
+  if (!Array.isArray(srcArr) || !Array.isArray(dstArr)) return false;
+  if (src.index < 0 || src.index >= srcArr.length) return false;
+  if (dst.index < 0 || dst.index >= dstArr.length) return false;
+
+  const tmp = srcArr[src.index];
+  srcArr[src.index] = dstArr[dst.index];
+  dstArr[dst.index] = tmp;
+  return true;
+}
+
+function normalizePrioritySide(prio) {
+  const raw = String(prio || '').toLowerCase();
+  if (raw === 'player1' || raw === 'p1') return 'p1';
+  if (raw === 'player2' || raw === 'p2') return 'p2';
+  return 'p1';
+}
+
+function toPriorityPlayer(side) {
+  return side === 'p2' ? 'player2' : 'player1';
+}
+
+function getMovementSequenceFromPriority(priorityPlayer) {
+  const side = normalizePrioritySide(priorityPlayer);
+  return side === 'p1' ? ['p1', 'p2', 'p2', 'p1'] : ['p2', 'p1', 'p1', 'p2'];
+}
+
+function hasPreventMovement(tile) {
+  return !!(tile && Array.isArray(tile.effects) && tile.effects.some((e) => e && e.preventMovement));
+}
+
+function countsTowardMainLimit(tile) {
+  return !!(tile && tile.hero && !tile._dead && !tile._revivedExtra && tile.hero.isMinion !== true);
+}
+
+function markHeroMovedThisPhase(tile) {
+  try {
+    if (tile && tile.hero) tile.hero._movedThisMovementPhase = true;
+  } catch (e) {}
+}
+
+function applyValidatedMoveDecisionToBoards(boards, decision) {
+  const src = parseMoveToken(decision?.sourceId);
+  const dst = parseMoveToken(decision?.destinationId);
+  if (!src || !dst || src.side !== dst.side) return false;
+
+  const mainKey = src.side === 'p1' ? 'p1Main' : 'p2Main';
+  const reserveKey = src.side === 'p1' ? 'p1Reserve' : 'p2Reserve';
+  const srcArr = src.isReserve ? boards[reserveKey] : boards[mainKey];
+  const dstArr = dst.isReserve ? boards[reserveKey] : boards[mainKey];
+
+  if (!Array.isArray(srcArr) || !Array.isArray(dstArr)) return false;
+  if (src.index < 0 || src.index >= srcArr.length) return false;
+  if (dst.index < 0 || dst.index >= dstArr.length) return false;
+
+  const srcTile = srcArr[src.index];
+  const dstTile = dstArr[dst.index];
+  if (!srcTile || !srcTile.hero || srcTile._dead) return false;
+  if (hasPreventMovement(srcTile) || hasPreventMovement(dstTile)) return false;
+
+  if (src.isReserve && !dst.isReserve) {
+    const mainArr = boards[mainKey] || [];
+    const mainAliveCount = mainArr.filter(countsTowardMainLimit).length;
+    const dstHasLivingHero = countsTowardMainLimit(dstTile);
+    if (!dstHasLivingHero && mainAliveCount >= 5) return false;
+  }
+
+  const sourceTileState = srcTile && srcTile._tileState ? srcTile._tileState : null;
+  const sourceMineMeta = srcTile && srcTile._mine ? { ...srcTile._mine } : null;
+  const destinationTileState = dstTile && dstTile._tileState ? dstTile._tileState : null;
+  const destinationMineMeta = dstTile && dstTile._mine ? { ...dstTile._mine } : null;
+
+  const tmp = srcArr[src.index];
+  srcArr[src.index] = dstArr[dst.index];
+  dstArr[dst.index] = tmp;
+
+  if (srcArr[src.index]) {
+    srcArr[src.index]._tileState = sourceTileState;
+    srcArr[src.index]._mine = sourceMineMeta;
+  }
+  if (dstArr[dst.index]) {
+    dstArr[dst.index]._tileState = destinationTileState;
+    dstArr[dst.index]._mine = destinationMineMeta;
+  }
+
+  markHeroMovedThisPhase(srcArr[src.index]);
+  markHeroMovedThisPhase(dstArr[dst.index]);
+  return true;
+}
+
+function mirrorMainBoardForP2Perspective(board) {
+  const src = Array.isArray(board) ? board : [];
+  const out = new Array(9).fill(null);
+  for (let i = 0; i < 9; i += 1) {
+    out[i] = src[8 - i] || null;
+  }
+  return out;
+}
+
+function unmirrorP1TokenFromP2Perspective(token) {
+  const raw = String(token || '');
+  if (raw.startsWith('p2Reserve:')) {
+    return raw.replace('p2Reserve:', 'p1Reserve:');
+  }
+  if (raw.startsWith('p2:')) {
+    const idx = Number(raw.split(':')[1]);
+    if (!Number.isFinite(idx)) return null;
+    return `p1:${8 - idx}`;
+  }
+  return null;
+}
+
+function chooseMovementDecisionForSide(side, p1Main, p1Reserve, p2Main, p2Reserve) {
+  if (side === 'p2') {
+    const baseDecision = makeMovementDecision(
+      p2Main,
+      p2Reserve,
+      { movementPhase: { sequence: ['p2'], index: 0 } },
+      p1Main,
+      p1Reserve
+    );
+    return normalizeDecisionForSide(baseDecision, 'p2');
+  }
+
+  const mirroredP1Main = mirrorMainBoardForP2Perspective(p1Main);
+  const mirroredP2Main = mirrorMainBoardForP2Perspective(p2Main);
+  const baseDecision = makeMovementDecision(
+    mirroredP1Main,
+    p1Reserve,
+    { movementPhase: { sequence: ['p2'], index: 0 } },
+    mirroredP2Main,
+    p2Reserve
+  );
+  if (!baseDecision) return null;
+
+  const sourceId = unmirrorP1TokenFromP2Perspective(baseDecision.sourceId);
+  const destinationId = unmirrorP1TokenFromP2Perspective(baseDecision.destinationId);
+  if (!sourceId || !destinationId) return null;
+
+  return {
+    sourceId,
+    destinationId
+  };
+}
+
+async function simulateBattleWithTimeout(spec, timeoutMs = 15_000, options = {}) {
+  let timeoutId = null;
+  let didTimeout = false;
+  const startedAt = Date.now();
+  try {
+    const timeoutPromise = new Promise((resolve) => {
+      timeoutId = setTimeout(() => {
+        didTimeout = true;
+        resolve(null);
+      }, timeoutMs);
+    });
+    const result = await Promise.race([
+      simulateBattle(spec, {
+        ...options,
+        isCancelled: () => didTimeout
+      }),
+      timeoutPromise
+    ]);
+    return {
+      result,
+      didTimeout,
+      timeoutMs: Number(timeoutMs || 0),
+      elapsedMs: Date.now() - startedAt
+    };
+  } finally {
+    if (timeoutId) clearTimeout(timeoutId);
+  }
+}
+
+async function simulateBattle(spec, options = {}) {
+  const onLiveStep = typeof options.onLiveStep === 'function' ? options.onLiveStep : null;
+  const onRoundVisualBarrier = typeof options.onRoundVisualBarrier === 'function' ? options.onRoundVisualBarrier : null;
+  const isCancelled = typeof options.isCancelled === 'function' ? options.isCancelled : (() => false);
   let p1Main = deepClone(spec.p1Main);
   let p1Reserve = deepClone(spec.p1Reserve);
   let p2Main = deepClone(spec.p2Main);
@@ -402,12 +753,23 @@ async function simulateBattle(spec) {
 
   let deathSeq = 0;
   let prevAlive = new Map();
+  const prevHealthByUid = new Map();
   let winnerToken = null;
   let endRound = 0;
+  let eliminationRound = null;
+  let eliminationWinnerSide = null;
+  let winningTeamHealthAtElimination = null;
+  let winningTeamEnergyAtElimination = null;
+  let currentPriorityPlayer = 'player1';
+  let lastCastActionBySide = null;
 
   const seedSnapshot = { p1Board: p1Main, p2Board: p2Main, p1Reserve, p2Reserve };
   collectAllTiles(seedSnapshot).forEach((entry) => {
     prevAlive.set(entry.uid, entry.alive);
+    const hp = entry.tile && entry.tile.currentHealth != null
+      ? Number(entry.tile.currentHealth)
+      : Number(entry.tile?.hero?.health || 0);
+    prevHealthByUid.set(entry.uid, Math.max(0, hp));
     heroNameByUid.set(entry.uid, entry.name);
     heroSideByUid.set(entry.uid, entry.side);
     damageByHero.set(entry.uid, 0);
@@ -415,15 +777,61 @@ async function simulateBattle(spec) {
   });
 
   for (let round = 1; round <= 20; round += 1) {
+    if (isCancelled()) return null;
     endRound = round;
+    let roundBoundarySeq = null;
+    let roundBoundaryWinner = null;
+
+    const pushReplayState = (actionType, movementPhase = null) => {
+      if (isCancelled()) return;
+      replaySeq += 1;
+      const action = { type: actionType, seq: replaySeq };
+      action.state = toSocketSafe({
+        p1Main: deepClone(p1Main || []),
+        p2Main: deepClone(p2Main || []),
+        p1Reserve: deepClone(p1Reserve || []),
+        p2Reserve: deepClone(p2Reserve || []),
+        priorityPlayer: round % 2 === 0 ? 'player2' : 'player1',
+        phase: movementPhase ? 'movement' : (actionType === 'movementComplete' ? 'ready' : 'battle'),
+        roundNumber: Number(round)
+      });
+      if (movementPhase) action.state.movementPhase = toSocketSafe(deepClone(movementPhase));
+      const safeAction = toSocketSafe(action);
+      replaySteps.push(safeAction);
+      if (onLiveStep && safeAction) onLiveStep(safeAction);
+    };
+
+    if (round > 1) {
+      const movementOrder = getMovementSequenceFromPriority(currentPriorityPlayer);
+      for (let moveIndex = 0; moveIndex < movementOrder.length; moveIndex += 1) {
+        if (isCancelled()) return null;
+        const mover = movementOrder[moveIndex];
+        const movementPhase = { sequence: movementOrder, index: moveIndex };
+        pushReplayState('movementStart', movementPhase);
+
+        const decision = chooseMovementDecisionForSide(mover, p1Main, p1Reserve, p2Main, p2Reserve);
+        if (decision) {
+          applyValidatedMoveDecisionToBoards({ p1Main, p2Main, p1Reserve, p2Reserve }, decision);
+        }
+
+        pushReplayState('movementSwap', { sequence: movementOrder, index: Math.min(moveIndex + 1, movementOrder.length - 1) });
+      }
+
+      pushReplayState('movementComplete', null);
+
+      const nextPrioritySide = normalizePrioritySide(currentPriorityPlayer) === 'p1' ? 'p2' : 'p1';
+      currentPriorityPlayer = toPriorityPlayer(nextPrioritySide);
+    }
+
     const result = await executeRound(
       {
         p1Board: p1Main,
         p2Board: p2Main,
         p1Reserve,
         p2Reserve,
-        priorityPlayer: round % 2 === 0 ? 'player2' : 'player1',
+        priorityPlayer: currentPriorityPlayer,
         roundNumber: round,
+        lastCastActionBySide,
         gameMode: 'classic'
       },
       {
@@ -434,11 +842,12 @@ async function simulateBattle(spec) {
         quiet: true,
         speedMultiplier: 30,
         onStep: (snapshot) => {
+          if (isCancelled()) return;
           const action = snapshot && snapshot.lastAction ? snapshot.lastAction : null;
           replaySeq += 1;
-          const stepAction = action ? deepClone(action) : { type: 'stateSync' };
+          const stepAction = toSocketSafe(action ? deepClone(action) : { type: 'stateSync' }) || { type: 'stateSync' };
           stepAction.seq = replaySeq;
-          stepAction.state = {
+          stepAction.state = toSocketSafe({
             p1Main: deepClone(snapshot?.p1Board || []),
             p2Main: deepClone(snapshot?.p2Board || []),
             p1Reserve: deepClone(snapshot?.p1Reserve || []),
@@ -446,8 +855,30 @@ async function simulateBattle(spec) {
             priorityPlayer: snapshot?.priorityPlayer || 'player1',
             phase: snapshot?.phase || 'battle',
             roundNumber: Number(snapshot?.roundNumber || round)
-          };
-          replaySteps.push(stepAction);
+          });
+          const safeStep = toSocketSafe(stepAction);
+          replaySteps.push(safeStep);
+          if (onLiveStep && safeStep) onLiveStep(safeStep);
+
+          if (safeStep && (safeStep.type === 'roundComplete' || safeStep.type === 'gameEnd')) {
+            roundBoundarySeq = Number(safeStep.seq || 0);
+            roundBoundaryWinner = safeStep.winner || null;
+          }
+
+          if (safeStep && safeStep.type === 'gameEnd' && eliminationRound == null) {
+            const snapshotRound = Number(snapshot?.roundNumber || round);
+            const stepWinner = safeStep.winner === 'player1'
+              ? 'p1'
+              : safeStep.winner === 'player2'
+                ? 'p2'
+                : null;
+            if (stepWinner) {
+              eliminationRound = Math.max(1, snapshotRound);
+              eliminationWinnerSide = stepWinner;
+              winningTeamHealthAtElimination = remainingStat(snapshot, stepWinner, 'currentHealth');
+              winningTeamEnergyAtElimination = remainingStat(snapshot, stepWinner, 'currentEnergy');
+            }
+          }
 
           collectAllTiles(snapshot).forEach((entry) => {
             heroNameByUid.set(entry.uid, entry.name);
@@ -461,12 +892,31 @@ async function simulateBattle(spec) {
             const casterUid = casterTile && casterTile.hero ? casterTile.hero._bettingUid : null;
             if (casterUid) {
               castsByHero.set(casterUid, Number(castsByHero.get(casterUid) || 0) + 1);
-              const damage = (Array.isArray(action.results) ? action.results : []).reduce((sum, item) => {
-                const amount = item && item.applied && item.applied.type === 'damage'
-                  ? Number(item.applied.amount || 0)
-                  : 0;
-                return sum + Math.max(0, amount);
-              }, 0);
+
+              // Use health deltas between snapshots to capture deferred/indirect cast damage.
+              const casterSide = heroSideByUid.get(casterUid) || null;
+              let damage = 0;
+              collectAllTiles(snapshot).forEach((entry) => {
+                const currentHp = entry.tile && entry.tile.currentHealth != null
+                  ? Number(entry.tile.currentHealth)
+                  : Number(entry.tile?.hero?.health || 0);
+                const nowHp = Math.max(0, currentHp);
+                const prevHp = Number(prevHealthByUid.get(entry.uid) || 0);
+                if (casterSide && entry.side !== casterSide) {
+                  damage += Math.max(0, prevHp - nowHp);
+                }
+              });
+
+              if (damage <= 0) {
+                // Fallback for non-deferred direct result payloads.
+                damage = (Array.isArray(action.results) ? action.results : []).reduce((sum, item) => {
+                  const amount = item && item.applied && item.applied.type === 'damage'
+                    ? Number(item.applied.amount || 0)
+                    : 0;
+                  return sum + Math.max(0, amount);
+                }, 0);
+              }
+
               damageByHero.set(casterUid, Number(damageByHero.get(casterUid) || 0) + damage);
               const casterName = heroNameByUid.get(casterUid) || 'Hero';
               if (damage > 0 && playback.length < 220) {
@@ -476,6 +926,46 @@ async function simulateBattle(spec) {
           }
 
           const allNow = collectAllTiles(snapshot);
+          const nowUids = new Set(allNow.map((entry) => entry.uid));
+
+          if (eliminationRound == null) {
+            const p1Alive = countAliveTilesForSide(snapshot, 'p1');
+            const p2Alive = countAliveTilesForSide(snapshot, 'p2');
+
+            if (p1Alive === 0 || p2Alive === 0) {
+              const snapshotRound = Number(snapshot?.roundNumber || round);
+              let snapshotWinnerSide = null;
+              if (p1Alive > p2Alive) snapshotWinnerSide = 'p1';
+              else if (p2Alive > p1Alive) snapshotWinnerSide = 'p2';
+              else {
+                const p1Hp = remainingStat(snapshot, 'p1', 'currentHealth');
+                const p2Hp = remainingStat(snapshot, 'p2', 'currentHealth');
+                snapshotWinnerSide = p1Hp >= p2Hp ? 'p1' : 'p2';
+              }
+
+              eliminationRound = Math.max(1, snapshotRound);
+              eliminationWinnerSide = snapshotWinnerSide;
+              winningTeamHealthAtElimination = remainingStat(snapshot, snapshotWinnerSide, 'currentHealth');
+              winningTeamEnergyAtElimination = remainingStat(snapshot, snapshotWinnerSide, 'currentEnergy');
+            }
+          }
+
+          // Some death flows remove heroes from the board immediately.
+          // Treat missing previously-alive heroes as death events.
+          prevAlive.forEach((beforeAlive, uid) => {
+            if (beforeAlive !== true) return;
+            if (nowUids.has(uid)) return;
+            const side = heroSideByUid.get(uid) || null;
+            const name = heroNameByUid.get(uid) || 'Hero';
+            deathSeq += 1;
+            deathEvents.push({ uid, round, seq: deathSeq, side });
+            deathsByRound.set(round, Number(deathsByRound.get(round) || 0) + 1);
+            prevAlive.set(uid, false);
+            if (playback.length < 220) {
+              playback.push(`Round ${round}: ${name} was slain.`);
+            }
+          });
+
           allNow.forEach((entry) => {
             const beforeAlive = prevAlive.get(entry.uid);
             const nowAlive = entry.alive;
@@ -488,15 +978,32 @@ async function simulateBattle(spec) {
                 playback.push(`Round ${round}: ${entry.name} was slain.`);
               }
             }
+
+            const hp = entry.tile && entry.tile.currentHealth != null
+              ? Number(entry.tile.currentHealth)
+              : Number(entry.tile?.hero?.health || 0);
+            prevHealthByUid.set(entry.uid, Math.max(0, hp));
           });
         }
       }
     );
 
+    if (isCancelled()) return null;
+
     p1Main = result.p1Board;
     p2Main = result.p2Board;
     p1Reserve = result.p1Reserve;
     p2Reserve = result.p2Reserve;
+    currentPriorityPlayer = result.priorityPlayer || currentPriorityPlayer;
+    lastCastActionBySide = result.lastCastActionBySide || lastCastActionBySide;
+
+    if (onRoundVisualBarrier && Number(roundBoundarySeq || 0) > 0) {
+      await onRoundVisualBarrier({
+        round: Number(round),
+        seq: Number(roundBoundarySeq),
+        hasWinner: !!roundBoundaryWinner
+      });
+    }
 
     if (result.winner) {
       winnerToken = result.winner;
@@ -509,18 +1016,23 @@ async function simulateBattle(spec) {
   const p1Health = remainingStat(finalSnapshot, 'p1', 'currentHealth');
   const p2Health = remainingStat(finalSnapshot, 'p2', 'currentHealth');
 
-  let winnerSide = winnerToken === 'player1'
-    ? 'p1'
-    : winnerToken === 'player2'
-      ? 'p2'
-      : p1Health >= p2Health
-        ? 'p1'
-        : 'p2';
+  let winnerSide = eliminationWinnerSide
+    || (winnerToken === 'player1'
+      ? 'p1'
+      : winnerToken === 'player2'
+        ? 'p2'
+        : p1Health >= p2Health
+          ? 'p1'
+          : 'p2');
 
   const losingSide = winnerSide === 'p1' ? 'p2' : 'p1';
 
-  const winningTeamHealth = remainingStat(finalSnapshot, winnerSide, 'currentHealth');
-  const winningTeamEnergy = remainingStat(finalSnapshot, winnerSide, 'currentEnergy');
+  const winningTeamHealth = winningTeamHealthAtElimination != null
+    ? Number(winningTeamHealthAtElimination)
+    : remainingStat(finalSnapshot, winnerSide, 'currentHealth');
+  const winningTeamEnergy = winningTeamEnergyAtElimination != null
+    ? Number(winningTeamEnergyAtElimination)
+    : remainingStat(finalSnapshot, winnerSide, 'currentEnergy');
 
   const damageEntries = [...damageByHero.entries()];
   const maxDamage = damageEntries.reduce((max, [, value]) => Math.max(max, Number(value || 0)), 0);
@@ -571,10 +1083,20 @@ async function simulateBattle(spec) {
     .filter(([, value]) => Number(value || 0) === maxDeathsAnyRound)
     .map(([round]) => Number(round));
 
+  const replayDerivedEndRound = replaySteps.reduce((max, step) => {
+    const stateRound = Number(step?.state?.roundNumber || 0);
+    const actionRound = Number(step?.roundNumber || 0);
+    return Math.max(max, stateRound, actionRound);
+  }, 0);
+
+  const resolvedEndRound = eliminationRound != null
+    ? Number(eliminationRound)
+    : Math.max(Number(endRound || 0), Number(replayDerivedEndRound || 0), 1);
+
   return {
     winnerSide,
     losingSide,
-    endRound,
+    endRound: resolvedEndRound,
     winningTeamHealth,
     winningTeamEnergy,
     mostDamageHeroes,
@@ -587,7 +1109,7 @@ async function simulateBattle(spec) {
     castsByHero: Object.fromEntries(castsByHero.entries()),
     damageByHero: Object.fromEntries(damageByHero.entries()),
     playback: playback.slice(0, 220),
-    replayInitialState: {
+    replayInitialState: toSocketSafe({
       p1Main: deepClone(spec.p1Main),
       p2Main: deepClone(spec.p2Main),
       p1Reserve: deepClone(spec.p1Reserve),
@@ -596,8 +1118,8 @@ async function simulateBattle(spec) {
       gameMode: 'classic',
       roundNumber: 0,
       priorityPlayer: 'player1'
-    },
-    replaySteps,
+    }),
+    replaySteps: toSocketSafe(replaySteps),
     finalSnapshot
   };
 }
@@ -625,6 +1147,217 @@ export function createBettingModeManager(io) {
     }
   };
 
+  const clearRoundVisualGate = (lobby) => {
+    if (!lobby || !lobby.pendingRoundVisualGate) return;
+    const gate = lobby.pendingRoundVisualGate;
+    if (gate.timeout) {
+      clearTimeout(gate.timeout);
+    }
+    lobby.pendingRoundVisualGate = null;
+  };
+
+  const clearPlaybackStepTimeout = (lobby) => {
+    if (!lobby || !lobby.playbackSession) return;
+    if (lobby.playbackSession.timeout) {
+      clearTimeout(lobby.playbackSession.timeout);
+      lobby.playbackSession.timeout = null;
+    }
+  };
+
+  const clearPlaybackStateFeedTimeout = (lobby) => {
+    if (!lobby || !lobby.playbackSession) return;
+    if (lobby.playbackSession.stateFeedTimeout) {
+      clearTimeout(lobby.playbackSession.stateFeedTimeout);
+      lobby.playbackSession.stateFeedTimeout = null;
+    }
+  };
+
+  const clearPlaybackSession = (lobby, resolve = false) => {
+    if (!lobby || !lobby.playbackSession) return;
+    const session = lobby.playbackSession;
+    clearPlaybackStepTimeout(lobby);
+    clearPlaybackStateFeedTimeout(lobby);
+    lobby.playbackSession = null;
+    if (resolve && typeof session.resolve === 'function') {
+      session.resolve();
+    }
+  };
+
+  const emitBattleStateSnapshot = (lobby, step) => {
+    if (!lobby || !step) return;
+    const payload = buildBattleStateSnapshotFromStep(step);
+    if (!payload) return;
+    io.to(roomForLobby(lobby.code)).emit('bettingBattleState', payload);
+  };
+
+  const scheduleNextPlaybackStateSnapshot = (lobby) => {
+    if (!lobby || !lobby.playbackSession) return;
+    const session = lobby.playbackSession;
+    if (!Array.isArray(session.steps)) return;
+
+    while (session.stateFeedIndex < session.steps.length) {
+      const step = session.steps[session.stateFeedIndex];
+      session.stateFeedIndex += 1;
+      if (!step || !step.state) continue;
+
+      emitBattleStateSnapshot(lobby, step);
+      const delayMs = Math.max(40, Math.min(220, Math.floor(estimateStepVisualMs(step) / 2)));
+      clearPlaybackStateFeedTimeout(lobby);
+      session.stateFeedTimeout = setTimeout(() => {
+        if (!lobby.playbackSession || lobby.playbackSession !== session) return;
+        scheduleNextPlaybackStateSnapshot(lobby);
+      }, delayMs);
+      return;
+    }
+
+    clearPlaybackStateFeedTimeout(lobby);
+  };
+
+  const sendNextPlaybackStep = (lobby) => {
+    if (!lobby || !lobby.playbackSession) return;
+    const session = lobby.playbackSession;
+    if (!lobbiesByCode.has(lobby.code)) {
+      clearPlaybackSession(lobby, true);
+      return;
+    }
+    if (!Array.isArray(session.steps) || session.index >= session.steps.length) {
+      clearPlaybackSession(lobby, true);
+      return;
+    }
+
+    const step = session.steps[session.index];
+    session.awaitingAck = true;
+    io.to(roomForLobby(lobby.code)).emit('bettingBattleStep', withTimelineMeta(step));
+
+    clearPlaybackStepTimeout(lobby);
+    session.timeout = setTimeout(() => {
+      if (!lobby.playbackSession || lobby.playbackSession !== session) return;
+      session.awaitingAck = false;
+      session.index += 1;
+      sendNextPlaybackStep(lobby);
+    }, BETTING_STEP_ACK_TIMEOUT_MS);
+  };
+
+  const advancePlaybackStep = (lobby) => {
+    if (!lobby || !lobby.playbackSession) return;
+    const session = lobby.playbackSession;
+    if (!session.awaitingAck) return;
+    session.awaitingAck = false;
+    clearPlaybackStepTimeout(lobby);
+    session.index += 1;
+    sendNextPlaybackStep(lobby);
+  };
+
+  const playBattleStepsWithAck = (lobby, steps) => {
+    if (!lobby || !Array.isArray(steps) || steps.length === 0) return Promise.resolve();
+    clearPlaybackSession(lobby, false);
+
+    const normalizedSteps = steps
+      .filter((step) => step && typeof step === 'object')
+      .map((step, idx) => ({
+        ...step,
+        seq: Number(step.seq || (idx + 1))
+      }));
+
+    if (normalizedSteps.length === 0) return Promise.resolve();
+
+    return new Promise((resolve) => {
+      lobby.playbackSession = {
+        steps: normalizedSteps,
+        index: 0,
+        awaitingAck: false,
+        stateFeedIndex: 0,
+        stateFeedTimeout: null,
+        timeout: null,
+        resolve
+      };
+      scheduleNextPlaybackStateSnapshot(lobby);
+      sendNextPlaybackStep(lobby);
+    });
+  };
+
+  const tryResolveRoundVisualGate = (lobby) => {
+    if (!lobby || !lobby.pendingRoundVisualGate) return false;
+    const gate = lobby.pendingRoundVisualGate;
+    const required = gate.requiredPlayerIds instanceof Set ? gate.requiredPlayerIds : new Set();
+    if (required.size === 0) {
+      const resolver = gate.resolve;
+      clearRoundVisualGate(lobby);
+      if (typeof resolver === 'function') resolver();
+      return true;
+    }
+    if ((gate.ackedPlayerIds instanceof Set ? gate.ackedPlayerIds.size : 0) <= 0) return false;
+    const resolver = gate.resolve;
+    clearRoundVisualGate(lobby);
+    if (typeof resolver === 'function') resolver();
+    return true;
+  };
+
+  const waitForRoundVisualBarrier = (lobby, payload = {}) => {
+    if (!lobby) return Promise.resolve();
+    clearRoundVisualGate(lobby);
+
+    const requiredPlayerIds = new Set(activeOnlinePlayerIds(lobby).map((id) => String(id)));
+    const seq = Number(payload.seq || 0);
+    const round = Number(payload.round || 0);
+    const timeoutMs = Math.max(2_000, Number(payload.timeoutMs || BETTING_ROUND_VISUAL_ACK_TIMEOUT_MS));
+
+    if (requiredPlayerIds.size === 0 || seq <= 0) {
+      return Promise.resolve();
+    }
+
+    return new Promise((resolve) => {
+      const gate = {
+        seq,
+        round,
+        hasWinner: !!payload.hasWinner,
+        requiredPlayerIds,
+        ackedPlayerIds: new Set(),
+        resolve,
+        timeout: null
+      };
+
+      const lastAckByPlayer = lobby.battleStepAckSeqByPlayer instanceof Map ? lobby.battleStepAckSeqByPlayer : new Map();
+      requiredPlayerIds.forEach((playerId) => {
+        const lastSeq = Number(lastAckByPlayer.get(String(playerId)) || 0);
+        if (lastSeq >= seq) {
+          gate.ackedPlayerIds.add(String(playerId));
+        }
+      });
+
+      gate.timeout = setTimeout(() => {
+        const stillPending = lobby.pendingRoundVisualGate && Number(lobby.pendingRoundVisualGate.seq || 0) === seq;
+        if (!stillPending) return;
+        const resolver = lobby.pendingRoundVisualGate.resolve;
+        clearRoundVisualGate(lobby);
+        if (typeof resolver === 'function') resolver();
+      }, timeoutMs);
+
+      lobby.pendingRoundVisualGate = gate;
+      tryResolveRoundVisualGate(lobby);
+    });
+  };
+
+  const activeOnlinePlayerIds = (lobby) => lobby.playerOrder.filter((id) => {
+    const player = lobby.players.get(id);
+    return !!(player && player.online !== false);
+  });
+
+  const tryAdvanceBattleToSummary = (lobby) => {
+    if (!lobby || lobby.phase !== 'battle') return false;
+    if (Number(lobby.lastSettledRound || 0) !== Number(lobby.currentRound || 0)) return false;
+    if (!lobby.roundSummary) return false;
+    if (lobby.playbackPending === true) return false;
+    if (lobby.playbackSession) return false;
+    const active = activeOnlinePlayerIds(lobby);
+    if (active.length === 0) return false;
+    const ackSet = lobby.battleVisualAcks instanceof Set ? lobby.battleVisualAcks : new Set();
+    if (ackSet.size <= 0) return false;
+    clearLobbyTimer(lobby);
+    beginSummaryPhase(lobby);
+    return true;
+  };
+
   const serializeLobby = (lobby, socketId) => {
     const mePlayerId = playerIdBySocketId.get(socketId) || null;
     const players = lobby.playerOrder
@@ -641,6 +1374,8 @@ export function createBettingModeManager(io) {
     const me = mePlayerId ? (lobby.players.get(mePlayerId) || null) : null;
 
     return {
+      serverNowTs: Date.now(),
+      serverInstanceId: BETTING_SERVER_INSTANCE_ID,
       code: lobby.code,
       visibility: lobby.visibility,
       phase: lobby.phase,
@@ -653,7 +1388,8 @@ export function createBettingModeManager(io) {
         ? {
             id: me.playerId,
             username: me.username,
-            coins: Number(me.coins || 0)
+            coins: Number(me.coins || 0),
+            hasSubmittedBet: !!(mePlayerId && lobby.bets && lobby.bets[mePlayerId])
           }
         : null,
       submittedBets: Object.keys(lobby.bets || {}).length,
@@ -663,15 +1399,12 @@ export function createBettingModeManager(io) {
       battle: lobby.battleSpec
         ? {
             bots: lobby.battleSpec.bots,
-            p1Main: lobby.battleSpec.p1Main,
-            p1Reserve: lobby.battleSpec.p1Reserve,
-            p2Main: lobby.battleSpec.p2Main,
-            p2Reserve: lobby.battleSpec.p2Reserve,
+            p1Main: toSocketSafe(lobby.battleSpec.p1Main),
+            p1Reserve: toSocketSafe(lobby.battleSpec.p1Reserve),
+            p2Main: toSocketSafe(lobby.battleSpec.p2Main),
+            p2Reserve: toSocketSafe(lobby.battleSpec.p2Reserve),
             sideBet: lobby.battleSpec.sideBet,
-            replay: lobby.battleReplay ? {
-              initialState: lobby.battleReplay.initialState,
-              steps: lobby.battleReplay.steps
-            } : null
+            replay: null
           }
         : null,
       playback: lobby.playback || null,
@@ -691,6 +1424,7 @@ export function createBettingModeManager(io) {
       }, 0);
       cards.push({
         code: lobby.code,
+        serverInstanceId: BETTING_SERVER_INSTANCE_ID,
         phase: lobby.phase,
         visibility: lobby.visibility,
         currentRound: lobby.currentRound,
@@ -805,8 +1539,10 @@ export function createBettingModeManager(io) {
     }, BETTING_SUMMARY_MS);
   };
 
-  const settleRound = async (lobby) => {
-    const battleOutcome = await simulateBattle(lobby.battleSpec);
+  const applyBattleOutcomeToLobby = (lobby, battleOutcome) => {
+    if (!lobby || !battleOutcome) return;
+    if (Number(lobby.lastSettledRound || 0) === Number(lobby.currentRound || 0)) return;
+
     const placed = lobby.playerOrder.map((id) => {
       const bet = lobby.bets[id] || {};
       return {
@@ -860,16 +1596,14 @@ export function createBettingModeManager(io) {
       winnerSide: battleOutcome.winnerSide,
       winnerName: battleOutcome.winnerSide === 'p1' ? lobby.battleSpec.bots.p1 : lobby.battleSpec.bots.p2
     };
-    lobby.battleReplay = {
-      initialState: battleOutcome.replayInitialState,
-      steps: battleOutcome.replaySteps
-    };
+    lobby.battleReplay = null;
 
     lobby.roundSummary = {
       round: lobby.currentRound,
       winnerSide: battleOutcome.winnerSide,
       winnerName: battleOutcome.winnerSide === 'p1' ? lobby.battleSpec.bots.p1 : lobby.battleSpec.bots.p2,
       endRound: battleOutcome.endRound,
+      debug: battleOutcome.debug || null,
       sideBet: lobby.battleSpec.sideBet,
       sideBetOutcome: {
         winningTeamHealth: battleOutcome.winningTeamHealth,
@@ -887,20 +1621,91 @@ export function createBettingModeManager(io) {
 
     lobby.phase = 'battle';
     lobby.betDeadlineTs = null;
-    lobby.battleDeadlineTs = Date.now() + BETTING_BATTLE_PLAYBACK_MS;
+    lobby.battleDeadlineTs = null;
+    lobby.playbackPending = !!(Array.isArray(battleOutcome.replaySteps) && battleOutcome.replaySteps.length > 0);
+    lobby.battleVisualAcks = new Set();
+    lobby.lastSettledRound = Number(lobby.currentRound || 0);
 
     emitLobbyState(lobby);
 
-    clearLobbyTimer(lobby);
-    lobby.timer = setTimeout(() => {
+    const checkBattleVisualCompletion = () => {
       if (!lobbiesByCode.has(lobby.code)) return;
+      if (lobby.phase !== 'battle') return;
+      if (lobby.playbackPending === true || lobby.playbackSession) {
+        clearLobbyTimer(lobby);
+        lobby.timer = setTimeout(checkBattleVisualCompletion, 1500);
+        return;
+      }
       beginSummaryPhase(lobby);
-    }, BETTING_BATTLE_PLAYBACK_MS);
+    };
+
+    clearLobbyTimer(lobby);
+    lobby.timer = setTimeout(checkBattleVisualCompletion, BETTING_BATTLE_VISUAL_TIMEOUT_MS);
+  };
+
+  const settleRound = async (lobby) => {
+    const simulationMeta = await simulateBattleWithTimeout(lobby.battleSpec, BETTING_SIMULATION_TIMEOUT_MS, {});
+    const simulated = simulationMeta?.result || null;
+    const battleOutcome = simulated || buildFallbackBattleOutcome(lobby.battleSpec);
+
+    const debug = {
+      outcomeSource: simulated
+        ? 'simulated'
+        : (simulationMeta?.didTimeout ? 'fallback:simulation-timeout' : 'fallback:simulation-null'),
+      settleStartedAt: Number(lobby._debugSettleStartedAt || 0),
+      settleElapsedMs: Math.max(0, Date.now() - Number(lobby._debugSettleStartedAt || Date.now())),
+      simulationElapsedMs: Number(simulationMeta?.elapsedMs || 0),
+      simulationTimeoutMs: Number(simulationMeta?.timeoutMs || BETTING_SIMULATION_TIMEOUT_MS),
+      simulationTimedOut: !!simulationMeta?.didTimeout,
+      replaySteps: Number(Array.isArray(simulated?.replaySteps) ? simulated.replaySteps.length : 0),
+      watchdogMs: Number(BETTING_SETTLE_WATCHDOG_MS),
+      settledRound: Number(lobby.currentRound || 0)
+    };
+    battleOutcome.debug = {
+      ...(battleOutcome.debug || {}),
+      ...debug
+    };
+
+    applyBattleOutcomeToLobby(lobby, battleOutcome);
+
+    if (simulated && Array.isArray(simulated.replaySteps) && simulated.replaySteps.length > 0) {
+      await playBattleStepsWithAck(lobby, simulated.replaySteps);
+      lobby.playbackPending = false;
+      tryAdvanceBattleToSummary(lobby);
+    }
   };
 
   const closeBettingWindow = async (lobby) => {
     if (!lobby || lobby.phase !== 'betting') return;
     lobby.betDeadlineTs = null;
+    // Keep lobby in a pre-battle settle phase while simulation runs.
+    // This avoids mounting BattlePhase before replay steps are ready.
+    lobby.phase = 'settling';
+    lobby.battleDeadlineTs = null;
+    lobby.settlingRound = true;
+    lobby._debugSettleStartedAt = Date.now();
+    emitLobbyState(lobby);
+
+    const settleWatchdog = setTimeout(() => {
+      if (!lobby || !lobbiesByCode.has(lobby.code)) return;
+      if (Number(lobby.lastSettledRound || 0) === Number(lobby.currentRound || 0)) return;
+      try {
+        console.warn('[Betting] Settle watchdog fallback applied for lobby', lobby.code, 'round', lobby.currentRound);
+        const fallback = buildFallbackBattleOutcome(lobby.battleSpec);
+        fallback.debug = {
+          outcomeSource: 'fallback:settle-watchdog',
+          settleStartedAt: Number(lobby._debugSettleStartedAt || 0),
+          settleElapsedMs: Math.max(0, Date.now() - Number(lobby._debugSettleStartedAt || Date.now())),
+          watchdogMs: Number(BETTING_SETTLE_WATCHDOG_MS),
+          simulationTimeoutMs: Number(BETTING_SIMULATION_TIMEOUT_MS),
+          settledRound: Number(lobby.currentRound || 0)
+        };
+        applyBattleOutcomeToLobby(lobby, fallback);
+      } catch (error) {
+        console.error('[Betting] Watchdog fallback failed:', error);
+      }
+    }, BETTING_SETTLE_WATCHDOG_MS);
+
     try {
       await settleRound(lobby);
     } catch (error) {
@@ -909,9 +1714,25 @@ export function createBettingModeManager(io) {
       lobby.roundSummary = {
         round: lobby.currentRound,
         winnerName: 'Unavailable',
+        debug: {
+          outcomeSource: 'error:settle-exception',
+          settleStartedAt: Number(lobby._debugSettleStartedAt || 0),
+          settleElapsedMs: Math.max(0, Date.now() - Number(lobby._debugSettleStartedAt || Date.now())),
+          simulationTimeoutMs: Number(BETTING_SIMULATION_TIMEOUT_MS),
+          watchdogMs: Number(BETTING_SETTLE_WATCHDOG_MS),
+          settledRound: Number(lobby.currentRound || 0)
+        },
         rows: []
       };
+      clearRoundVisualGate(lobby);
+      clearPlaybackSession(lobby, false);
       emitLobbyState(lobby);
+    } finally {
+      clearTimeout(settleWatchdog);
+      clearRoundVisualGate(lobby);
+      clearPlaybackSession(lobby, false);
+      lobby.settlingRound = false;
+      lobby._debugSettleStartedAt = null;
     }
   };
 
@@ -922,6 +1743,11 @@ export function createBettingModeManager(io) {
     lobby.roundSummary = null;
     lobby.playback = null;
     lobby.battleReplay = null;
+    lobby.battleVisualAcks = null;
+    lobby.playbackPending = false;
+    lobby.battleStepAckSeqByPlayer = new Map();
+    clearRoundVisualGate(lobby);
+    clearPlaybackSession(lobby, false);
     lobby.summaryDeadlineTs = null;
     lobby.battleDeadlineTs = null;
 
@@ -970,6 +1796,9 @@ export function createBettingModeManager(io) {
         playback: null,
         roundSummary: null,
         finalStandings: null,
+        lastSettledRound: 0,
+        settlingRound: false,
+        battleStepAckSeqByPlayer: new Map(),
         timer: null,
         betDeadlineTs: null,
         battleDeadlineTs: null,
@@ -1028,6 +1857,12 @@ export function createBettingModeManager(io) {
       }
       if (lobby.phase !== 'lobby') {
         socket.emit('bettingError', { message: 'Game already started in this lobby.' });
+        return;
+      }
+
+      const existingInLobby = lobby.players.get(playerId);
+      if (existingInLobby && existingInLobby.online && existingInLobby.socketId && existingInLobby.socketId !== socket.id) {
+        socket.emit('bettingError', { message: 'This account is already connected to the lobby on another device/tab.' });
         return;
       }
 
@@ -1103,6 +1938,11 @@ export function createBettingModeManager(io) {
       const player = lobby.players.get(playerId);
       if (!player) return;
 
+      if (lobby.bets[playerId]) {
+        socket.emit('bettingError', { message: 'Bet already submitted for this round.' });
+        return;
+      }
+
       const primaryAmount = Math.max(0, Math.floor(Number(payload.primaryAmount || 0)));
       const sideAmountRaw = Math.max(0, Math.floor(Number(payload.sideAmount || 0)));
       const sideAmount = Math.min(Number(lobby.battleSpec?.sideBet?.maxStake || 5), sideAmountRaw);
@@ -1152,7 +1992,80 @@ export function createBettingModeManager(io) {
         submittedAt: Date.now()
       };
 
+      const submittedPlayers = new Set(Object.keys(lobby.bets || {}));
+      const activePlayerIds = lobby.playerOrder.filter((id) => {
+        const p = lobby.players.get(id);
+        return !!(p && p.online !== false);
+      });
+      const allActiveSubmitted = activePlayerIds.length > 0 && activePlayerIds.every((id) => submittedPlayers.has(String(id)));
+      const allSeatsSubmitted = lobby.playerOrder.length > 0 && lobby.playerOrder.every((id) => submittedPlayers.has(String(id)));
+
+      if (allActiveSubmitted || allSeatsSubmitted) {
+        clearLobbyTimer(lobby);
+        closeBettingWindow(lobby).catch((error) => {
+          console.error('[Betting] Failed to settle early close:', error);
+        });
+        return;
+      }
+
       emitLobbyState(lobby);
+    });
+
+    socket.on('bettingBattleVisualComplete', (payload = {}) => {
+      const lobby = getLobbyForSocket(socket.id);
+      if (!lobby || lobby.phase !== 'battle') return;
+      if (lobby.settlingRound) return;
+      if (Number(lobby.lastSettledRound || 0) !== Number(lobby.currentRound || 0)) return;
+      if (!lobby.roundSummary) return;
+
+      const playerId = getPlayerId(socket);
+      if (!playerId) return;
+
+      const expectedRound = Number(payload?.round || 0);
+      if (expectedRound && expectedRound !== Number(lobby.currentRound || 0)) return;
+
+      if (!(lobby.battleVisualAcks instanceof Set)) {
+        lobby.battleVisualAcks = new Set();
+      }
+      lobby.battleVisualAcks.add(String(playerId));
+      tryAdvanceBattleToSummary(lobby);
+    });
+
+    socket.on('bettingBattleStepAck', (payload = {}) => {
+      const lobby = getLobbyForSocket(socket.id);
+      if (!lobby) return;
+
+      const playerId = getPlayerId(socket);
+      if (!playerId) return;
+
+      const seq = Number(payload?.seq || 0);
+      if (!Number.isFinite(seq) || seq <= 0) return;
+
+      if (!(lobby.battleStepAckSeqByPlayer instanceof Map)) {
+        lobby.battleStepAckSeqByPlayer = new Map();
+      }
+      const prevSeq = Number(lobby.battleStepAckSeqByPlayer.get(String(playerId)) || 0);
+      if (seq > prevSeq) {
+        lobby.battleStepAckSeqByPlayer.set(String(playerId), seq);
+      }
+
+      if (lobby.playbackSession && lobby.playbackSession.awaitingAck) {
+        const current = lobby.playbackSession.steps?.[lobby.playbackSession.index] || null;
+        const expected = Number(current?.seq || 0);
+        if (expected > 0 && seq >= expected) {
+          advancePlaybackStep(lobby);
+          return;
+        }
+      }
+
+      if (!lobby.pendingRoundVisualGate) return;
+
+      const gate = lobby.pendingRoundVisualGate;
+      if (seq < Number(gate.seq || 0)) return;
+      if (gate.requiredPlayerIds instanceof Set && gate.requiredPlayerIds.size > 0 && !gate.requiredPlayerIds.has(String(playerId))) return;
+
+      gate.ackedPlayerIds.add(String(playerId));
+      tryResolveRoundVisualGate(lobby);
     });
   };
 
@@ -1178,6 +2091,12 @@ export function createBettingModeManager(io) {
     socket.join(roomForLobby(existingCode));
 
     const player = lobby.players.get(playerId);
+    if (player.online && player.socketId && player.socketId !== socket.id) {
+      socket.emit('bettingError', { message: 'This account is already connected to that betting lobby on another device/tab.' });
+      socket.emit('bettingLobbyBrowser', { lobbies: serializeLobbyBrowser() });
+      return;
+    }
+
     player.socketId = socket.id;
     player.online = true;
     player.username = getPlayerName(socket);
@@ -1197,7 +2116,9 @@ export function createBettingModeManager(io) {
     player.socketId = null;
     player.online = false;
     player.lastSeenAt = Date.now();
+    tryResolveRoundVisualGate(lobby);
     emitLobbyState(lobby);
+    tryAdvanceBattleToSummary(lobby);
   };
 
   return {

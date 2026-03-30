@@ -1372,6 +1372,86 @@ export const HEROES = [
     },
     description: 'Troll: Club Smash [3] targets highest Health enemy for 6 Attack Power and applies Armor Break (-2 Armor). Troll Regeneration [2] heals self for 5. Pay The Toll [2] applies an effect that deals 2 damage to moved or swapped enemies that end on the main board.'
   },
+  {
+    id: 'halbrechtID',
+    name: 'Halbrecht',
+    image: '/images/heroes/Halbrecht Cropped.png',
+    health: 12,
+    armor: 3,
+    speed: 2,
+    energy: 0,
+    draftable: false,
+    spells: {
+      front: { id: 'justice', cost: 3, casts: 4 },
+      middle: { id: 'armorUp', cost: 2, casts: 4 },
+      back: { id: 'battleFormation', cost: 4, casts: 3 },
+    },
+    description: 'Story placeholder: Halbrecht uses a tank/commander loadout built from existing Paladin and Prince spells.'
+  },
+  {
+    id: 'varricID',
+    name: 'Varric',
+    image: '/images/heroes/Varric Cropped.png',
+    health: 11,
+    armor: 2,
+    speed: 3,
+    energy: 0,
+    draftable: false,
+    spells: {
+      front: { id: 'duel', cost: 3, casts: 4 },
+      middle: { id: 'cleave', cost: 3, casts: 3 },
+      back: { id: 'blackArrows', cost: 3, casts: 3 },
+    },
+    description: 'Story placeholder: Varric is a flexible frontline commander using existing melee and ranged pressure spells.'
+  },
+  {
+    id: 'rogueMageID',
+    name: 'Rogue Mage',
+    image: '/images/heroes/Dark Mage Cropped.jpg',
+    health: 8,
+    armor: 1,
+    speed: 3,
+    energy: 1,
+    draftable: false,
+    spells: {
+      front: { id: 'arcaneBolt', cost: 2, casts: 4 },
+      middle: { id: 'hex', cost: 2, casts: 4 },
+      back: { id: 'energyWave', cost: 5, casts: 2 },
+    },
+    description: 'Story placeholder: Rogue Mage leans on existing arcane and curse spells with known animations.'
+  },
+  {
+    id: 'outcastAssassinID',
+    name: 'Outcast Assassin',
+    image: '/images/heroes/Assassin cropped.jpg',
+    health: 8,
+    armor: 1,
+    speed: 4,
+    energy: 0,
+    draftable: false,
+    spells: {
+      front: { id: 'slash', cost: 2, casts: 5 },
+      middle: { id: 'assassinate', cost: 3, casts: 2 },
+      back: { id: 'duel', cost: 3, casts: 3 },
+    },
+    description: 'Story placeholder: Outcast Assassin uses an existing burst-focused kit with no new VFX requirements.'
+  },
+  {
+    id: 'garrukRedID',
+    name: 'Garruk the Red',
+    image: '/images/heroes/Axeman Cropped.jpg',
+    health: 13,
+    armor: 2,
+    speed: 2,
+    energy: 0,
+    draftable: false,
+    spells: {
+      front: { id: 'slash', cost: 2, casts: 5 },
+      middle: { id: 'cleave', cost: 3, casts: 3 },
+      back: { id: 'duel', cost: 3, casts: 3 },
+    },
+    description: 'Story placeholder: Garruk uses heavy melee abilities that already have stable animations.'
+  },
 ];
 
 /*

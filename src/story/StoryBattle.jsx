@@ -12,6 +12,55 @@ import { getStoryEnemyTeam } from './storyEnemies.js';
 import { getStoryArc } from './storyData.js';
 import getAssetPath from '../utils/assetPath.js';
 
+const DEFAULT_STORY_BACKGROUND = '/images/background/BSVBackground.png';
+
+function buildPresentationConfig(node) {
+  const presentation = node?.presentation || {};
+
+  const backgroundCandidates = [];
+  if (typeof presentation.backgroundImage === 'string' && presentation.backgroundImage) {
+    backgroundCandidates.push(presentation.backgroundImage);
+  }
+  if (typeof presentation.backgroundKey === 'string' && presentation.backgroundKey) {
+    backgroundCandidates.push(`/images/background/story/${presentation.backgroundKey}.webp`);
+    backgroundCandidates.push(`/images/background/story/${presentation.backgroundKey}.jpg`);
+    backgroundCandidates.push(`/images/background/story/${presentation.backgroundKey}.png`);
+  }
+  backgroundCandidates.push(DEFAULT_STORY_BACKGROUND);
+
+  const ambientCandidates = [];
+  if (typeof presentation.ambientTrack === 'string' && presentation.ambientTrack) {
+    ambientCandidates.push(presentation.ambientTrack);
+  }
+  if (typeof presentation.ambientKey === 'string' && presentation.ambientKey) {
+    ambientCandidates.push(`/images/sounds/ambient/${presentation.ambientKey}.mp3`);
+    ambientCandidates.push(`/images/sounds/ambient/${presentation.ambientKey}.ogg`);
+    ambientCandidates.push(`/images/sounds/ambient/${presentation.ambientKey}.wav`);
+  }
+
+  const introStingerCandidates = [];
+  const introStinger = presentation?.stingers?.intro;
+  if (typeof introStinger === 'string' && introStinger) {
+    introStingerCandidates.push(`/images/sounds/stingers/${introStinger}.mp3`);
+    introStingerCandidates.push(`/images/sounds/stingers/${introStinger}.ogg`);
+    introStingerCandidates.push(`/images/sounds/stingers/${introStinger}.wav`);
+  }
+
+  return {
+    backgroundImage: backgroundCandidates
+      .map(path => `url(${getAssetPath(encodeURI(path))})`)
+      .join(', '),
+    ambientCandidates,
+    introStingerCandidates,
+    ambientVolume: Number.isFinite(presentation.ambientVolume)
+      ? Math.max(0, Math.min(1, presentation.ambientVolume))
+      : 0.22,
+    stingerVolume: Number.isFinite(presentation.stingerVolume)
+      ? Math.max(0, Math.min(1, presentation.stingerVolume))
+      : 0.35
+  };
+}
+
 const styles = {
   container: {
     minHeight: '100vh',
@@ -43,13 +92,14 @@ const styles = {
 export default function StoryBattle({ runState, node, onBattleEnd }) {
   const [socket, setSocket] = useState(null);
   const [gameState, setGameState] = useState(null);
+  const ambientAudioRef = useRef(null);
+  const introStingerPlayedForNodeRef = useRef(null);
   const [battleSpeedMultiplier] = useState(() => {
     const savedStory = Number(localStorage.getItem('storyBattleSpeedMultiplier') || NaN);
     if (Number.isFinite(savedStory)) return Math.min(4, Math.max(1, savedStory));
     return 1;
   });
   const battleEndHandledRef = useRef(false);
-  const autoStartRef = useRef(false);
   const battleStateRef = useRef(null);
   const battleLaunchedRef = useRef(false);
   const [sceneIndex, setSceneIndex] = useState(0);
@@ -107,6 +157,8 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
         rightPortraits: entry.rightPortraits
       }));
   }, [node]);
+
+  const presentationConfig = useMemo(() => buildPresentationConfig(node), [node]);
 
   useEffect(() => {
     const localSocket = createOfflineSocket();
@@ -247,29 +299,13 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     setBattleDialogueIndex(0);
     setBattleDialogueActive(false);
     if (sceneSteps.length === 0) {
-      autoStartRef.current = false;
       socket.emit('setTestState', battleState);
       battleLaunchedRef.current = true;
     }
   }, [socket, runState, node, sceneSteps.length]);
 
-  useEffect(() => {
-    if (!socket || !gameState || autoStartRef.current) return;
-    if (gameState.phase !== 'battle') return;
-    if (gameState.lastAction) return;
-    if (!battleLaunchedRef.current) return;
-    if (battleDialogueActive) return;
-    autoStartRef.current = true;
-    socket.emit('makeMove', {
-      type: 'startRound',
-      priorityPlayer: gameState.priorityPlayer || 'player1',
-      speedMultiplier: battleSpeedMultiplier
-    });
-  }, [socket, gameState, battleDialogueActive, battleSpeedMultiplier]);
-
   const startBattle = () => {
     if (!socket || !battleStateRef.current || battleLaunchedRef.current) return;
-    autoStartRef.current = false;
     if (battleDialogueSteps.length > 0) {
       setBattleDialogueIndex(0);
       setBattleDialogueActive(true);
@@ -345,6 +381,100 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     }
   }, [gameState, onBattleEnd]);
 
+  useEffect(() => {
+    if (!node) return;
+
+    if (ambientAudioRef.current) {
+      ambientAudioRef.current.pause();
+      ambientAudioRef.current.src = '';
+      ambientAudioRef.current = null;
+    }
+
+    const candidates = presentationConfig.ambientCandidates || [];
+    if (!candidates.length) return;
+
+    const audio = new Audio();
+    ambientAudioRef.current = audio;
+    audio.loop = true;
+    audio.volume = presentationConfig.ambientVolume;
+    audio.preload = 'none';
+
+    let index = 0;
+    let disposed = false;
+
+    const tryPlay = () => {
+      if (disposed || index >= candidates.length) return;
+      audio.src = getAssetPath(encodeURI(candidates[index]));
+      const playPromise = audio.play();
+      if (playPromise?.catch) {
+        playPromise.catch(() => {
+          index += 1;
+          tryPlay();
+        });
+      }
+    };
+
+    const onError = () => {
+      if (disposed) return;
+      index += 1;
+      tryPlay();
+    };
+
+    audio.addEventListener('error', onError);
+    tryPlay();
+
+    return () => {
+      disposed = true;
+      audio.removeEventListener('error', onError);
+      audio.pause();
+      audio.src = '';
+      if (ambientAudioRef.current === audio) {
+        ambientAudioRef.current = null;
+      }
+    };
+  }, [node?.id, presentationConfig.ambientCandidates, presentationConfig.ambientVolume]);
+
+  useEffect(() => {
+    if (!node) return;
+    if (introStingerPlayedForNodeRef.current === node.id) return;
+
+    const candidates = presentationConfig.introStingerCandidates || [];
+    if (!candidates.length) return;
+
+    introStingerPlayedForNodeRef.current = node.id;
+    const stinger = new Audio();
+    stinger.volume = presentationConfig.stingerVolume;
+    stinger.preload = 'none';
+
+    let index = 0;
+
+    const tryPlay = () => {
+      if (index >= candidates.length) return;
+      stinger.src = getAssetPath(encodeURI(candidates[index]));
+      const playPromise = stinger.play();
+      if (playPromise?.catch) {
+        playPromise.catch(() => {
+          index += 1;
+          tryPlay();
+        });
+      }
+    };
+
+    const onError = () => {
+      index += 1;
+      tryPlay();
+    };
+
+    stinger.addEventListener('error', onError);
+    tryPlay();
+
+    return () => {
+      stinger.removeEventListener('error', onError);
+      stinger.pause();
+      stinger.src = '';
+    };
+  }, [node?.id, presentationConfig.introStingerCandidates, presentationConfig.stingerVolume]);
+
   if (!node) return null;
 
   const activeSteps = sceneActive
@@ -362,8 +492,7 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     const isDialogue = step && step.type === 'dialogue';
     const isNarration = step && step.type === 'narration';
     const speakerImages = {
-      Knight: '/images/heroes/Knight Cropped.jpg',
-      Warrior: '/images/heroes/Knight Cropped.jpg',
+      Warrior: '/images/heroes/Warrior Cropped.jpg',
       Lancer: '/images/heroes/Lancer Cropped.jpg',
       'Ice Mage': '/images/heroes/Ice Mage Cropped.jpg',
       'Fire Mage': '/images/heroes/Fire Mage Cropped.jpg',
@@ -374,7 +503,7 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
       'Battle Mage': '/images/heroes/Battle Mage Cropped.jpg'
     };
     const leftDefaults = [
-      { name: 'Knight', image: speakerImages.Knight },
+      { name: 'Warrior', image: speakerImages.Warrior },
       { name: 'Lancer', image: speakerImages.Lancer }
     ];
     const leftPortraits = Array.isArray(step.leftPortraits) && step.leftPortraits.length > 0
@@ -434,11 +563,12 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     };
     const narrationLines = isNarration && Array.isArray(step.lines) ? step.lines : [];
     const narrationCharCount = narrationLines.reduce((total, line) => total + (line?.length || 0), 0);
-    const charsPerSecond = 4.4;
+    const scrollSpeedMultiplier = 1.3;
+    const charsPerSecond = 4.4 * scrollSpeedMultiplier;
     const secondsByChars = narrationCharCount / charsPerSecond;
-    const secondsByLines = narrationLines.length * 7;
+    const secondsByLines = (narrationLines.length * 7) / scrollSpeedMultiplier;
     const scrollDurationSeconds = isNarration
-      ? Math.max(34, secondsByChars, secondsByLines)
+      ? Math.max(24, secondsByChars, secondsByLines)
       : 28;
     const estimatedDialogueLines = isDialogue
       ? Math.ceil((step.text?.length || 0) / 38)
@@ -451,7 +581,7 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
         className="story-scene"
         style={{
           ...styles.container,
-          backgroundImage: `url(${getAssetPath('/images/background/BSVBackground.png')})`,
+          backgroundImage: presentationConfig.backgroundImage,
           backgroundSize: 'cover',
           backgroundPosition: 'center'
         }}
@@ -520,7 +650,14 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
   }
 
   return (
-    <div style={styles.container}>
+    <div
+      style={{
+        ...styles.container,
+        backgroundImage: presentationConfig.backgroundImage,
+        backgroundSize: 'cover',
+        backgroundPosition: 'center'
+      }}
+    >
       <div style={styles.banner}>
         <div>
           <div style={styles.bannerTitle}>{node.title}</div>

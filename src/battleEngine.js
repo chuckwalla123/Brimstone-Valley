@@ -491,7 +491,7 @@ function getCastOrder(casts = [], p1Board = [], p2Board = [], p3Board = [], prio
   return { ordered, priorityPlayer };
 }
 
-export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p1Reserve = [], p2Reserve = [], p3Reserve = [], addLog, priorityPlayer = 'player1', roundNumber = 1, lastCastActionBySide = null, gameMode = null }, { castDelayMs = 700, onStep, postEffectDelayMs = 0, reactionDelayMs = 1000, postCastDelayMs = 500, quiet = false, speedMultiplier = 1 } = {}) {
+export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p1Reserve = [], p2Reserve = [], p3Reserve = [], addLog, priorityPlayer = 'player1', roundNumber = 1, lastCastActionBySide = null, gameMode = null }, { castDelayMs = 700, onStep, postEffectDelayMs = 0, reactionDelayMs = 1000, postCastDelayMs = 500, quiet = false, speedMultiplier = 1, rowBasicAttackWhenSlotEmpty = true } = {}) {
   const normalizedSpeedMultiplier = Math.max(1, Number(speedMultiplier || 1));
   const scaleDelay = (ms) => Math.max(0, Math.floor(Number(ms || 0) / normalizedSpeedMultiplier));
   const scaledPostCastDelayMs = scaleDelay(postCastDelayMs);
@@ -1491,14 +1491,15 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
 
   // Optional short pause after effect pulses/onRoundStart triggers so UI can show damage animations
   if (typeof postEffectDelayMs === 'number' && postEffectDelayMs > 0) {
-    addLog && addLog(`Pausing ${postEffectDelayMs}ms after onRoundStart effects before casting`);
+    const scaledPostEffectDelayMs = scaleDelay(postEffectDelayMs);
+    addLog && addLog(`Pausing ${scaledPostEffectDelayMs}ms after onRoundStart effects before casting`);
     try {
       if (typeof onStep === 'function') {
-        const pauseAction = { type: 'postEffectDelay', duration: Number(postEffectDelayMs) };
+        const pauseAction = { type: 'postEffectDelay', duration: Number(scaledPostEffectDelayMs) };
         try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: pauseAction }); } catch (e) {}
       }
     } catch (e) {}
-    await new Promise(res => setTimeout(res, Number(postEffectDelayMs)));
+    await new Promise(res => setTimeout(res, Number(scaledPostEffectDelayMs)));
   }
 
   // Apply energy increments sequentially (emit event BEFORE applying each increment)
@@ -1774,13 +1775,18 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
           }
         }
       } catch (e) {}
-      // If the slot has no spell OR the hero started the pass with zero casts remaining
-      // (meaning they are out of casts across all slots), allow a basic attack while energy permits.
+      // If the slot has no spell OR casts are exhausted per configured eligibility rule,
+      // allow a basic attack while energy permits.
       try {
         let energyForBasic = tile.currentEnergy || 0;
-        const heroOutOfCasts = totalCastsRemaining <= 0;
-        if ((!spec || !spec.id) || heroOutOfCasts) {
-          if (heroOutOfCasts) addLog && addLog(`  > ${boardName}[${idx}] no casts remaining across all slots — basic attack eligible`);
+        const slotOutOfCasts = rowBasicAttackWhenSlotEmpty
+          ? (slotRemainingAtStart <= 0)
+          : (totalCastsRemaining <= 0);
+        if ((!spec || !spec.id) || slotOutOfCasts) {
+          if (slotOutOfCasts) {
+            const scopeText = rowBasicAttackWhenSlotEmpty ? `active row (${slot})` : 'all rows';
+            addLog && addLog(`  > ${boardName}[${idx}] no casts remaining in ${scopeText} — basic attack eligible`);
+          }
           if (energyForBasic >= 1 && !basicQueued) {
               // basic attack consumes all current energy at resolution time; attach queuedCost
               tile.spellCasts = tile.spellCasts || [];
@@ -1803,12 +1809,14 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       // enqueue a basic attack as a fallback. This ensures heroes who are out of casts
       // still perform a basic attack when they have energy.
       try {
-        // Only enqueue fallback basic attack when this slot truly has no casts remaining
-        // and nothing else was queued for this tile.
-        const totalRemainingForFallback = (tile._castsRemaining
-          ? (Number(tile._castsRemaining.front || 0) + Number(tile._castsRemaining.middle || 0) + Number(tile._castsRemaining.back || 0))
-          : 0);
-        if ((tile.spellCasts || []).length === 0 && totalRemainingForFallback <= 0) {
+        // Only enqueue fallback basic attack when configured cast-eligibility scope
+        // is exhausted and nothing else was queued for this tile.
+        const fallbackOutOfCasts = rowBasicAttackWhenSlotEmpty
+          ? ((tile._castsRemaining ? Number(tile._castsRemaining[slot] || 0) : 0) <= 0)
+          : ((tile._castsRemaining
+              ? (Number(tile._castsRemaining.front || 0) + Number(tile._castsRemaining.middle || 0) + Number(tile._castsRemaining.back || 0))
+              : 0) <= 0);
+        if ((tile.spellCasts || []).length === 0 && fallbackOutOfCasts) {
           const eNow = tile.currentEnergy || 0;
           if (eNow >= 1 && !basicQueued) {
             tile.spellCasts = tile.spellCasts || [];
@@ -1838,7 +1846,14 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
   // re-run auto-cast collection to allow tiles that gained energy mid-round
   // (e.g. from Frenzy) to enqueue casts and act during the same round.
   const processedQueuedIds = new Set();
+  const MAX_CAST_RESOLUTIONS_PER_ROUND = 1200;
+  let castResolutions = 0;
   while (pendingCasts.length > 0) {
+    castResolutions += 1;
+    if (castResolutions > MAX_CAST_RESOLUTIONS_PER_ROUND) {
+      addLog && addLog(`Cast resolution safety cap reached (${MAX_CAST_RESOLUTIONS_PER_ROUND}) - ending round early to prevent hang.`);
+      break;
+    }
     // Order pending casts and pick the next one to resolve
     const go = getCastOrder(pendingCasts, cP1, cP2, cP3, priorityPlayer, addLog);
     const ordered = go.ordered;

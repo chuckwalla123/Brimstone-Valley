@@ -14,6 +14,7 @@ COPY src/spell.js ./src/spell.js
 COPY src/spells.js ./src/spells.js
 COPY src/targeting.js ./src/targeting.js
 COPY src/tower/augments.js ./src/tower/augments.js
+COPY src/ai/easyAI.js ./src/ai/easyAI.js
 
 EXPOSE 3002
 

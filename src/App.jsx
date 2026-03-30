@@ -29,6 +29,15 @@ const resolveServerUrl = () => {
 
 const SERVER_URL = resolveServerUrl();
 
+const isLocalServerUrl = (url) => {
+  try {
+    const parsed = new URL(url, typeof window !== 'undefined' ? window.location.origin : undefined);
+    return parsed.hostname === 'localhost' || parsed.hostname === '127.0.0.1';
+  } catch {
+    return false;
+  }
+};
+
 // Check if we're running in Electron or offline mode
 const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron;
 const forceOffline = typeof window !== 'undefined' && (
@@ -146,11 +155,16 @@ function App() {
     }
     
     // Try to connect to server
+    const localServer = isLocalServerUrl(SERVER_URL);
     const newSocket = io(SERVER_URL, {
       timeout: 15000,
       reconnectionAttempts: 20,
       reconnectionDelay: 1000,
-      reconnectionDelayMax: 5000
+      reconnectionDelayMax: 5000,
+      // Use websocket-first everywhere, but keep polling as fallback when ws handshake is rejected.
+      transports: ['websocket', 'polling'],
+      tryAllTransports: true,
+      rememberUpgrade: !localServer
     });
     setSocket(newSocket);
     setOnlineSocket(newSocket); // Keep reference to online socket
@@ -200,7 +214,15 @@ function App() {
 
     // Handle connection errors - fallback to offline mode
     newSocket.on('connect_error', (error) => {
-      console.warn('[App] Connection error:', error.message);
+      const extra = error && typeof error === 'object'
+        ? {
+            message: error.message,
+            description: error.description,
+            context: error.context,
+            type: error.type
+          }
+        : { message: String(error || 'unknown') };
+      console.warn('[App] Connection error:', extra);
       setConnectionStatus('error');
     });
 
@@ -250,6 +272,12 @@ function App() {
       setGameState(null);
       setAiDifficulty(null);
       setLocalSide(null);
+      if (onlineSocket) {
+        setSocket(onlineSocket);
+        try {
+          if (!onlineSocket.connected) onlineSocket.connect();
+        } catch (e) {}
+      }
       setCurrentScreen('betting');
       return;
     }
@@ -455,6 +483,7 @@ function App() {
             aiDifficulty={aiDifficulty}
             autoPlay={autoPlayLocal || !!aiDifficulty || !!localSide}
             localSide={localSide}
+            disableBackgroundFastForward={true}
             matchPlayers={matchPlayers}
           />
         )}

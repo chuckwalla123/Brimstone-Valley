@@ -599,7 +599,7 @@ function BoardGrid({ label, tiles = [], movement, player, isReserve = false, isE
 import { executeRound } from './battleEngine';
 import { indexToColumn, indexToRow, columnIndicesForBoard } from './targeting';
 
-export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty = null, autoPlay: autoPlayProp, localSide = null, matchPlayers = null, showReturnToMenu = true, battleSpeedMultiplier = 1, towerLevel = null }){
+export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisualComplete = null, disableBackgroundFastForward = false, aiDifficulty = null, autoPlay: autoPlayProp, localSide = null, matchPlayers = null, showReturnToMenu = true, battleSpeedMultiplier = 1, towerLevel = null }){
   const autoPlay = (typeof autoPlayProp === 'boolean') ? autoPlayProp : !!aiDifficulty;
   const normalizedBattleSpeed = Math.max(1, Number(battleSpeedMultiplier || 1));
   const gameMode = gameState?.gameMode || 'classic';
@@ -618,6 +618,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   const emoteDelayRef = useRef(0);
   const lastEmoteTimeRef = useRef(0);
   const lastAnimationDelayRef = useRef(0);
+  const pendingServerGameStateRef = useRef(null);
   const lastAnimMsRef = useRef(1200);
   const animationEndTimeRef = useRef(0);
   const [log, setLog] = useState([]);
@@ -794,6 +795,12 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     const isPhaseTransition = gameState.phase && (gameState.phase === 'movement' || gameState.phase === 'ready');
     const isRoundComplete = lastType === 'roundComplete';
     
+    const queueBusy = processingQueueRef.current || (eventQueueRef.current && eventQueueRef.current.length > 0);
+    if (socket && queueBusy && (isPhaseTransition || isRoundComplete)) {
+      pendingServerGameStateRef.current = gameState;
+      return;
+    }
+
     if (isPhaseTransition || isRoundComplete) {
       // Apply phase transitions and round completion immediately - no delay
       
@@ -806,17 +813,17 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       const t = setTimeout(() => {
         if (expectedSeq != null && lastProcessedSeqRef.current >= expectedSeq) return;
         applyState();
-      }, 1200);
+      }, Math.max(120, Math.floor(1200 / Math.max(1, Number(normalizedBattleSpeed || 1)))));
       return () => clearTimeout(t);
     }
 
     // Default: apply quickly for non-animation steps
     const t = setTimeout(() => {
       applyState();
-    }, 200);
+    }, Math.max(50, Math.floor(200 / Math.max(1, Number(normalizedBattleSpeed || 1)))));
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [gameState]);
+  }, [gameState, normalizedBattleSpeed]);
 
   useEffect(() => {
     if (!gameOver) {
@@ -828,6 +835,19 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     }, 60);
     return () => clearTimeout(t);
   }, [gameOver]);
+
+  const battleVisualCompleteNotifiedRef = useRef(false);
+  useEffect(() => {
+    if (!gameOver || !victoryOverlayVisible) {
+      battleVisualCompleteNotifiedRef.current = false;
+      return;
+    }
+    if (battleVisualCompleteNotifiedRef.current) return;
+    battleVisualCompleteNotifiedRef.current = true;
+    if (typeof onBattleVisualComplete === 'function') {
+      onBattleVisualComplete(gameOver);
+    }
+  }, [gameOver, victoryOverlayVisible, onBattleVisualComplete]);
 
   // Listen for step events from server (ACK-based sequencing)
   useEffect(() => {
@@ -1002,9 +1022,9 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       if (movement && movement.startMovementPhase && !movement.movementPhase) {
         movement.startMovementPhase();
       }
-    }, 200);
+    }, Math.max(50, Math.floor(200 / Math.max(1, Number(normalizedBattleSpeed || 1)))));
     return () => clearTimeout(t);
-  }, [autoPlay, gameState?.lastAction?.type, movement, movement?.movementPhase]);
+  }, [autoPlay, gameState?.lastAction?.type, movement, movement?.movementPhase, normalizedBattleSpeed]);
 
   // animation API (provided when app is wrapped with <AnimationLayer>)
   const { play } = useAnimations();
@@ -1012,9 +1032,15 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
   // Event queue to serialise animation events and avoid progressive timing drift
   const eventQueueRef = useRef([]);
   const processingQueueRef = useRef(false);
+  const catchupSpeedRef = useRef(1);
+  const queueLastProgressAtRef = useRef(Date.now());
 
   const sleep = ms => new Promise(res => setTimeout(res, ms));
-  const scaleClientDelay = (ms, minMs = 0) => Math.max(Number(minMs || 0), Math.floor(Number(ms || 0) / normalizedBattleSpeed));
+  const scaleClientDelay = (ms, minMs = 0) => {
+    const baseSpeed = Math.max(1, Number(normalizedBattleSpeed || 1));
+    const catchup = Math.max(1, Number(catchupSpeedRef.current || 1));
+    return Math.max(Number(minMs || 0), Math.floor(Number(ms || 0) / (baseSpeed * catchup)));
+  };
 
   const applyStateSnapshot = (snapshot) => {
     if (!snapshot) return;
@@ -1186,7 +1212,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
               delete next[ownerKey];
               return next;
             });
-          }, 250);
+          }, scaleClientDelay(250, 60));
         } else if (!isAugmentProc) {
           setEventsMap(prev => {
             const next = { ...prev };
@@ -1943,26 +1969,100 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     if (processingQueueRef.current) return;
     processingQueueRef.current = true;
     isStepProcessingRef.current = true;
-    while (eventQueueRef.current.length > 0) {
-      const action = eventQueueRef.current.shift();
-      const shouldFastForward = typeof document !== 'undefined' && (document.hidden || !document.hasFocus());
-      try { await handleAnimationAction(action, { skipVisuals: shouldFastForward }); } catch (e) { console.error('Error handling animation action', e); }
-      if (socket && action && typeof action.seq === 'number') {
-        socket.emit('stepAck', { seq: action.seq });
+    queueLastProgressAtRef.current = Date.now();
+    try {
+      while (eventQueueRef.current.length > 0) {
+        const action = eventQueueRef.current.shift();
+        queueLastProgressAtRef.current = Date.now();
+
+        const emittedAt = Number(action?.timeline?.emittedAt || 0);
+        const expectedMs = Math.max(0, Number(action?.timeline?.expectedMs || 0));
+        const lagMs = emittedAt > 0 ? Math.max(0, Date.now() - emittedAt - Math.floor(expectedMs * 0.25)) : 0;
+        const queueDepth = Number(eventQueueRef.current.length || 0);
+
+        let lagCatchup = 1;
+        if (lagMs >= 12000) lagCatchup = 5;
+        else if (lagMs >= 6000) lagCatchup = 3.5;
+        else if (lagMs >= 2500) lagCatchup = 2.2;
+
+        let depthCatchup = 1;
+        if (queueDepth >= 70) depthCatchup = 5;
+        else if (queueDepth >= 35) depthCatchup = 3.5;
+        else if (queueDepth >= 15) depthCatchup = 2.2;
+
+        catchupSpeedRef.current = Math.max(lagCatchup, depthCatchup);
+
+        const shouldFastForward = !disableBackgroundFastForward
+          && typeof document !== 'undefined'
+          && document.hidden;
+        let actionTimedOut = false;
+        const actionTimeoutMs = Math.max(1200, Math.min(7000, Math.floor(4000 / Math.max(1, Number(normalizedBattleSpeed || 1)))));
+        try {
+          await Promise.race([
+            (async () => {
+              try {
+                await handleAnimationAction(action, { skipVisuals: shouldFastForward });
+              } catch (e) {
+                console.error('Error handling animation action', e);
+              }
+            })(),
+            new Promise((resolve) => setTimeout(() => {
+              actionTimedOut = true;
+              resolve();
+            }, actionTimeoutMs))
+          ]);
+        } catch (e) {
+          console.error('Error handling animation action', e);
+        }
+        if (actionTimedOut) {
+          console.warn('[BattlePhase] Step processing timeout; continuing playback', {
+            type: action?.type,
+            seq: action?.seq,
+            timeoutMs: actionTimeoutMs
+          });
+        }
+        if (socket && action && typeof action.seq === 'number') {
+          socket.emit('stepAck', { seq: action.seq });
+        }
+        queueLastProgressAtRef.current = Date.now();
       }
-    }
-    processingQueueRef.current = false;
-    isStepProcessingRef.current = false;
-    if (!gameOver && pendingWinnerRef.current) {
-      setGameOver(pendingWinnerRef.current);
-      pendingWinnerRef.current = null;
+    } finally {
+      catchupSpeedRef.current = 1;
+
+      if (pendingServerGameStateRef.current && eventQueueRef.current.length === 0) {
+        const pendingState = pendingServerGameStateRef.current;
+        pendingServerGameStateRef.current = null;
+        applyStateSnapshot(pendingState);
+      }
+
+      processingQueueRef.current = false;
+      isStepProcessingRef.current = false;
+      if (!gameOver && pendingWinnerRef.current) {
+        setGameOver(pendingWinnerRef.current);
+        pendingWinnerRef.current = null;
+      }
     }
   };
 
   const enqueueAnimation = useCallback((action) => {
     eventQueueRef.current.push(action);
+    queueLastProgressAtRef.current = Date.now();
     processQueue();
-  }, [socket]);
+  }, [socket, disableBackgroundFastForward]);
+
+  useEffect(() => {
+    const watchdog = setInterval(() => {
+      const queueLen = Number(eventQueueRef.current?.length || 0);
+      if (!processingQueueRef.current || queueLen <= 0) return;
+      const stalledMs = Date.now() - Number(queueLastProgressAtRef.current || 0);
+      if (stalledMs < 8000) return;
+      console.warn('[BattlePhase] Queue stall watchdog triggered; restarting queue', { stalledMs, queueLen });
+      processingQueueRef.current = false;
+      isStepProcessingRef.current = false;
+      processQueue();
+    }, 2000);
+    return () => clearInterval(watchdog);
+  }, [processQueue]);
 
   // track last-seen energy per tile to avoid duplicate energy floats
   const lastSeenEnergyRef = useRef({});
@@ -2311,8 +2411,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     const currentMover = phaseState.sequence[phaseIndex];
     
     
-    // Only automate P2's moves
-    if (currentMover !== 'p2') return;
+    // Only automate P2's moves (accept both short and long side names)
+    if (currentMover !== 'p2' && currentMover !== 'player2') return;
     
     // Guard: prevent multiple AI moves for the same turn index
     // Use a unique key combining phase index and sequence length
@@ -2325,6 +2425,12 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
     
     const ai = getAI(aiDifficulty);
     const delay = ai.getThinkingDelay();
+    console.log('[AI] Movement turn detected', {
+      aiDifficulty,
+      phaseIndex,
+      currentMover,
+      delay
+    });
 
     const parseAiTileId = (tileId) => {
       if (typeof tileId !== 'string') return null;
@@ -2357,6 +2463,11 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       const currentMovement = movementRef.current;
       const currentPhase = currentMovement?.movementPhase;
       if (!currentPhase || currentPhase.index !== phaseIndex) {
+        console.log('[AI] Skipping stale movement timer', {
+          expectedPhaseIndex: phaseIndex,
+          currentPhaseIndex: currentPhase?.index,
+          currentMover: currentPhase?.sequence?.[currentPhase?.index]
+        });
         
         aiMoveInProgressRef.current = null;
         return;
@@ -2365,27 +2476,70 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       
       // Pass p1 boards for Easy AI and above to evaluate positioning
       const decision = await ai.makeMovementDecision(p2Board, p2ReserveBoard, currentMovement, p1Board, p1ReserveBoard);
+      const isNoopDecision = !!(decision?.sourceId && decision?.destinationId && decision.sourceId === decision.destinationId);
+      console.log('[AI] makeMovementDecision result', {
+        decision,
+        isNoopDecision,
+        phaseIndex,
+        mover: currentPhase?.sequence?.[currentPhase?.index]
+      });
+
+      if (decision?.sourceId && decision?.destinationId) {
+        addLog && addLog(`[AI] Decision ${decision.sourceId} -> ${decision.destinationId}${isNoopDecision ? ' (no-op)' : ''}`);
+      }
       
       if (!decision) {
-      
-        // AI chose not to move - advance to next turn by making a no-op swap (swap tile with itself)
-        // Find any P2 hero and swap with itself to advance the phase
-        let anyP2TileId = null;
+        // Fallback: if AI returns no plan, attempt a visible legal move first.
+        const movableHeroes = [];
         for (let i = 0; i < p2Board.length; i++) {
-          if (p2Board[i]?.hero) {
-            anyP2TileId = `p2:${i}`;
-            break;
+          const tile = p2Board[i];
+          if (!tile?.hero || tile._dead) continue;
+          if (isTower13OpeningMovementLock && isLockedTile(tile)) continue;
+          movableHeroes.push(`p2:${i}`);
+        }
+        for (let i = 0; i < p2ReserveBoard.length; i++) {
+          const tile = p2ReserveBoard[i];
+          if (!tile?.hero || tile._dead) continue;
+          if (isTower13OpeningMovementLock && isLockedTile(tile)) continue;
+          movableHeroes.push(`p2Reserve:${i}`);
+        }
+
+        const legalTargets = [];
+        for (let i = 0; i < p2Board.length; i++) {
+          const tile = p2Board[i];
+          if (isTower13OpeningMovementLock && isLockedTile(tile)) continue;
+          legalTargets.push(`p2:${i}`);
+        }
+        for (let i = 0; i < p2ReserveBoard.length; i++) {
+          const tile = p2ReserveBoard[i];
+          if (isTower13OpeningMovementLock && isLockedTile(tile)) continue;
+          legalTargets.push(`p2Reserve:${i}`);
+        }
+
+        console.log('[AI] Fallback evaluation', {
+          reason: !decision ? 'no-decision' : 'noop-decision',
+          movableHeroes,
+          legalTargets,
+          phaseIndex
+        });
+
+        if (currentMovement?.handleSwapById && movableHeroes.length > 0) {
+          const sourceId = movableHeroes[0];
+          const destinationId = legalTargets.find(id => id !== sourceId) || null;
+
+          if (destinationId) {
+            addLog && addLog(`[AI] No scored move. Fallback swap ${sourceId} -> ${destinationId}`);
+            console.log('[AI] Dispatching fallback swap', { sourceId, destinationId, phaseIndex });
+            currentMovement.handleSwapById(sourceId, destinationId);
+            return;
           }
         }
-        if (!anyP2TileId) {
-          for (let i = 0; i < p2ReserveBoard.length; i++) {
-            if (p2ReserveBoard[i]?.hero) {
-              anyP2TileId = `p2Reserve:${i}`;
-              break;
-            }
-          }
-        }
+
+        // Last resort: advance the phase with no-op if absolutely no legal swap exists.
+        const anyP2TileId = movableHeroes[0] || null;
         if (anyP2TileId && currentMovement?.handleSwapById) {
+          addLog && addLog(`[AI] No legal fallback destination. Skipping with no-op on ${anyP2TileId}`);
+          console.log('[AI] Dispatching fallback no-op', { sourceId: anyP2TileId, destinationId: anyP2TileId, phaseIndex });
           currentMovement.handleSwapById(anyP2TileId, anyP2TileId);
         }
         return;
@@ -2431,6 +2585,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
             }
           }
           if (fallbackNoopId && currentMovement?.handleSwapById) {
+            addLog && addLog(`[AI] Locked opening prevented move ${decision.sourceId} -> ${decision.destinationId}; forcing no-op on ${fallbackNoopId}`);
             currentMovement.handleSwapById(fallbackNoopId, fallbackNoopId);
           }
           return;
@@ -2439,7 +2594,15 @@ export default function BattlePhase({ gameState, socket, onGameEnd, aiDifficulty
       
       
       if (currentMovement?.handleSwapById) {
+        console.log('[AI] Dispatching movement decision', {
+          sourceId: decision.sourceId,
+          destinationId: decision.destinationId,
+          phaseIndex,
+          mover: currentPhase?.sequence?.[currentPhase?.index]
+        });
         currentMovement.handleSwapById(decision.sourceId, decision.destinationId);
+      } else {
+        console.warn('[AI] Missing handleSwapById during movement turn');
       }
     }, delay);
 

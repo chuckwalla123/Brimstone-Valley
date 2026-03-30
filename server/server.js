@@ -131,10 +131,40 @@ const recordFfa3Result = async (match, winnerKey) => {
 };
 
 const app = express();
-app.use(cors()); // Allow client connections
+
+const allowedOrigins = (process.env.CORS_ORIGINS
+  || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,https://brimstonevalley.fly.dev')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean);
+
+const isAllowedOrigin = (origin) => {
+  if (!origin) return true;
+  return allowedOrigins.includes(origin);
+};
+
+app.use(cors({
+  origin: (origin, callback) => {
+    if (isAllowedOrigin(origin)) {
+      callback(null, true);
+      return;
+    }
+    callback(new Error(`CORS blocked for origin: ${origin}`));
+  }
+}));
+
 const server = http.createServer(app);
 const io = new SocketIOServer(server, {
-  cors: { origin: '*' },
+  cors: {
+    origin: (origin, callback) => {
+      if (isAllowedOrigin(origin)) {
+        callback(null, true);
+        return;
+      }
+      callback(new Error(`Socket.IO CORS blocked for origin: ${origin}`));
+    },
+    methods: ['GET', 'POST']
+  },
   pingInterval: 25000,
   pingTimeout: 60000
 }); // WebSockets for real-time
@@ -921,6 +951,29 @@ const clearStepTimeout = () => {
   clearMatchStepTimeout(null);
 };
 
+const estimateStepVisualMs = (step) => {
+  const type = String(step?.type || '').toLowerCase();
+  if (type === 'movementstart' || type === 'movementswap' || type === 'movementcomplete') return 180;
+  if (type === 'precast' || type === 'effectprecast') return 420;
+  if (type === 'cast' || type === 'castapplied' || type === 'effectapplied') return 300;
+  if (type === 'postcastwait') return Math.max(80, Number(step?.duration || 180));
+  if (type === 'energyapplied' || type === 'energyincrement' || type === 'posteffectdelay') return 160;
+  if (type === 'onroundstarttriggered') return 220;
+  if (type === 'roundcomplete' || type === 'gameend') return 800;
+  return 120;
+};
+
+const withTimelineMeta = (step) => {
+  if (!step || typeof step !== 'object') return step;
+  return {
+    ...step,
+    timeline: {
+      emittedAt: Date.now(),
+      expectedMs: estimateStepVisualMs(step)
+    }
+  };
+};
+
 const isSideAlive = (boardArr) => (boardArr || []).some(t => {
   if (!t || !t.hero) return false;
   if (t._dead) return false;
@@ -1055,7 +1108,7 @@ const sendNextStepForMatch = (matchId) => {
   }
   const step = execState.stepQueue[execState.stepIndex];
   execState.awaitingAck = true;
-  io.to(matchId).emit('step', cloneForWire({ ...step, matchId }));
+  io.to(matchId).emit('step', cloneForWire(withTimelineMeta({ ...step, matchId })));
   startMatchStepTimeout(matchId);
 };
 
@@ -1077,7 +1130,7 @@ const sendNextStep = () => {
   }
   const step = stepQueue[stepIndex];
   awaitingAck = true;
-  io.emit('step', cloneForWire(step));
+  io.emit('step', cloneForWire(withTimelineMeta(step)));
   startStepTimeout();
 };
 
@@ -1291,7 +1344,7 @@ function sendNextStepForLeaguePair(matchId, pairKey) {
 
   const step = session.stepQueue[session.stepIndex];
   session.awaitingAck = true;
-  io.to(matchId).emit('leaguePairBattleStep', cloneForWire({ ...step, pairKey }));
+  io.to(matchId).emit('leaguePairBattleStep', cloneForWire(withTimelineMeta({ ...step, pairKey })));
   const gameEnd = step && (step.type === 'gameEnd' || (step.type === 'roundComplete' && step.winner));
   if (gameEnd && step.winner) {
     finalizeLeaguePairResult(matchId, pairKey, step.winner).catch((error) => {
@@ -2312,7 +2365,8 @@ io.on('connection', (socket) => {
         if (!src || !dst) return;
 
         const srcPlayer = src.boardName.startsWith('p1') ? 'p1' : 'p2';
-        if (srcPlayer !== mover) return;
+        const dstPlayer = dst.boardName.startsWith('p1') ? 'p1' : 'p2';
+        if (srcPlayer !== mover || dstPlayer !== mover) return;
 
         const srcIsReserve = src.boardName.includes('Reserve');
         const dstIsMain = dst.boardName.includes('Main');
@@ -2502,8 +2556,9 @@ io.on('connection', (socket) => {
       }
 
       const srcPlayer = src.boardName.startsWith('p1') ? 'p1' : (src.boardName.startsWith('p2') ? 'p2' : 'p3');
-      if (srcPlayer !== mover) {
-        console.log('[Server] movementMove: Wrong player trying to move', srcPlayer, 'vs', mover);
+      const dstPlayer = dst.boardName.startsWith('p1') ? 'p1' : (dst.boardName.startsWith('p2') ? 'p2' : 'p3');
+      if (srcPlayer !== mover || dstPlayer !== mover) {
+        console.log('[Server] movementMove: Wrong side move/swap attempt', srcPlayer, dstPlayer, 'vs', mover);
         return;
       }
 

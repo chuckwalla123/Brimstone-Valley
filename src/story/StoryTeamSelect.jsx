@@ -148,7 +148,7 @@ const displayIndexToBoardIndex = (displayIndex) => (
 export default function StoryTeamSelect({ arc, onConfirm, onBack }) {
   const bannerHeroes = arc?.bannerHeroes || [];
   const bannerPositions = arc?.bannerPositions || [];
-  const maxMercs = 3;
+  const maxMercs = 1;
   const [selectedIds, setSelectedIds] = useState([...bannerHeroes]);
   const [boardPositions, setBoardPositions] = useState(Array(9).fill(null));
   const [reserveHeroes, setReserveHeroes] = useState([]);
@@ -195,42 +195,79 @@ export default function StoryTeamSelect({ arc, onConfirm, onBack }) {
 
   const handleSlotClick = (slotIndex) => {
     if (!selectedHeroId) return;
-    setBoardPositions(current => {
-      const next = [...current];
-      const existing = next[slotIndex];
-      if (existing && existing === selectedHeroId) return next;
-      // Remove hero from other slots or reserve
-      for (let i = 0; i < next.length; i++) {
-        if (next[i] === selectedHeroId) next[i] = null;
+    const nextBoard = [...boardPositions];
+    const nextReserve = [reserveHeroes[0] || null, reserveHeroes[1] || null];
+    const sourceBoardIndex = nextBoard.findIndex(id => id === selectedHeroId);
+    const sourceReserveIndex = nextReserve.findIndex(id => id === selectedHeroId);
+    const destinationHeroId = nextBoard[slotIndex];
+
+    if (destinationHeroId === selectedHeroId) return;
+
+    if (sourceBoardIndex >= 0) nextBoard[sourceBoardIndex] = null;
+    if (sourceReserveIndex >= 0) nextReserve[sourceReserveIndex] = null;
+
+    nextBoard[slotIndex] = selectedHeroId;
+
+    if (destinationHeroId) {
+      if (sourceBoardIndex >= 0) {
+        nextBoard[sourceBoardIndex] = destinationHeroId;
+      } else if (sourceReserveIndex >= 0) {
+        nextReserve[sourceReserveIndex] = destinationHeroId;
+      } else {
+        const emptyReserve = nextReserve.findIndex(id => !id);
+        if (emptyReserve >= 0) {
+          nextReserve[emptyReserve] = destinationHeroId;
+        } else {
+          // No legal swap destination available; keep board unchanged.
+          nextBoard[slotIndex] = destinationHeroId;
+          return;
+        }
       }
-      setReserveHeroes(res => res.filter(id => id !== selectedHeroId));
-      next[slotIndex] = selectedHeroId;
-      return next;
-    });
+    }
+
+    setBoardPositions(nextBoard);
+    setReserveHeroes(nextReserve);
   };
 
   const handleReserveClick = (slotIndex) => {
     if (!selectedHeroId) return;
-    setReserveHeroes(current => {
-      const next = [...current];
-      if (next[slotIndex] === selectedHeroId) return next;
-      // Remove hero from board
-      setBoardPositions(currentBoard => currentBoard.map(id => (id === selectedHeroId ? null : id)));
-      // Remove hero from other reserve slots
-      const filtered = next.filter(id => id !== selectedHeroId);
-      if (slotIndex < filtered.length) {
-        filtered[slotIndex] = selectedHeroId;
-      } else if (filtered.length < 2) {
-        filtered.push(selectedHeroId);
+    const nextBoard = [...boardPositions];
+    const nextReserve = [reserveHeroes[0] || null, reserveHeroes[1] || null];
+    const sourceBoardIndex = nextBoard.findIndex(id => id === selectedHeroId);
+    const sourceReserveIndex = nextReserve.findIndex(id => id === selectedHeroId);
+    const destinationHeroId = nextReserve[slotIndex] || null;
+
+    if (destinationHeroId === selectedHeroId) return;
+
+    if (sourceBoardIndex >= 0) nextBoard[sourceBoardIndex] = null;
+    if (sourceReserveIndex >= 0) nextReserve[sourceReserveIndex] = null;
+
+    nextReserve[slotIndex] = selectedHeroId;
+
+    if (destinationHeroId) {
+      if (sourceBoardIndex >= 0) {
+        nextBoard[sourceBoardIndex] = destinationHeroId;
+      } else if (sourceReserveIndex >= 0) {
+        nextReserve[sourceReserveIndex] = destinationHeroId;
+      } else {
+        const emptyBoard = nextBoard.findIndex(id => !id);
+        if (emptyBoard >= 0) {
+          nextBoard[emptyBoard] = destinationHeroId;
+        } else {
+          nextReserve[slotIndex] = destinationHeroId;
+          return;
+        }
       }
-      return filtered.slice(0, 2);
-    });
+    }
+
+    setBoardPositions(nextBoard);
+    setReserveHeroes(nextReserve);
   };
 
   const totalRequired = bannerHeroes.length + maxMercs;
   const selectedComplete = selectedIds.length === totalRequired;
   const boardCount = boardPositions.filter(Boolean).length;
-  const canConfirm = selectedComplete && boardCount >= 3;
+  const canConfirm = selectedComplete && boardCount >= bannerHeroes.length;
 
   const confirmSelection = () => {
     if (!canConfirm) return;
@@ -248,7 +285,7 @@ export default function StoryTeamSelect({ arc, onConfirm, onBack }) {
     <div style={styles.container}>
       <div style={styles.header}>
         <div style={styles.title}>Assemble Your Expedition</div>
-        <div style={styles.subtitle}>Choose {maxMercs} mercenaries to join your banner heroes</div>
+        <div style={styles.subtitle}>Choose {maxMercs} mercenary to join your banner heroes</div>
       </div>
 
       <div style={styles.section}>
@@ -350,7 +387,7 @@ export default function StoryTeamSelect({ arc, onConfirm, onBack }) {
         </div>
 
         <div style={styles.helper}>
-          Select a hero, then click a slot to place them. You need at least 3 heroes on the board.
+          Select a hero, then click Main Board or Reserve to place them. You need your two banner heroes on the board.
         </div>
       </div>
 

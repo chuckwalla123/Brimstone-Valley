@@ -12,6 +12,28 @@ import { getSpellById } from '../spells.js';
 import { getEffectByName } from '../effects.js';
 import { indexToRow, indexToColumn, resolveTargets, columnIndicesForBoard } from '../targeting.js';
 
+const EASY_AI_DEBUG = (() => {
+  try {
+    if (typeof window !== 'undefined' && window?.localStorage) {
+      const explicit = window.localStorage.getItem('easyAiDebug');
+      if (explicit != null) {
+        const normalized = String(explicit).trim().toLowerCase();
+        return normalized === '1' || normalized === 'true' || normalized === 'on';
+      }
+      // Default to enabled in local dev for easier AI diagnostics.
+      if (typeof import.meta !== 'undefined' && import.meta?.env?.DEV) {
+        return true;
+      }
+    }
+  } catch (_) {
+    // Ignore localStorage access issues and fall through.
+  }
+  return typeof process !== 'undefined' && process?.env?.EASY_AI_DEBUG === '1';
+})();
+const aiLog = (...args) => {
+  if (EASY_AI_DEBUG) console.log(...args);
+};
+
 /**
  * Calculate the effective combat value (ECV) of a hero
  * ECV models the synergy between health and armor
@@ -513,7 +535,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           
           // DEBUG: Log projectile targeting details
           if (hero && (hero.name === 'Lancer' || hero.name?.includes('Boss') || hero.name?.includes('Lord') || hero.name?.includes('King') || hero.name?.includes('Queen'))) {
-            console.log(`[EasyAI Projectile] ${hero.name} at index ${tileIndex} (${casterPos.row},${casterPos.col}) targeting col ${targetCol} on ${side} board, indices: [${columnIndices.join(',')}]`);
+            aiLog(`[EasyAI Projectile] ${hero.name} at index ${tileIndex} (${casterPos.row},${casterPos.col}) targeting col ${targetCol} on ${side} board, indices: [${columnIndices.join(',')}]`);
           }
           
           // columnIndicesForBoard returns indices in front→back order, so first alive hero is frontmost
@@ -522,14 +544,14 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
               affectedTargets.push(boardToCheck[i].hero);
               lastResolved = { idx: i, boardSide: side === 'enemy' ? enemySide : boardSide };
               if (hero && (hero.name === 'Lancer' || hero.name?.includes('Boss') || hero.name?.includes('Lord') || hero.name?.includes('King') || hero.name?.includes('Queen'))) {
-                console.log(`  [EasyAI Projectile] Hitting frontmost at idx ${i}`);
+                aiLog(`  [EasyAI Projectile] Hitting frontmost at idx ${i}`);
               }
               break; // Projectile hits only the frontmost target
             }
           }
           
           if (affectedTargets.length === 0 && hero && (hero.name === 'Lancer' || hero.name?.includes('Boss') || hero.name?.includes('Lord') || hero.name?.includes('King') || hero.name?.includes('Queen'))) {
-            console.log(`  [EasyAI Projectile] No targets found in column ${targetCol}`);
+            aiLog(`  [EasyAI Projectile] No targets found in column ${targetCol}`);
           }
         }
         break;
@@ -576,9 +598,9 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           
           // DEBUG: Log column targeting details
           if (hero && (hero.name === 'Lancer' || hero.name?.includes('Boss') || hero.name?.includes('Lord') || hero.name?.includes('King') || hero.name?.includes('Queen'))) {
-            console.log(`[EasyAI Column] ${hero.name} at index ${tileIndex} (row=${casterPos.row},col=${casterPos.col}) on ${boardSide} board`);
-            console.log(`  Targeting col ${targetCol} on ${side} board (${targetSide}), indices: [${columnIndices.join(',')}]`);
-            console.log(`  Enemy board has ${boardToCheck.length} slots:`, boardToCheck.map((t,i) => t && t.hero ? `${i}:${t.hero.name}` : `${i}:empty`).join(' '));
+            aiLog(`[EasyAI Column] ${hero.name} at index ${tileIndex} (row=${casterPos.row},col=${casterPos.col}) on ${boardSide} board`);
+            aiLog(`  Targeting col ${targetCol} on ${side} board (${targetSide}), indices: [${columnIndices.join(',')}]`);
+            aiLog(`  Enemy board has ${boardToCheck.length} slots:`, boardToCheck.map((t,i) => t && t.hero ? `${i}:${t.hero.name}` : `${i}:empty`).join(' '));
           }
           
           // Check only the indices that are actually in the target column
@@ -589,7 +611,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           }
           
           if (hero && (hero.name === 'Lancer' || hero.name?.includes('Boss') || hero.name?.includes('Lord') || hero.name?.includes('King') || hero.name?.includes('Queen'))) {
-            console.log(`  [EasyAI Column] Found ${affectedTargets.length} targets in column ${targetCol}`);
+            aiLog(`  [EasyAI Column] Found ${affectedTargets.length} targets in column ${targetCol}`);
           }
         }
         break;
@@ -1059,7 +1081,7 @@ export const makePickDecision = (availableHeroes, boardState) => {
   // Find best points value
   bestPoints = Math.max(...choices.map(c => c.points));
   
-  console.log(`[EasyAI Draft] Evaluated ${choices.length} choices, best points: ${bestPoints}`);
+  aiLog(`[EasyAI Draft] Evaluated ${choices.length} choices, best points: ${bestPoints}`);
   
   // Get all choices with best points (for randomization)
   const bestChoices = choices.filter(c => c.points === bestPoints);
@@ -1102,7 +1124,7 @@ export const makeMovementDecision = (p2Board, p2ReserveBoard, movement, p1Board 
       evalRows.push({ idx, activeRow, castsRemaining, tileValue, incomingDamage, heroPoints });
     }
     const label = movable.hero.isBoss ? 'BossAI' : 'EasyAI';
-    console.log(`[${label}] ${heroName} tile evals:`, evalRows);
+    aiLog(`[${label}] ${heroName} tile evals:`, evalRows);
   };
   const hasPreventMovement = (tile) => {
     if (!tile) return false;
@@ -1217,7 +1239,7 @@ export const makeMovementDecision = (p2Board, p2ReserveBoard, movement, p1Board 
     logBossTileEvaluations(movable, enemyBoardFull, enemyReserve, allyBoardFull, allyReserve);
   });
   
-  console.log(`[EasyAI Movement] Evaluating ${movableHeroes.length} movable heroes:`, movableHeroes.map(m => `${m.hero.name || m.hero.id}@${m.sourceId}`).join(', '));
+  aiLog(`[EasyAI Movement] Evaluating ${movableHeroes.length} movable heroes:`, movableHeroes.map(m => `${m.hero.name || m.hero.id}@${m.sourceId}`).join(', '));
   
   // Helper: parse token and legality check
   const parseToken = (token) => {
@@ -1298,7 +1320,7 @@ export const makeMovementDecision = (p2Board, p2ReserveBoard, movement, p1Board 
   movableHeroes.forEach(movable => {
     // DEBUG: Log which hero is being evaluated for movement
     if (movable.hero && (movable.hero.name?.toLowerCase().includes('lancer') || movable.hero.id === 'lancerID')) {
-      console.log(`[EasyAI Movement] Evaluating ${movable.hero.name || movable.hero.id} at ${movable.sourceId} (currentIdx=${movable.currentIndex})`);
+      aiLog(`[EasyAI Movement] Evaluating ${movable.hero.name || movable.hero.id} at ${movable.sourceId} (currentIdx=${movable.currentIndex})`);
     }
     
     const currentTileIndex = movable.isReserve ? -1 - movable.currentIndex : movable.currentIndex;
@@ -1352,7 +1374,7 @@ export const makeMovementDecision = (p2Board, p2ReserveBoard, movement, p1Board 
       
       // DEBUG: Log Lancer move evaluations
       if (movable.hero && (movable.hero.name === 'Lancer' || movable.hero.id === 'lancerID' || movable.hero.name?.toLowerCase().includes('lancer'))) {
-        console.log(`[EasyAI Movement] ${movable.hero.name || movable.hero.id} ${movable.sourceId} -> ${destId}: currentPts=${currentPoints.toFixed(1)} newPts=${points.toFixed(1)} improvement=${pointImprovement.toFixed(1)} | currentTileVal=${currentTileValue.toFixed(1)} newTileVal=${tileVal.toFixed(1)} tileImprov=${tileImprovement.toFixed(1)} | teamImprov=${teamImprovement.toFixed(1)} threshold=${(currentTeamPoints * 0.01).toFixed(1)} | passesThreshold=${pointImprovement > currentPoints * 0.05 || tileImprovement > 0.1 || teamImprovement > currentTeamPoints * 0.01}`);
+        aiLog(`[EasyAI Movement] ${movable.hero.name || movable.hero.id} ${movable.sourceId} -> ${destId}: currentPts=${currentPoints.toFixed(1)} newPts=${points.toFixed(1)} improvement=${pointImprovement.toFixed(1)} | currentTileVal=${currentTileValue.toFixed(1)} newTileVal=${tileVal.toFixed(1)} tileImprov=${tileImprovement.toFixed(1)} | teamImprov=${teamImprovement.toFixed(1)} threshold=${(currentTeamPoints * 0.01).toFixed(1)} | passesThreshold=${pointImprovement > currentPoints * 0.05 || tileImprovement > 0.1 || teamImprovement > currentTeamPoints * 0.01}`);
       }
       
       if (pointImprovement > currentPoints * 0.05 || tileImprovement > 0.1 || teamImprovement > currentTeamPoints * 0.01) {
@@ -1408,6 +1430,22 @@ export const makeMovementDecision = (p2Board, p2ReserveBoard, movement, p1Board 
   // Find best legal move
   let bestMove = null;
   if (moves.length > 0) {
+    const scored = [...moves].sort((a, b) => {
+      const aScore = typeof a.teamImprovement === 'number' ? a.teamImprovement : a.improvement;
+      const bScore = typeof b.teamImprovement === 'number' ? b.teamImprovement : b.improvement;
+      return bScore - aScore;
+    });
+    const topCandidates = scored.slice(0, 8).map(m => {
+      const score = typeof m.teamImprovement === 'number' ? m.teamImprovement : m.improvement;
+      const imp = typeof m.improvement === 'number' ? m.improvement : 0;
+      const tileImp = typeof m.tileImprovement === 'number' ? m.tileImprovement : 0;
+      return `${m.sourceId}->${m.destinationId} score=${score.toFixed(2)} imp=${imp.toFixed(2)} tile=${tileImp.toFixed(2)}`;
+    });
+    aiLog(`[EasyAI Movement] Candidate moves: ${moves.length}, teamBase=${currentTeamPoints.toFixed(2)}`);
+    if (topCandidates.length > 0) {
+      aiLog('[EasyAI Movement] Top candidates:', topCandidates.join(' | '));
+    }
+
     // Sort unique improvements descending
     const improvements = Array.from(new Set(moves.map(m => (typeof m.teamImprovement === 'number' ? m.teamImprovement : m.improvement)))).sort((a, b) => b - a);
     const shuffle = (arr) => arr.sort(() => Math.random() - 0.5);
@@ -1427,11 +1465,11 @@ export const makeMovementDecision = (p2Board, p2ReserveBoard, movement, p1Board 
 
   // If no improving move found, return a noop (same tile swap)
   if (!bestMove) {
-    console.log('[EasyAI Movement] No valid improving moves found, returning noop');
+    aiLog('[EasyAI Movement] No valid improving moves found, returning noop');
     return getNoopMove();
   }
 
-  console.log(`[EasyAI Movement] Selected move: ${bestMove.sourceId} -> ${bestMove.destinationId} (teamImprovement=${bestMove.teamImprovement?.toFixed(1)}, improvement=${bestMove.improvement?.toFixed(1)})`);
+  aiLog(`[EasyAI Movement] Selected move: ${bestMove.sourceId} -> ${bestMove.destinationId} (teamImprovement=${bestMove.teamImprovement?.toFixed(1)}, improvement=${bestMove.improvement?.toFixed(1)})`);
   return bestMove;
 };
 
