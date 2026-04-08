@@ -93,13 +93,10 @@ export const STORY_ENEMIES = {
     aiDifficulty: 'hard',
     main: [
       { heroId: 'garrukRedID', position: 7, augments: [{ augmentId: 'healthBoostMedium', rolledValue: 4 }] },
-      { heroId: 'berserkerID', position: 6 },
       { heroId: 'outcastAssassinID', position: 2 },
       { heroId: 'rogueMageID', position: 1 }
     ],
-    reserve: [
-      { heroId: 'axemanID' }
-    ]
+    reserve: []
   },
 
   brave_blood_golem_advance: {

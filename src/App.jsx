@@ -138,7 +138,7 @@ function App() {
 
       localSocket.on('authResult', (payload) => {
         if (payload && payload.ok) {
-          setPlayFabUser(payload.user || null);
+          setPlayFabUser(payload.user ? { ...payload.user, serverInstanceId: payload.serverInstanceId || null } : null);
         }
       });
 
@@ -197,7 +197,7 @@ function App() {
 
     newSocket.on('authResult', (payload) => {
       if (payload && payload.ok) {
-        setPlayFabUser(payload.user || null);
+        setPlayFabUser(payload.user ? { ...payload.user, serverInstanceId: payload.serverInstanceId || null } : null);
         
         // Update stored session with username from server (login response doesn't include it)
         if (payload.user?.username) {
@@ -442,10 +442,7 @@ function App() {
 
   const handleLoginSuccess = (data) => {
     try {
-      setPlayFabUser({
-        playFabId: data?.PlayFabId || null,
-        username: data?.InfoResultPayload?.AccountInfo?.Username || data?.Username || null
-      });
+      setPlayFabUser(null);
       const session = getStoredSession();
       if (socket && socket.connected && session && session.sessionTicket) {
         socket.emit('auth', { sessionTicket: session.sessionTicket });

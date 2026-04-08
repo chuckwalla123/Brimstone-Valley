@@ -1996,7 +1996,39 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
           && typeof document !== 'undefined'
           && document.hidden;
         let actionTimedOut = false;
-        const actionTimeoutMs = Math.max(1200, Math.min(7000, Math.floor(4000 / Math.max(1, Number(normalizedBattleSpeed || 1)))));
+        const getActionTimeoutMs = (queuedAction) => {
+          const speed = Math.max(1, Number(normalizedBattleSpeed || 1));
+          let timeoutMs = Math.max(1200, Math.min(7000, Math.floor(4000 / speed)));
+          const timelineExpectedMs = Math.max(0, Number(queuedAction?.timeline?.expectedMs || 0));
+          if (timelineExpectedMs > 0) {
+            timeoutMs = Math.max(timeoutMs, Math.min(10000, Math.floor(timelineExpectedMs * 4) + 400));
+          }
+
+          const type = String(queuedAction?.type || '').toLowerCase();
+          if (type !== 'cast') {
+            return timeoutMs;
+          }
+
+          const primaryTargets = Array.isArray(queuedAction?.primaryTargets)
+            ? queuedAction.primaryTargets.filter((target) => target && target.boardName && typeof target.index === 'number')
+            : [];
+          const resultTargets = Array.isArray(queuedAction?.results)
+            ? queuedAction.results
+                .map((result) => result?.target)
+                .filter((target) => target && target.boardName && typeof target.index === 'number')
+            : [];
+          const uniqueTargetCount = Math.max(1, new Set(
+            [...primaryTargets, ...resultTargets].map((target) => `${target.boardName}:${target.index}`)
+          ).size || 1);
+          const castAnimationMs = Math.max(0, Number(queuedAction?.animationMs || 1200));
+          const secondaryAnimationMs = queuedAction?.secondaryAnimation || queuedAction?.secondaryAnimationMs
+            ? Math.max(0, Number(queuedAction?.secondaryAnimationMs || queuedAction?.animationMs || 1200))
+            : 0;
+          const diceRevealMs = queuedAction?.rollInfo?.die && queuedAction?.rollInfo?.roll ? 1500 : 0;
+          const scaledEstimateMs = Math.floor(((castAnimationMs * uniqueTargetCount) + secondaryAnimationMs + diceRevealMs + 600) / speed);
+          return Math.max(timeoutMs, Math.min(12000, scaledEstimateMs + 500));
+        };
+        const actionTimeoutMs = getActionTimeoutMs(action);
         try {
           await Promise.race([
             (async () => {
@@ -2020,6 +2052,17 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
             seq: action?.seq,
             timeoutMs: actionTimeoutMs
           });
+          try {
+            if (socket && typeof socket.emit === 'function') {
+              socket.emit('forceBattleSync', {
+                reason: 'step-timeout',
+                seq: action?.seq,
+                type: action?.type
+              });
+            }
+          } catch (e) {
+            console.warn('[BattlePhase] Failed to request battle sync after timeout', e);
+          }
         }
         if (socket && action && typeof action.seq === 'number') {
           socket.emit('stepAck', { seq: action.seq });

@@ -989,7 +989,7 @@ export const SPELLS = {
   },
   oops: {
     id: 'oops', name: 'OOPS!!',
-    description: 'Targets an ally with the lowest Health, dealing 3 Attack Power ignoring Armor. If this would kill that ally, deal 999 Attack Power to the enemy with the highest Health.',
+    description: 'Targets an ally with the lowest Health, dealing 3 Attack Power ignoring Armor. If this would kill that ally, deal 25 Attack Power to the enemy with the highest Health.',
     spec: {
       targets: [{ type: 'lowestHealth', side: 'ally', max: 1 }],
       formula: { type: 'attackPower', value: 3, ignoreArmor: true },

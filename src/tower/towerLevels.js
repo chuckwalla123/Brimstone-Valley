@@ -1139,7 +1139,7 @@ export const BOSSES = {
         { speaker: 'The Boss', side: 'right', text: 'So tell me, challenger: will our clash awaken whatever humanity I have left… or will it drag the curse to the surface instead?' }
       ],
       stats: {
-        health: 220,
+        health: 250,
         armor: 6,
         speed: 6,
         energy: 2,
@@ -1151,14 +1151,14 @@ export const BOSSES = {
         back: { id: 'level40Kingslaw', cost: 3, casts: 4 }
       },
       passives: [],
-      augments: ['keenStrikeIV', 'healthBoostMassive', 'healthBoostMassive', 'doubleStrike'],
+      augments: ['keenStrikeIV', 'healthBoostMassive', 'healthBoostMassive', 'doubleStrike', 'shatteredChampionsCrown'],
       phaseRevive: {
         name: 'The Boss (Ghost)',
         title: 'The Undying Will',
         description: 'His body falls, but his will refuses the grave.',
         imageOverride: '/images/heroes/Boss Ghost Cropped.png',
         stats: {
-          health: 180,
+          health: 210,
           armor: 0,
           speed: 6,
           energy: 0,

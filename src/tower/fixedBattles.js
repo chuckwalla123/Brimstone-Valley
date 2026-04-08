@@ -215,7 +215,7 @@ export const TOWER_FIXED_BATTLES = {
         slot: 6,
         fixedAugments: [
           { augmentId: 'healthBoostHuge' },
-          { augmentId: 'vampiricIV' },
+          { augmentId: 'vampiricIII' },
           { augmentId: 'ironForgeAugmentII' }
         ]
       },
@@ -333,7 +333,7 @@ export const TOWER_FIXED_BATTLES = {
         slot: 10,
         fixedAugments: [
           { augmentId: 'healthBoostMassive' },
-          { augmentId: 'vampiricIV' },
+          { augmentId: 'vampiricIII' },
           { augmentId: 'spellPowerBoostHuge' },
           { augmentId: 'spellPowerBoostMedium' }
         ]

@@ -37,6 +37,7 @@ import { createBettingModeManager } from './bettingMode.js';
 
 const PLAYFAB_TITLE_ID = process.env.PLAYFAB_TITLE_ID || '';
 const PLAYFAB_SECRET_KEY = process.env.PLAYFAB_SECRET_KEY || '';
+const SERVER_INSTANCE_ID = process.env.FLY_ALLOC_ID || process.env.HOSTNAME || `pid:${process.pid}`;
 
 const verifyPlayFabSession = async (sessionTicket) => {
   if (!PLAYFAB_TITLE_ID || !PLAYFAB_SECRET_KEY) return null;
@@ -92,19 +93,85 @@ const updatePlayerStatistics = async (playFabId, statistics) => {
   }
 };
 
+const getPlayerStatistics = async (playFabId, statisticNames = []) => {
+  if (!PLAYFAB_TITLE_ID || !PLAYFAB_SECRET_KEY || !playFabId) {
+    console.log('[PlayFab] Cannot fetch stats - missing config or playFabId');
+    return null;
+  }
+  try {
+    const url = `https://${PLAYFAB_TITLE_ID}.playfabapi.com/Server/GetPlayerStatistics`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-SecretKey': PLAYFAB_SECRET_KEY
+      },
+      body: JSON.stringify({
+        PlayFabId: playFabId,
+        StatisticNames: statisticNames
+      })
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      console.error('[PlayFab] Failed to fetch stats:', data);
+      return null;
+    }
+    const stats = {};
+    for (const stat of data.data?.Statistics || []) {
+      if (!stat?.StatisticName) continue;
+      stats[stat.StatisticName] = Number(stat.Value || 0);
+    }
+    return stats;
+  } catch (e) {
+    console.error('[PlayFab] Error fetching stats:', e);
+    return null;
+  }
+};
+
+const incrementPlayerStatistics = async (playFabId, statisticDeltas) => {
+  const deltas = Array.isArray(statisticDeltas)
+    ? statisticDeltas.filter((entry) => entry && entry.StatisticName && Number.isFinite(Number(entry.Value)))
+    : [];
+  if (deltas.length === 0) return true;
+
+  const statisticNames = [...new Set(deltas.map((entry) => entry.StatisticName))];
+  const currentStats = await getPlayerStatistics(playFabId, statisticNames);
+  if (currentStats == null) return false;
+
+  const nextStats = deltas.map((entry) => ({
+    StatisticName: entry.StatisticName,
+    Value: Number(currentStats[entry.StatisticName] || 0) + Number(entry.Value || 0)
+  }));
+
+  return updatePlayerStatistics(playFabId, nextStats);
+};
+
 // Record match result - update wins/losses for both players
 const recordMatchResult = async (winnerPlayFabId, loserPlayFabId, isDraw = false) => {
   if (isDraw) {
     // Both players get a draw
-    await updatePlayerStatistics(winnerPlayFabId, [{ StatisticName: 'Draws', Value: 1 }]);
-    await updatePlayerStatistics(loserPlayFabId, [{ StatisticName: 'Draws', Value: 1 }]);
+    const [winnerOk, loserOk] = await Promise.all([
+      incrementPlayerStatistics(winnerPlayFabId, [{ StatisticName: 'Draws', Value: 1 }]),
+      incrementPlayerStatistics(loserPlayFabId, [{ StatisticName: 'Draws', Value: 1 }])
+    ]);
+    if (!winnerOk || !loserOk) {
+      console.error('[PlayFab] Failed to record draw for', winnerPlayFabId, loserPlayFabId);
+      return false;
+    }
     console.log('[PlayFab] Draw recorded for', winnerPlayFabId, loserPlayFabId);
   } else {
     // Winner gets a win, loser gets a loss
-    await updatePlayerStatistics(winnerPlayFabId, [{ StatisticName: 'Wins', Value: 1 }]);
-    await updatePlayerStatistics(loserPlayFabId, [{ StatisticName: 'Losses', Value: 1 }]);
+    const [winnerOk, loserOk] = await Promise.all([
+      incrementPlayerStatistics(winnerPlayFabId, [{ StatisticName: 'Wins', Value: 1 }]),
+      incrementPlayerStatistics(loserPlayFabId, [{ StatisticName: 'Losses', Value: 1 }])
+    ]);
+    if (!winnerOk || !loserOk) {
+      console.error('[PlayFab] Failed to record win/loss for', winnerPlayFabId, loserPlayFabId);
+      return false;
+    }
     console.log('[PlayFab] Win recorded for', winnerPlayFabId, ', loss for', loserPlayFabId);
   }
+  return true;
 };
 
 const recordFfa3Result = async (match, winnerKey) => {
@@ -116,18 +183,47 @@ const recordFfa3Result = async (match, winnerKey) => {
   if (playerIds.length === 0) return;
 
   if (winnerKey === 'draw') {
-    await Promise.all(playerIds.map((id) => updatePlayerStatistics(id, [{ StatisticName: 'Draws', Value: 1 }])));
+    const results = await Promise.all(playerIds.map((id) => incrementPlayerStatistics(id, [{ StatisticName: 'Draws', Value: 1 }])));
+    if (results.some((ok) => !ok)) {
+      console.error('[PlayFab] Failed to record FFA3 draw for', playerIds.join(', '));
+      return false;
+    }
     console.log('[PlayFab] FFA3 draw recorded for', playerIds.join(', '));
-    return;
+    return true;
   }
 
   const winnerId = winnerKey === 'player1' ? p1Id : (winnerKey === 'player2' ? p2Id : p3Id);
   const loserIds = playerIds.filter((id) => id && id !== winnerId);
-  if (!winnerId) return;
+  if (!winnerId) return false;
 
-  await updatePlayerStatistics(winnerId, [{ StatisticName: 'Wins', Value: 1 }]);
-  await Promise.all(loserIds.map((id) => updatePlayerStatistics(id, [{ StatisticName: 'Losses', Value: 1 }])));
+  const winnerOk = await incrementPlayerStatistics(winnerId, [{ StatisticName: 'Wins', Value: 1 }]);
+  const loserResults = await Promise.all(loserIds.map((id) => incrementPlayerStatistics(id, [{ StatisticName: 'Losses', Value: 1 }])));
+  if (!winnerOk || loserResults.some((ok) => !ok)) {
+    console.error('[PlayFab] Failed to record FFA3 result for', winnerId, loserIds.join(', '));
+    return false;
+  }
   console.log('[PlayFab] FFA3 win recorded for', winnerId, ', losses for', loserIds.join(', '));
+  return true;
+};
+
+const getClassicMatchDepartureResult = (match, departingSocketId) => {
+  if (!match || match.gameMode !== 'classic' || !match.p1 || !match.p2) return null;
+
+  if (match.p1.id === departingSocketId) {
+    return {
+      winnerPlayFabId: match.p2.playFabId,
+      loserPlayFabId: match.p1.playFabId
+    };
+  }
+
+  if (match.p2.id === departingSocketId) {
+    return {
+      winnerPlayFabId: match.p1.playFabId,
+      loserPlayFabId: match.p2.playFabId
+    };
+  }
+
+  return null;
 };
 
 const app = express();
@@ -181,6 +277,7 @@ const LEAGUE4_DRAFT_POOL_SIZE = 12;
 const LEAGUE4_DRAFT_TIMER_MS = 120000;
 const LEAGUE4_SWAP_TIMER_MS = 120000;
 const LEAGUE4_SHOP_TURN_TIMER_MS = 30000;
+const LEAGUE4_CHESS_TIME_MS = 4 * 60 * 1000;
 const LEAGUE4_TOTAL_ROUNDS = 6;
 const LEAGUE4_SHOP_SIZE = 5;
 const LEAGUE4_WIN_COINS = 10;
@@ -623,6 +720,7 @@ const emitLeague4State = (matchId) => {
     ? state.league4.shopState.offers.map(toWireLeagueOffer).filter(Boolean)
     : [];
   const payload = {
+    serverNowTs: Date.now(),
     gameMode: 'league4',
     phase: state.phase,
     league4: {
@@ -908,6 +1006,50 @@ const removeFromQueues = (socketId) => {
       idx = queue.indexOf(socketId);
     }
   });
+};
+
+const getSocketPlayFabId = (socket) => String(socket?.data?.playfab?.playFabId || '');
+
+const clearStaleMatchForSocket = (socket, reason = 'stale-match-reference') => {
+  if (!socket?.data?.matchId) return false;
+  const staleMatchId = socket.data.matchId;
+  const hasLiveMatch = activeMatches.has(staleMatchId) || matchStates.has(staleMatchId);
+  if (hasLiveMatch) return false;
+  console.warn('[Matchmaking] Clearing stale matchId', {
+    socketId: socket.id,
+    playFabId: getSocketPlayFabId(socket) || 'unknown',
+    matchId: staleMatchId,
+    reason
+  });
+  try {
+    socket.leave(staleMatchId);
+  } catch (e) {}
+  socket.data.matchId = null;
+  return true;
+};
+
+const removeQueuedSocketsForPlayFabId = (playFabId, keepSocketId = null) => {
+  const normalizedId = String(playFabId || '');
+  if (!normalizedId) return false;
+  let changed = false;
+  Object.values(matchQueues).forEach((queue) => {
+    for (let idx = queue.length - 1; idx >= 0; idx -= 1) {
+      const queuedSocketId = queue[idx];
+      if (keepSocketId && queuedSocketId === keepSocketId) continue;
+      const queuedSocket = io.sockets.sockets.get(queuedSocketId);
+      if (!queuedSocket) {
+        queue.splice(idx, 1);
+        changed = true;
+        continue;
+      }
+      clearStaleMatchForSocket(queuedSocket, 'queue-scan');
+      if (getSocketPlayFabId(queuedSocket) !== normalizedId) continue;
+      queue.splice(idx, 1);
+      queuedSocket.data.queueMode = null;
+      changed = true;
+    }
+  });
+  return changed;
 };
 
 
@@ -1197,6 +1339,10 @@ const clearLeaguePairSessionStore = (matchId) => {
       clearTimeout(session.stepTimeout);
       session.stepTimeout = null;
     }
+    if (session?.clockTimeout) {
+      clearTimeout(session.clockTimeout);
+      session.clockTimeout = null;
+    }
   });
   leaguePairSessions.delete(matchId);
 };
@@ -1217,7 +1363,10 @@ const emitLeaguePairState = (matchId, pairKey) => {
   const store = getLeaguePairSessionStore(matchId);
   const session = store[pairKey];
   if (!session || !session.state) return;
+  const clock = syncLeaguePairClock(session, Date.now());
+  session.state.clockState = clock ? { ...clock } : null;
   io.to(matchId).emit('leaguePairBattleState', cloneForWire({
+    serverNowTs: Date.now(),
     pairKey,
     a: session.a,
     b: session.b,
@@ -1248,6 +1397,117 @@ const clearLeaguePairStepTimeout = (matchId, pairKey) => {
   session.stepTimeout = null;
 };
 
+const ensureLeaguePairClockState = (session) => {
+  if (!session) return null;
+  session.clockState = session.clockState || {
+    player1Ms: LEAGUE4_CHESS_TIME_MS,
+    player2Ms: LEAGUE4_CHESS_TIME_MS,
+    activePlayerKey: null,
+    lastUpdatedTs: Date.now(),
+    deadlineTs: null
+  };
+  return session.clockState;
+};
+
+const clearLeaguePairClockTimeout = (matchId, pairKey) => {
+  const store = getLeaguePairSessionStore(matchId);
+  const session = store[pairKey];
+  if (!session || !session.clockTimeout) return;
+  clearTimeout(session.clockTimeout);
+  session.clockTimeout = null;
+};
+
+const syncLeaguePairClock = (session, nowTs = Date.now()) => {
+  const clock = ensureLeaguePairClockState(session);
+  if (!clock) return null;
+  const active = clock.activePlayerKey;
+  const lastUpdated = Number(clock.lastUpdatedTs || nowTs);
+  const elapsed = Math.max(0, Number(nowTs) - lastUpdated);
+
+  if (active === 'player1' && elapsed > 0) {
+    clock.player1Ms = Math.max(0, Number(clock.player1Ms || 0) - elapsed);
+  } else if (active === 'player2' && elapsed > 0) {
+    clock.player2Ms = Math.max(0, Number(clock.player2Ms || 0) - elapsed);
+  }
+
+  clock.lastUpdatedTs = Number(nowTs);
+  if (active) {
+    const remaining = active === 'player1' ? Number(clock.player1Ms || 0) : Number(clock.player2Ms || 0);
+    clock.deadlineTs = Number(nowTs) + remaining;
+  } else {
+    clock.deadlineTs = null;
+  }
+  return clock;
+};
+
+const getLeaguePairActiveClockPlayer = (session) => {
+  if (!session || !session.state || session.state.phase !== 'movement') return null;
+  const mover = session.state.movementPhase?.sequence?.[session.state.movementPhase?.index];
+  if (mover === 'p1') return 'player1';
+  if (mover === 'p2') return 'player2';
+  return null;
+};
+
+const advanceLeaguePairMovementTurn = (matchId, pairKey, reason = 'timeout') => {
+  const store = getLeaguePairSessionStore(matchId);
+  const session = store[pairKey];
+  if (!session || !session.state || session.state.phase !== 'movement' || !session.state.movementPhase) return false;
+
+  const pairState = session.state;
+  const mp = pairState.movementPhase;
+  const nextIndex = Number(mp.index || 0) + 1;
+  if (nextIndex >= mp.sequence.length) {
+    pairState.movementPhase = null;
+    pairState.phase = 'ready';
+    pairState.priorityPlayer = (pairState.priorityPlayer === 'player1' || pairState.priorityPlayer === 'p1') ? 'player2' : 'player1';
+  } else {
+    pairState.movementPhase = { ...mp, index: nextIndex };
+  }
+
+  const nextActive = getLeaguePairActiveClockPlayer(session);
+  setLeaguePairClockActive(matchId, pairKey, nextActive);
+  emitLeaguePairState(matchId, pairKey);
+  return true;
+};
+
+const setLeaguePairClockActive = (matchId, pairKey, activePlayerKey) => {
+  const store = getLeaguePairSessionStore(matchId);
+  const session = store[pairKey];
+  if (!session) return;
+
+  const nowTs = Date.now();
+  const clock = syncLeaguePairClock(session, nowTs);
+  clearLeaguePairClockTimeout(matchId, pairKey);
+
+  clock.activePlayerKey = activePlayerKey || null;
+  clock.lastUpdatedTs = nowTs;
+  if (!clock.activePlayerKey) {
+    clock.deadlineTs = null;
+    return;
+  }
+
+  const remaining = clock.activePlayerKey === 'player1'
+    ? Number(clock.player1Ms || 0)
+    : Number(clock.player2Ms || 0);
+  clock.deadlineTs = nowTs + remaining;
+
+  if (remaining <= 0) {
+    setTimeout(() => {
+      advanceLeaguePairMovementTurn(matchId, pairKey, 'clock-expired');
+    }, 0);
+    return;
+  }
+
+  session.clockTimeout = setTimeout(() => {
+    const latestStore = getLeaguePairSessionStore(matchId);
+    const latestSession = latestStore[pairKey];
+    if (!latestSession) return;
+    const latestClock = syncLeaguePairClock(latestSession, Date.now());
+    if (latestClock.activePlayerKey !== activePlayerKey) return;
+    advanceLeaguePairMovementTurn(matchId, pairKey, 'clock-expired');
+  }, remaining);
+};
+
 const startMovementPhaseForLeaguePair = (matchId, pairKey) => {
   const store = getLeaguePairSessionStore(matchId);
   const session = store[pairKey];
@@ -1258,6 +1518,7 @@ const startMovementPhaseForLeaguePair = (matchId, pairKey) => {
   const sequence = prioShort === 'p1' ? ['p1', 'p2', 'p2', 'p1'] : ['p2', 'p1', 'p1', 'p2'];
   state.movementPhase = { sequence, index: 0 };
   state.phase = 'movement';
+  setLeaguePairClockActive(matchId, pairKey, getLeaguePairActiveClockPlayer(session));
   emitLeaguePairState(matchId, pairKey);
 };
 
@@ -1318,6 +1579,7 @@ const startLeaguePairRound = async (matchId, pairKey, priorityPlayer = 'player1'
     speedMultiplier: 4
   }, io, { returnSteps: true });
   session.state = result.state;
+  setLeaguePairClockActive(matchId, pairKey, null);
   session.stepQueue = (result.steps || []).map((step) => (step && typeof step === 'object' ? { ...step, leaguePairKey: pairKey } : step));
   session.stepIndex = 0;
   session.awaitingAck = false;
@@ -1361,6 +1623,7 @@ const beginLeague4LivePairBattles = (matchId) => {
   const store = getLeaguePairSessionStore(matchId);
   Object.keys(store).forEach((k) => {
     clearLeaguePairStepTimeout(matchId, k);
+    clearLeaguePairClockTimeout(matchId, k);
     delete store[k];
   });
   state.league4.pendingMatchReports = {};
@@ -1388,10 +1651,18 @@ const beginLeague4LivePairBattles = (matchId) => {
       a,
       b,
       state: sessionState,
+      clockState: {
+        player1Ms: LEAGUE4_CHESS_TIME_MS,
+        player2Ms: LEAGUE4_CHESS_TIME_MS,
+        activePlayerKey: null,
+        lastUpdatedTs: Date.now(),
+        deadlineTs: null
+      },
       stepQueue: [],
       stepIndex: 0,
       awaitingAck: false,
       stepTimeout: null,
+      clockTimeout: null,
       isRunningRound: false,
       pendingMovementStart: false,
       resultReported: false
@@ -1802,11 +2073,14 @@ const emitQueuePositions = (gameMode) => {
   const queue = getMatchQueue(gameMode);
   const validIds = queue.filter((id) => {
     const s = io.sockets.sockets.get(id);
+    if (s) {
+      clearStaleMatchForSocket(s, 'emit-queue-positions');
+    }
     return !!(s && s.data && s.data.playfab && !s.data.matchId);
   });
   validIds.forEach((id, idx) => {
     const s = io.sockets.sockets.get(id);
-    if (s) s.emit('matchQueued', { position: idx + 1, gameMode });
+    if (s) s.emit('matchQueued', { position: idx + 1, gameMode, serverInstanceId: SERVER_INSTANCE_ID });
   });
 };
 
@@ -1841,21 +2115,29 @@ const startQueuedMatchIfReady = (gameMode) => {
   const queue = getMatchQueue(gameMode);
   const required = getRequiredPlayersForMode(gameMode);
 
-  const pullNextValidSocket = () => {
+  const pullNextValidSocket = (pickedPlayFabIds = new Set()) => {
     while (queue.length > 0) {
       const id = queue.shift();
       const s = io.sockets.sockets.get(id);
-      if (s && s.data && s.data.playfab && !s.data.matchId) return s;
+      if (!s || !s.data || !s.data.playfab) continue;
+      clearStaleMatchForSocket(s, 'queue-pick');
+      if (s.data.matchId) continue;
+      const playFabId = getSocketPlayFabId(s);
+      if (!playFabId) continue;
+      if (pickedPlayFabIds.has(playFabId)) continue;
+      return s;
     }
     return null;
   };
 
   while (true) {
     const picked = [];
+    const pickedPlayFabIds = new Set();
     for (let i = 0; i < required; i += 1) {
-      const s = pullNextValidSocket();
+      const s = pullNextValidSocket(pickedPlayFabIds);
       if (!s) break;
       picked.push(s);
+      pickedPlayFabIds.add(getSocketPlayFabId(s));
     }
 
     if (picked.length < required) {
@@ -1890,10 +2172,10 @@ const startQueuedMatchIfReady = (gameMode) => {
       ...(p4 ? { p4: p4.username || 'Player 4' } : {})
     };
 
-    p1Socket.emit('matchFound', { matchId, side: 'p1', gameMode, players: playersPayload, opponent: { playFabId: p2.playFabId, username: p2.username } });
-    p2Socket.emit('matchFound', { matchId, side: 'p2', gameMode, players: playersPayload, opponent: { playFabId: p1.playFabId, username: p1.username } });
-    if (p3Socket) p3Socket.emit('matchFound', { matchId, side: 'p3', gameMode, players: playersPayload, opponent: { playFabId: p1.playFabId, username: p1.username } });
-    if (p4Socket) p4Socket.emit('matchFound', { matchId, side: 'p4', gameMode, players: playersPayload, opponent: { playFabId: p1.playFabId, username: p1.username } });
+    p1Socket.emit('matchFound', { matchId, side: 'p1', gameMode, players: playersPayload, opponent: { playFabId: p2.playFabId, username: p2.username }, serverInstanceId: SERVER_INSTANCE_ID });
+    p2Socket.emit('matchFound', { matchId, side: 'p2', gameMode, players: playersPayload, opponent: { playFabId: p1.playFabId, username: p1.username }, serverInstanceId: SERVER_INSTANCE_ID });
+    if (p3Socket) p3Socket.emit('matchFound', { matchId, side: 'p3', gameMode, players: playersPayload, opponent: { playFabId: p1.playFabId, username: p1.username }, serverInstanceId: SERVER_INSTANCE_ID });
+    if (p4Socket) p4Socket.emit('matchFound', { matchId, side: 'p4', gameMode, players: playersPayload, opponent: { playFabId: p1.playFabId, username: p1.username }, serverInstanceId: SERVER_INSTANCE_ID });
 
     console.log('[Matchmaking] Match found', matchId, p1.playFabId, p2.playFabId, p3 ? p3.playFabId : null, p4 ? p4.playFabId : null, 'mode', gameMode);
   }
@@ -2169,17 +2451,21 @@ io.on('connection', (socket) => {
               if (match && !execState.resultRecorded) {
                 execState.resultRecorded = true;  // Prevent double-recording on disconnect
                 const winner = gameEndStep.winner;
+                let saved = true;
                 console.log(`[SERVER] Match ${matchId} ended with winner: ${winner}`);
                 if (match.gameMode !== 'ffa3') {
                   if (winner === 'draw') {
-                    recordMatchResult(match.p1.playFabId, match.p2.playFabId, true);
+                    saved = await recordMatchResult(match.p1.playFabId, match.p2.playFabId, true);
                   } else if (winner === 'player1') {
-                    recordMatchResult(match.p1.playFabId, match.p2.playFabId, false);
+                    saved = await recordMatchResult(match.p1.playFabId, match.p2.playFabId, false);
                   } else if (winner === 'player2') {
-                    recordMatchResult(match.p2.playFabId, match.p1.playFabId, false);
+                    saved = await recordMatchResult(match.p2.playFabId, match.p1.playFabId, false);
                   }
                 } else {
-                  recordFfa3Result(match, winner);
+                  saved = await recordFfa3Result(match, winner);
+                }
+                if (!saved) {
+                  execState.resultRecorded = false;
                 }
               } else if (execState.resultRecorded) {
                 console.log(`[SERVER] Match ${matchId}: Result already recorded, skipping`);
@@ -2244,7 +2530,7 @@ io.on('connection', (socket) => {
       } catch (e) {
         console.error('[Betting] onAuthenticated failed:', e);
       }
-      socket.emit('authResult', { ok: true, user: socket.data.playfab });
+      socket.emit('authResult', { ok: true, user: socket.data.playfab, serverInstanceId: SERVER_INSTANCE_ID });
     } catch (e) {
       socket.emit('authResult', { ok: false });
     }
@@ -2268,12 +2554,14 @@ io.on('connection', (socket) => {
         const pairCtx = getLeaguePairSessionForPlayer(matchId, playerKey, payload.leaguePairKey || null);
         if (!pairCtx || !pairCtx.session) return;
         const { pairKey, session } = pairCtx;
+        syncLeaguePairClock(session, Date.now());
         if (payload.p1Main) session.state.p1Main = payload.p1Main;
         if (payload.p2Main) session.state.p2Main = payload.p2Main;
         if (payload.p1Reserve) session.state.p1Reserve = payload.p1Reserve;
         if (payload.p2Reserve) session.state.p2Reserve = payload.p2Reserve;
         if (payload.priorityPlayer) session.state.priorityPlayer = payload.priorityPlayer;
         session.state.phase = 'battle';
+        setLeaguePairClockActive(matchId, pairKey, null);
         emitLeaguePairState(matchId, pairKey);
         return;
       }
@@ -2321,6 +2609,7 @@ io.on('connection', (socket) => {
 
         const { pairKey, session } = pairCtx;
         const pairState = session.state;
+        syncLeaguePairClock(session, Date.now());
         const srcId = payload.sourceId;
         const dstId = payload.targetId;
         if (!srcId || !dstId) return;
@@ -2427,6 +2716,7 @@ io.on('connection', (socket) => {
         } else {
           pairState.movementPhase = { ...mp, index: nextIndex };
         }
+        setLeaguePairClockActive(matchId, pairKey, getLeaguePairActiveClockPlayer(session));
         emitLeaguePairState(matchId, pairKey);
         return;
       }
@@ -2766,7 +3056,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('disconnect', () => {
+  socket.on('disconnect', async () => {
     console.log('Player disconnected:', socket.id);
     bettingModeManager.onDisconnect(socket);
     // Remove from queue if present
@@ -2815,13 +3105,14 @@ io.on('connection', (socket) => {
 
         // Only record disconnect as win for classic matches
         if (!execState || !execState.resultRecorded) {
-          if (match.gameMode !== 'ffa3' && otherPlayers.length === 1) {
-            const winnerPlayFabId = otherPlayers[0].playFabId;
-            const loserPlayFabId = match.p1.id === socket.id ? match.p1.playFabId : match.p2.playFabId;
+          const departureResult = getClassicMatchDepartureResult(match, socket.id);
+          if (departureResult && otherPlayers.length === 1) {
             console.log(`[SERVER] Match ${matchId} - player disconnected, recording win for opponent`);
-            recordMatchResult(winnerPlayFabId, loserPlayFabId, false);
+            if (execState) execState.resultRecorded = true;
+            const saved = await recordMatchResult(departureResult.winnerPlayFabId, departureResult.loserPlayFabId, false);
+            if (!saved && execState) execState.resultRecorded = false;
           } else {
-            console.log(`[SERVER] Match ${matchId} - player disconnected, skipping result record for ffa3`);
+            console.log(`[SERVER] Match ${matchId} - player disconnected, skipping result record for non-classic match`);
           }
         } else {
           console.log(`[SERVER] Match ${matchId} - player disconnected, but result already recorded (game ended normally)`);
@@ -2860,14 +3151,20 @@ io.on('connection', (socket) => {
       socket.emit('matchError', { message: 'Not authenticated' });
       return;
     }
+    clearStaleMatchForSocket(socket, 'find-match');
     if (socket.data.matchId) {
       socket.emit('matchError', { message: 'Already in match' });
       return;
     }
+    const playFabId = getSocketPlayFabId(socket);
+    const removedOtherQueuedSockets = removeQueuedSocketsForPlayFabId(playFabId, socket.id);
     const queue = getMatchQueue(gameMode);
     socket.data.queueMode = gameMode;
     removeFromQueues(socket.id);
     if (!queue.includes(socket.id)) queue.push(socket.id);
+    if (removedOtherQueuedSockets) {
+      Object.keys(matchQueues).forEach((mode) => emitQueuePositions(normalizeGameMode(mode)));
+    }
     emitQueuePositions(gameMode);
     console.log('[Matchmaking] Queued', socket.id, 'mode', gameMode);
     startQueuedMatchIfReady(gameMode);
@@ -2881,7 +3178,7 @@ io.on('connection', (socket) => {
   });
 
   // Leave an active match gracefully
-  socket.on('leaveMatch', () => {
+  socket.on('leaveMatch', async () => {
     if (!socket.data || !socket.data.matchId) {
       socket.emit('leaveMatchResult', { ok: false, message: 'Not in a match' });
       return;
@@ -2889,6 +3186,7 @@ io.on('connection', (socket) => {
     
     const matchId = socket.data.matchId;
     const match = activeMatches.get(matchId);
+    const execState = matchExecutionState.has(matchId) ? matchExecutionState.get(matchId) : null;
     
     console.log(`[Matchmaking] Player ${socket.id} leaving match ${matchId}`);
     
@@ -2925,6 +3223,20 @@ io.on('connection', (socket) => {
       if (match.p2 && match.p2.id !== socket.id) otherPlayers.push(match.p2);
       if (match.p3 && match.p3.id !== socket.id) otherPlayers.push(match.p3);
       if (match.p4 && match.p4.id !== socket.id) otherPlayers.push(match.p4);
+
+      if (!execState || !execState.resultRecorded) {
+        const departureResult = getClassicMatchDepartureResult(match, socket.id);
+        if (departureResult && otherPlayers.length === 1) {
+          console.log(`[SERVER] Match ${matchId} - player left, recording win for opponent`);
+          if (execState) execState.resultRecorded = true;
+          const saved = await recordMatchResult(departureResult.winnerPlayFabId, departureResult.loserPlayFabId, false);
+          if (!saved && execState) execState.resultRecorded = false;
+        } else {
+          console.log(`[SERVER] Match ${matchId} - player left, skipping result record for non-classic match`);
+        }
+      } else {
+        console.log(`[SERVER] Match ${matchId} - player left after result already recorded`);
+      }
 
       otherPlayers.forEach((player) => {
         const otherSocket = io.sockets.sockets.get(player.id);

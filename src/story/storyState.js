@@ -6,6 +6,7 @@ import { getRandomAugments, AUGMENTS } from '../tower/augments.js';
 import { HEROES } from '../heroes.js';
 
 const STORY_STORAGE_KEY = 'brimstone_story_run';
+export const STORY_PARTY_MAX = 7;
 
 export function createNewStoryRun(kingdomId) {
   const arc = getStoryArc(kingdomId);
@@ -16,6 +17,7 @@ export function createNewStoryRun(kingdomId) {
     completedNodeIds: [],
     selectedHeroes: [],
     pendingRelicChoice: null,
+    pendingRecruitChoice: null,
     relics: [],
     startedAt: Date.now(),
     lastPlayedAt: Date.now(),
@@ -80,6 +82,21 @@ export function setStoryTeam(runState, heroSelections) {
   return runState;
 }
 
+export function setStoryPartySelections(runState, heroSelections) {
+  if (!runState) return runState;
+  runState.selectedHeroes = heroSelections
+    .slice(0, STORY_PARTY_MAX)
+    .map(sel => ({
+      heroId: sel.heroId,
+      position: sel.position,
+      augments: sel.augments || []
+    }));
+  runState.pendingRecruitChoice = null;
+  runState.lastPlayedAt = Date.now();
+  saveStoryRun(runState);
+  return runState;
+}
+
 export function getHeroById(heroId) {
   return HEROES.find(h => h.id === heroId) || null;
 }
@@ -92,6 +109,35 @@ export function generateRelicChoices(runState, count = 3) {
   return choices;
 }
 
+export function generateRecruitChoices(runState, count = 3) {
+  if (!runState) return [];
+  const selectedHeroIds = new Set((runState.selectedHeroes || []).map(entry => entry.heroId));
+  const availableHeroes = HEROES.filter(
+    hero => hero.draftable !== false && !selectedHeroIds.has(hero.id)
+  );
+
+  const shuffled = [...availableHeroes].sort(() => Math.random() - 0.5);
+  const choices = shuffled.slice(0, Math.min(count, shuffled.length));
+  runState.pendingRecruitChoice = choices.map(hero => hero.id);
+  runState.lastPlayedAt = Date.now();
+  saveStoryRun(runState);
+  return choices;
+}
+
+function getFirstOpenBoardPosition(selectedHeroes) {
+  const occupied = new Set(
+    (selectedHeroes || [])
+      .map(entry => entry?.position)
+      .filter(position => Number.isInteger(position) && position >= 0 && position <= 8)
+  );
+
+  for (let position = 0; position < 9; position += 1) {
+    if (!occupied.has(position)) return position;
+  }
+
+  return null;
+}
+
 export function applyRelicToHero(runState, heroIndex, augmentId, rolledValue) {
   if (!runState || !Array.isArray(runState.selectedHeroes)) return runState;
   const entry = runState.selectedHeroes[heroIndex];
@@ -101,6 +147,25 @@ export function applyRelicToHero(runState, heroIndex, augmentId, rolledValue) {
   runState.relics = runState.relics || [];
   runState.relics.push({ augmentId, rolledValue, heroId: entry.heroId, at: Date.now() });
   runState.pendingRelicChoice = null;
+  runState.lastPlayedAt = Date.now();
+  saveStoryRun(runState);
+  return runState;
+}
+
+export function recruitHeroToStoryParty(runState, heroId) {
+  if (!runState || !Array.isArray(runState.selectedHeroes) || !heroId) return runState;
+  if (runState.selectedHeroes.length >= STORY_PARTY_MAX) return runState;
+  if (runState.selectedHeroes.some(entry => entry.heroId === heroId)) return runState;
+
+  const hero = getHeroById(heroId);
+  if (!hero || hero.draftable === false) return runState;
+
+  runState.selectedHeroes.push({
+    heroId,
+    position: getFirstOpenBoardPosition(runState.selectedHeroes),
+    augments: []
+  });
+  runState.pendingRecruitChoice = null;
   runState.lastPlayedAt = Date.now();
   saveStoryRun(runState);
   return runState;

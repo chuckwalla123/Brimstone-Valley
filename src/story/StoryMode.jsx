@@ -7,6 +7,7 @@ import StoryTeamSelect from './StoryTeamSelect.jsx';
 import StoryMap from './StoryMap.jsx';
 import StoryBattle from './StoryBattle.jsx';
 import StoryRelicChoice from './StoryRelicChoice.jsx';
+import StoryRecruitChoice from './StoryRecruitChoice.jsx';
 import {
   createNewStoryRun,
   loadStoryRun,
@@ -26,6 +27,7 @@ const SCREEN = {
   MAP: 'map',
   BATTLE: 'battle',
   RELIC: 'relic',
+  RECRUIT: 'recruit',
   VICTORY: 'victory',
   DEFEAT: 'defeat'
 };
@@ -54,6 +56,14 @@ export default function StoryMode({ onExit }) {
 
   const handleContinue = () => {
     if (!runState) return;
+    if (pendingAdvance && Array.isArray(runState.pendingRecruitChoice) && runState.pendingRecruitChoice.length > 0) {
+      setScreen(SCREEN.RECRUIT);
+      return;
+    }
+    if (pendingAdvance && Array.isArray(runState.pendingRelicChoice) && runState.pendingRelicChoice.length > 0) {
+      setScreen(SCREEN.RELIC);
+      return;
+    }
     if (runState.completed) {
       setScreen(SCREEN.VICTORY);
       return;
@@ -114,12 +124,13 @@ export default function StoryMode({ onExit }) {
     }
   };
 
-  const handleRelicConfirm = (updatedRun) => {
+  const finalizePendingAdvance = (updatedRun) => {
     if (!pendingAdvance) {
       setRunState({ ...updatedRun });
       setScreen(SCREEN.MAP);
       return;
     }
+
     const { nodeId, nextId } = pendingAdvance;
     const updated = advanceToNextNode(updatedRun, nodeId, nextId);
     setPendingAdvance(null);
@@ -129,6 +140,15 @@ export default function StoryMode({ onExit }) {
     } else {
       setScreen(SCREEN.MAP);
     }
+  };
+
+  const handleRelicConfirm = (updatedRun) => {
+    setRunState({ ...updatedRun });
+    setScreen(SCREEN.RECRUIT);
+  };
+
+  const handleRecruitConfirm = (updatedRun) => {
+    finalizePendingAdvance(updatedRun);
   };
 
   const handleRelicExit = () => {
@@ -190,6 +210,16 @@ export default function StoryMode({ onExit }) {
       <StoryRelicChoice
         runState={runState}
         onConfirm={handleRelicConfirm}
+        onExit={handleRelicExit}
+      />
+    );
+  }
+
+  if (screen === SCREEN.RECRUIT) {
+    return (
+      <StoryRecruitChoice
+        runState={runState}
+        onConfirm={handleRecruitConfirm}
         onExit={handleRelicExit}
       />
     );

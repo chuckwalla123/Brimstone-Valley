@@ -85,6 +85,16 @@ function formatSideBetCorrectAnswer(roundSummary) {
   return 'Unavailable';
 }
 
+function getBattleSnapshotRound(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return 0;
+  return Number(snapshot?.roundNumber || snapshot?.state?.roundNumber || 0);
+}
+
+function getBattleSnapshotSeq(snapshot) {
+  if (!snapshot || typeof snapshot !== 'object') return 0;
+  return Number(snapshot?.seq || snapshot?.state?.seq || 0);
+}
+
 export default function BettingMode({ socket, onExit }) {
   const [lobbyState, setLobbyState] = useState(null);
   const [lobbyBrowser, setLobbyBrowser] = useState([]);
@@ -101,11 +111,27 @@ export default function BettingMode({ socket, onExit }) {
   const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
   const [stableCoinsByPlayer, setStableCoinsByPlayer] = useState({});
   const [isSocketConnected, setIsSocketConnected] = useState(!!socket?.connected);
+  const [liveBattleState, setLiveBattleState] = useState(null);
+  const [battleSyncVersion, setBattleSyncVersion] = useState(0);
+  const battleUiActiveRef = React.useRef(false);
+  const currentRoundRef = React.useRef(0);
+  const syncedBattleSeqRef = React.useRef(0);
+  const battleStepActivityAtRef = React.useRef(0);
+  const battleSocketHandlerMapRef = React.useRef(new Map());
+  const latestBattleSnapshotSeqRef = React.useRef(0);
 
   useEffect(() => {
     const tick = setInterval(() => setNowMs(Date.now()), 500);
     return () => clearInterval(tick);
   }, []);
+
+  useEffect(() => {
+    battleUiActiveRef.current = lobbyState?.phase === 'battle';
+  }, [lobbyState?.phase]);
+
+  useEffect(() => {
+    currentRoundRef.current = Number(lobbyState?.currentRound || 0);
+  }, [lobbyState?.currentRound]);
 
   useEffect(() => {
     if (!socket) return undefined;
@@ -116,8 +142,43 @@ export default function BettingMode({ socket, onExit }) {
       if (payload && Number.isFinite(Number(payload.serverNowTs))) {
         setServerTimeOffsetMs(Number(payload.serverNowTs) - Date.now());
       }
+      const lobbyRound = Number(payload?.currentRound || 0);
+      const nextLiveState = payload?.battle?.liveState || null;
+      const nextLiveRound = getBattleSnapshotRound(nextLiveState);
+      const nextLiveSeq = getBattleSnapshotSeq(nextLiveState);
+      if (payload?.phase === 'battle' && nextLiveState && nextLiveRound === lobbyRound && nextLiveSeq >= Number(latestBattleSnapshotSeqRef.current || 0)) {
+        latestBattleSnapshotSeqRef.current = nextLiveSeq;
+        battleStepActivityAtRef.current = Date.now();
+        setLiveBattleState(nextLiveState);
+      } else if (payload?.phase !== 'battle') {
+        setLiveBattleState(null);
+      }
       setLobbyState(payload || null);
       setStatus('');
+    };
+    const onBattleState = (payload) => {
+      if (!payload || typeof payload !== 'object') return;
+      const activeRound = Number(currentRoundRef.current || 0);
+      const payloadRound = getBattleSnapshotRound(payload);
+      if (activeRound > 0 && payloadRound > 0 && payloadRound !== activeRound) return;
+      const payloadSeq = getBattleSnapshotSeq(payload);
+      if (payload.forceSync) {
+        syncedBattleSeqRef.current = Math.max(syncedBattleSeqRef.current, Number(payload?.seq || 0));
+        latestBattleSnapshotSeqRef.current = Math.max(latestBattleSnapshotSeqRef.current, payloadSeq);
+        battleStepActivityAtRef.current = Date.now();
+        setLiveBattleState(payload);
+        if (Number(payload?.seq || 0) > 0) {
+          socket.emit('bettingBattleStepAck', { seq: Number(payload.seq) });
+        }
+        setBattleSyncVersion((value) => value + 1);
+        return;
+      }
+      if (payloadSeq < Number(latestBattleSnapshotSeqRef.current || 0)) {
+        return;
+      }
+      latestBattleSnapshotSeqRef.current = payloadSeq;
+      battleStepActivityAtRef.current = Date.now();
+      setLiveBattleState(payload);
     };
     const onError = (payload) => {
       const message = payload?.message || 'Betting mode error.';
@@ -127,11 +188,20 @@ export default function BettingMode({ socket, onExit }) {
         setLocalBetSubmitted(false);
       }
     };
-    const onLeft = () => setLobbyState(null);
+    const onLeft = () => {
+      setLobbyState(null);
+      setLiveBattleState(null);
+      setLocalBetSubmitted(false);
+      setBattleVisualCompleteAcked(false);
+      socket.emit('listBettingLobbies');
+    };
     const onBrowser = (payload) => setLobbyBrowser(Array.isArray(payload?.lobbies) ? payload.lobbies : []);
     const onConnect = () => {
       setIsSocketConnected(true);
       socket.emit('listBettingLobbies');
+      if (currentRoundRef.current > 0) {
+        socket.emit('requestBettingBattleSync');
+      }
     };
     const onDisconnect = () => {
       setIsSocketConnected(false);
@@ -145,6 +215,7 @@ export default function BettingMode({ socket, onExit }) {
     socket.on('bettingError', onError);
     socket.on('bettingLeftLobby', onLeft);
     socket.on('bettingLobbyBrowser', onBrowser);
+    socket.on('bettingBattleState', onBattleState);
     socket.on('connect', onConnect);
     socket.on('disconnect', onDisconnect);
     socket.on('connect_error', onConnectError);
@@ -155,10 +226,10 @@ export default function BettingMode({ socket, onExit }) {
       socket.off('bettingError', onError);
       socket.off('bettingLeftLobby', onLeft);
       socket.off('bettingLobbyBrowser', onBrowser);
+      socket.off('bettingBattleState', onBattleState);
       socket.off('connect', onConnect);
       socket.off('disconnect', onDisconnect);
       socket.off('connect_error', onConnectError);
-      socket.emit('leaveBettingLobby');
     };
   }, [socket]);
 
@@ -170,6 +241,32 @@ export default function BettingMode({ socket, onExit }) {
     }, 5000);
     return () => clearInterval(intervalId);
   }, [socket, isSocketConnected, lobbyState]);
+
+  useEffect(() => {
+    if (!socket) return undefined;
+    const onVisibilityChange = () => {
+      if (document.hidden) return;
+      if (currentRoundRef.current <= 0) return;
+      if (battleUiActiveRef.current) {
+        socket.emit('requestBettingBattleSync');
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => document.removeEventListener('visibilitychange', onVisibilityChange);
+  }, [socket]);
+
+  useEffect(() => {
+    if (!socket || !lobbyState || lobbyState.phase !== 'battle') return undefined;
+    battleStepActivityAtRef.current = Date.now();
+    const intervalId = setInterval(() => {
+      if (document.hidden) return;
+      const idleMs = Date.now() - Number(battleStepActivityAtRef.current || 0);
+      if (idleMs < 10000) return;
+      battleStepActivityAtRef.current = Date.now();
+      socket.emit('requestBettingBattleSync');
+    }, 3000);
+    return () => clearInterval(intervalId);
+  }, [socket, lobbyState?.phase, lobbyState?.currentRound]);
 
   useEffect(() => {
     if (lobbyState?.phase !== 'betting') return;
@@ -218,6 +315,13 @@ export default function BettingMode({ socket, onExit }) {
   }, [lobbyState?.code, lobbyState?.currentRound]);
 
   useEffect(() => {
+    if (lobbyState?.phase === 'battle') return;
+    syncedBattleSeqRef.current = 0;
+    battleStepActivityAtRef.current = 0;
+    latestBattleSnapshotSeqRef.current = 0;
+  }, [lobbyState?.phase, lobbyState?.code, lobbyState?.currentRound]);
+
+  useEffect(() => {
     if (!lobbyState || !Array.isArray(lobbyState.players)) {
       setStableCoinsByPlayer({});
       return;
@@ -243,6 +347,7 @@ export default function BettingMode({ socket, onExit }) {
   }, [lobbyState, me]);
 
   const syncedNowMs = nowMs + serverTimeOffsetMs;
+  const shouldRenderBattle = lobbyState?.phase === 'battle' || (!!liveBattleState && lobbyState?.phase === 'settling');
 
   const getVisibleCoins = (playerId, fallbackCoins = 0) => {
     const id = String(playerId || '');
@@ -253,6 +358,12 @@ export default function BettingMode({ socket, onExit }) {
   };
 
   const battleGameState = useMemo(() => {
+    if (liveBattleState) {
+      return {
+        ...liveBattleState,
+        gameMode: 'classic'
+      };
+    }
     if (!battle) return null;
     return {
       p1Main: battle.p1Main || [],
@@ -265,23 +376,50 @@ export default function BettingMode({ socket, onExit }) {
       priorityPlayer: 'player1',
       lastAction: null
     };
-  }, [battle, lobbyState?.currentRound]);
+  }, [battle, lobbyState?.currentRound, liveBattleState]);
 
   const bettingBattleSocket = useMemo(() => ({
     on: (eventName, callback) => {
       if (!socket || typeof callback !== 'function') return;
       const mapped = eventName === 'step' ? 'bettingBattleStep' : eventName;
+      if (mapped === 'bettingBattleStep') {
+        const wrapped = (payload) => {
+          const seq = Number(payload?.seq || 0);
+          if (seq > 0 && seq <= Number(syncedBattleSeqRef.current || 0)) {
+            socket.emit('bettingBattleStepAck', { seq });
+            battleStepActivityAtRef.current = Date.now();
+            return;
+          }
+          battleStepActivityAtRef.current = Date.now();
+          callback(payload);
+        };
+        battleSocketHandlerMapRef.current.set(callback, wrapped);
+        socket.on(mapped, wrapped);
+        return;
+      }
       socket.on(mapped, callback);
     },
     off: (eventName, callback) => {
       if (!socket) return;
       const mapped = eventName === 'step' ? 'bettingBattleStep' : eventName;
+      if (mapped === 'bettingBattleStep') {
+        const wrapped = battleSocketHandlerMapRef.current.get(callback);
+        if (wrapped) {
+          socket.off(mapped, wrapped);
+          battleSocketHandlerMapRef.current.delete(callback);
+          return;
+        }
+      }
       socket.off(mapped, callback);
     },
     emit: (eventName, payload) => {
       if (!socket) return;
       if (eventName === 'stepAck') {
         socket.emit('bettingBattleStepAck', payload || {});
+      } else if (eventName === 'makeMove' && payload?.type === 'syncBattleState') {
+        socket.emit('requestBettingBattleSync');
+      } else if (eventName === 'forceBattleSync') {
+        socket.emit('requestBettingBattleSync');
       }
     }
   }), [socket]);
@@ -471,10 +609,10 @@ export default function BettingMode({ socket, onExit }) {
                     {lobbyState.phase === 'summary' && <div style={{ fontWeight: 800, color: '#9ad4ff' }}>Next Round: {countdownText(lobbyState.summaryDeadlineTs, syncedNowMs)}</div>}
                   </div>
 
-                  {lobbyState.phase === 'battle' && battleGameState ? (
+                  {shouldRenderBattle && battleGameState ? (
                     <div style={{ borderTop: '1px solid rgba(255,255,255,0.18)', paddingTop: 8, borderRadius: 10, overflow: 'hidden' }}>
                       <BattlePhase
-                        key={`bet-live-${lobbyState.code}-${lobbyState.currentRound}`}
+                        key={`bet-live-${lobbyState.code}-${lobbyState.currentRound}-${battleSyncVersion}`}
                         gameState={battleGameState}
                         socket={bettingBattleSocket}
                         onGameEnd={() => {}}
@@ -487,7 +625,7 @@ export default function BettingMode({ socket, onExit }) {
                         autoPlay={false}
                         localSide="p1"
                         showReturnToMenu={false}
-                        disableBackgroundFastForward={true}
+                        disableBackgroundFastForward={false}
                         battleSpeedMultiplier={4}
                         matchPlayers={{ p1: battle.bots.p1, p2: battle.bots.p2 }}
                       />

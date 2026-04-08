@@ -82,6 +82,8 @@ const styles = {
     background: 'rgba(0,0,0,0.4)',
     border: '2px dashed #7c4a12',
     borderRadius: '8px',
+    width: '100px',
+    height: '100px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
@@ -106,7 +108,8 @@ const styles = {
   reserveRow: {
     display: 'flex',
     gap: '8px',
-    justifyContent: 'center'
+    justifyContent: 'center',
+    flexWrap: 'wrap'
   },
   buttonRow: {
     display: 'flex',
@@ -374,9 +377,10 @@ export default function StoryTeamSelect({ arc, onConfirm, onBack }) {
               return (
                 <div
                   key={i}
-                  style={{ ...styles.slot, ...(heroId ? styles.slotFilled : {}) }}
+                  style={{ ...styles.slot, ...(heroId ? styles.slotFilled : {}), position: 'relative' }}
                   onClick={() => handleReserveClick(i)}
                 >
+                  <div style={styles.slotLabel}>Reserve</div>
                   {hero ? (
                     <img src={getAssetPath(hero.image)} alt={hero.name} style={styles.slotHeroImage} />
                   ) : null}

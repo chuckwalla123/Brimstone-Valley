@@ -10,15 +10,42 @@ import { EFFECTS } from '../effects.js';
  * - rare: Levels 8+, less frequent
  * - epic: Levels 15+, rare
  * - legendary: Levels 22+, very rare
+ *
+ * Each tier also has a late-game target weight so rolls keep trending upward
+ * as tower level increases instead of staying mostly static after unlock.
  */
 
 export const AUGMENT_TIERS = {
-  common: { minLevel: 1, weight: 100 },
-  uncommon: { minLevel: 3, weight: 60 },
-  rare: { minLevel: 8, weight: 30 },
-  epic: { minLevel: 15, weight: 15 },
-  legendary: { minLevel: 22, weight: 5 }
+  common: { minLevel: 1, weight: 100, targetWeight: 10 },
+  uncommon: { minLevel: 3, weight: 60, targetWeight: 24 },
+  rare: { minLevel: 8, weight: 30, targetWeight: 55 },
+  epic: { minLevel: 15, weight: 15, targetWeight: 48 },
+  legendary: { minLevel: 22, weight: 5, targetWeight: 34 }
 };
+
+const AUGMENT_WEIGHT_TARGET_LEVEL = 40;
+
+function clampProgress(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function smoothstep(value) {
+  const progress = clampProgress(value);
+  return progress * progress * (3 - (2 * progress));
+}
+
+export function getAugmentTierWeight(tier, level) {
+  const tierInfo = AUGMENT_TIERS[tier];
+
+  if (!tierInfo) return 0;
+  if (level <= tierInfo.minLevel) return tierInfo.weight;
+
+  const span = Math.max(1, AUGMENT_WEIGHT_TARGET_LEVEL - tierInfo.minLevel);
+  const progress = smoothstep((level - tierInfo.minLevel) / span);
+  const scaledWeight = tierInfo.weight + ((tierInfo.targetWeight - tierInfo.weight) * progress);
+
+  return Math.max(1, Math.round(scaledWeight));
+}
 
 /**
  * Augments are hidden effects applied to heroes during tower runs.
@@ -46,7 +73,7 @@ export const AUGMENTS = {
     description: '+{value} Health',
     tier: 'common',
     type: 'stat',
-    valueRange: [1, 3],
+    valueRange: [3, 3],
     apply: (hero, value) => { hero.health += value; hero.currentHealth += value; }
   },
   healthBoostMedium: {
@@ -55,7 +82,7 @@ export const AUGMENTS = {
     description: '+{value} Health',
     tier: 'uncommon',
     type: 'stat',
-    valueRange: [3, 6],
+    valueRange: [6, 6],
     apply: (hero, value) => { hero.health += value; hero.currentHealth += value; }
   },
   healthBoostLarge: {
@@ -64,7 +91,7 @@ export const AUGMENTS = {
     description: '+{value} Health',
     tier: 'rare',
     type: 'stat',
-    valueRange: [5, 10],
+    valueRange: [9, 9],
     apply: (hero, value) => { hero.health += value; hero.currentHealth += value; }
   },
   healthBoostHuge: {
@@ -73,7 +100,7 @@ export const AUGMENTS = {
     description: '+{value} Health',
     tier: 'epic',
     type: 'stat',
-    valueRange: [8, 15],
+    valueRange: [12, 12],
     apply: (hero, value) => { hero.health += value; hero.currentHealth += value; }
   },
   healthBoostMassive: {
@@ -82,7 +109,7 @@ export const AUGMENTS = {
     description: '+{value} Health',
     tier: 'legendary',
     type: 'stat',
-    valueRange: [12, 20],
+    valueRange: [15, 15],
     apply: (hero, value) => { hero.health += value; hero.currentHealth += value; }
   },
 
@@ -227,6 +254,25 @@ export const AUGMENTS = {
     apply: (hero, value) => { hero.spellPower = (hero.spellPower || 0) + value; hero.currentSpellPower = (hero.currentSpellPower || hero.spellPower || 0) + value; }
   },
 
+  attackPowerBoostSmall: {
+    id: 'attackPowerBoostSmall',
+    name: 'Might I',
+    description: '+{value} Attack Power',
+    tier: 'common',
+    type: 'special',
+    valueRange: [2, 2],
+    apply: (hero, value) => { hero._towerAttackPowerBonus = Math.max(Number(hero._towerAttackPowerBonus || 0), Number(value || 0)); }
+  },
+  attackPowerBoostLarge: {
+    id: 'attackPowerBoostLarge',
+    name: 'Might II',
+    description: '+{value} Attack Power',
+    tier: 'rare',
+    type: 'special',
+    valueRange: [5, 5],
+    apply: (hero, value) => { hero._towerAttackPowerBonus = Math.max(Number(hero._towerAttackPowerBonus || 0), Number(value || 0)); }
+  },
+
   // Starting Energy augments
   energyBoostSmall: {
     id: 'energyBoostSmall',
@@ -234,7 +280,7 @@ export const AUGMENTS = {
     description: '+{value} Starting Energy',
     tier: 'uncommon',
     type: 'stat',
-    valueRange: [1, 2],
+    valueRange: [2, 2],
     apply: (hero, value) => { hero.energy += value; hero.currentEnergy = (hero.currentEnergy || hero.energy) + value; }
   },
   energyBoostMedium: {
@@ -243,7 +289,7 @@ export const AUGMENTS = {
     description: '+{value} Starting Energy',
     tier: 'rare',
     type: 'stat',
-    valueRange: [2, 4],
+    valueRange: [4, 4],
     apply: (hero, value) => { hero.energy += value; hero.currentEnergy = (hero.currentEnergy || hero.energy) + value; }
   },
   energyBoostLarge: {
@@ -252,7 +298,7 @@ export const AUGMENTS = {
     description: '+{value} Starting Energy',
     tier: 'epic',
     type: 'stat',
-    valueRange: [4, 6],
+    valueRange: [6, 6],
     apply: (hero, value) => { hero.energy += value; hero.currentEnergy = (hero.currentEnergy || hero.energy) + value; }
   },
 
@@ -287,6 +333,15 @@ export const AUGMENTS = {
     valueRange: [6, 6],
     apply: (hero, value) => { hero._towerEarlySpark = (hero._towerEarlySpark || 0) + Number(value || 0); }
   },
+  earlySparkV: {
+    id: 'earlySparkV',
+    name: 'Early Spark V',
+    description: 'In round 1, spells gain +{value} Spell Power.',
+    tier: 'legendary',
+    type: 'special',
+    valueRange: [10, 10],
+    apply: (hero, value) => { hero._towerEarlySpark = (hero._towerEarlySpark || 0) + Number(value || 0); }
+  },
   earlySparkIV: {
     id: 'earlySparkIV',
     name: 'Early Spark IV',
@@ -299,23 +354,39 @@ export const AUGMENTS = {
   frontlineVanguard: {
     id: 'frontlineVanguard',
     name: 'Frontline Vanguard',
-    description: 'If placed in the front row: +1 starting Energy and +1 front-row casts.',
+    description: 'If started in the front row: +1 starting Energy and +1 front-row casts.',
     tier: 'common',
     type: 'special',
-    apply: (hero) => { hero._towerFrontlineVanguard = true; }
+    apply: (hero) => { hero._towerFrontlineVanguard = Math.max(Number(hero._towerFrontlineVanguard || 0), 1); }
+  },
+  frontlineVanguardII: {
+    id: 'frontlineVanguardII',
+    name: 'Frontline Vanguard II',
+    description: 'If started in the front row: +2 starting Energy and +2 front-row casts.',
+    tier: 'uncommon',
+    type: 'special',
+    apply: (hero) => { hero._towerFrontlineVanguard = Math.max(Number(hero._towerFrontlineVanguard || 0), 2); }
   },
   rearguard: {
     id: 'rearguard',
     name: 'Rearguard',
-    description: 'If placed in the back row: +1 starting Energy and +1 back-row casts.',
+    description: 'If started in the back row: +1 starting Energy and +1 back-row casts.',
     tier: 'common',
     type: 'special',
-    apply: (hero) => { hero._towerRearguard = true; }
+    apply: (hero) => { hero._towerRearguard = Math.max(Number(hero._towerRearguard || 0), 1); }
+  },
+  rearguardII: {
+    id: 'rearguardII',
+    name: 'Rearguard II',
+    description: 'If started in the back row: +2 starting Energy and +2 back-row casts.',
+    tier: 'uncommon',
+    type: 'special',
+    apply: (hero) => { hero._towerRearguard = Math.max(Number(hero._towerRearguard || 0), 2); }
   },
   shieldedStart: {
     id: 'shieldedStart',
     name: 'Shielded Start',
-    description: 'Gain +2 Armor for 2 rounds at battle start.',
+    description: 'Gain +3 Armor for 2 rounds at battle start.',
     tier: 'common',
     type: 'effect',
     apply: (hero) => {
@@ -324,18 +395,10 @@ export const AUGMENTS = {
         name: 'Shielded Start',
         kind: 'buff',
         duration: 2,
-        modifiers: { armor: 2 },
+        modifiers: { armor: 3 },
         _hidden: true
       });
     }
-  },
-  warmUp: {
-    id: 'warmUp',
-    name: 'Warm-Up',
-    description: 'After your first cast each round, gain +1 Energy.',
-    tier: 'common',
-    type: 'special',
-    apply: (hero) => { hero._towerWarmUp = true; }
   },
   keenStrike: {
     id: 'keenStrike',
@@ -369,27 +432,59 @@ export const AUGMENTS = {
     type: 'special',
     apply: (hero) => { hero._towerKeenStrike = Math.max(Number(hero._towerKeenStrike || 0), 8); }
   },
+  keenStrikeV: {
+    id: 'keenStrikeV',
+    name: 'Keen Strike V',
+    description: 'Basic Attack deals +10 damage.',
+    tier: 'legendary',
+    type: 'special',
+    apply: (hero) => { hero._towerKeenStrike = Math.max(Number(hero._towerKeenStrike || 0), 10); }
+  },
 
   momentum: {
     id: 'momentum',
     name: 'Momentum',
     description: 'Each time you cast, gain +1 Speed (max +2 per battle).',
-    tier: 'rare',
+    tier: 'common',
     type: 'special',
     apply: (hero) => { hero._towerMomentum = true; }
   },
   attunement: {
     id: 'attunement',
-    name: 'Attunement',
-    description: 'When you change rows, gain +1 Energy and +1 Spell Power for that round.',
+    name: 'Attunement I',
+    description: 'When you change rows, gain +1 Energy and +2 Spell Power for that round.',
+    tier: 'uncommon',
+    type: 'special',
+    apply: (hero) => {
+      const current = (hero && hero._towerAttunement && typeof hero._towerAttunement === 'object')
+        ? hero._towerAttunement
+        : {};
+      hero._towerAttunement = {
+        energy: Math.max(Number(current.energy || 0), 1),
+        spellPower: Math.max(Number(current.spellPower || 0), 2)
+      };
+    }
+  },
+  attunementII: {
+    id: 'attunementII',
+    name: 'Attunement II',
+    description: 'When you change rows, gain +2 Energy and +3 Spell Power for that round.',
     tier: 'rare',
     type: 'special',
-    apply: (hero) => { hero._towerAttunement = true; }
+    apply: (hero) => {
+      const current = (hero && hero._towerAttunement && typeof hero._towerAttunement === 'object')
+        ? hero._towerAttunement
+        : {};
+      hero._towerAttunement = {
+        energy: Math.max(Number(current.energy || 0), 2),
+        spellPower: Math.max(Number(current.spellPower || 0), 3)
+      };
+    }
   },
   focusedColumn: {
     id: 'focusedColumn',
     name: 'Focused Column',
-    description: 'Your column spells cost 1 less Energy (min 1).',
+    description: 'Your column spells cost 1 less Energy (min 1) and gain +2 Spell Power.',
     tier: 'rare',
     type: 'special',
     apply: (hero) => { hero._towerFocusedColumn = true; }
@@ -398,14 +493,14 @@ export const AUGMENTS = {
     id: 'echoCaster',
     name: 'Echo Caster',
     description: 'First cast each round grants +1 casts to that row next round.',
-    tier: 'rare',
+    tier: 'epic',
     type: 'special',
     apply: (hero) => { hero._towerEchoCaster = true; }
   },
   tacticalSwap: {
     id: 'tacticalSwap',
     name: 'Tactical Swap',
-    description: 'When you change rows, gain +2 Armor for that round.',
+    description: 'When you change rows, heal 5 and gain +2 Armor for that round.',
     tier: 'rare',
     type: 'special',
     apply: (hero) => { hero._towerTacticalSwap = true; }
@@ -414,86 +509,62 @@ export const AUGMENTS = {
     id: 'arcaneExchange',
     name: 'Arcane Exchange',
     description: 'When you heal an ally, gain +1 Energy and your next damage spell next round gets +2 damage.',
-    tier: 'rare',
+    tier: 'epic',
     type: 'special',
     apply: (hero) => { hero._towerArcaneExchange = true; }
   },
   predatorsPace: {
     id: 'predatorsPace',
     name: 'Predator\'s Pace',
-    description: 'If you kill an enemy, gain +2 Speed next round.',
+    description: 'If you kill an enemy, gain +2 Energy and heal 4.',
     tier: 'rare',
     type: 'special',
     apply: (hero) => { hero._towerPredatorPace = true; }
   },
-  cinderTaxI: {
-    id: 'cinderTaxI',
-    name: 'Cinder Tax I',
-    description: 'First time each round you apply Burn, also reduce that target\'s Energy by 1.',
+  agonyTollI: {
+    id: 'agonyTollI',
+    name: 'Agony Toll I',
+    description: 'First time each round you apply Burn or Bleed, reduce that target\'s Energy by 1 and deal +1 damage (ignores armor).',
     tier: 'uncommon',
     type: 'special',
     apply: (hero) => {
-      hero._towerCinderTax = hero._towerCinderTax || { energyDrain: 0, bonusDamage: 0 };
-      hero._towerCinderTax.energyDrain = Number(hero._towerCinderTax.energyDrain || 0) + 1;
+      hero._towerAfflictionToll = hero._towerAfflictionToll || { energyDrain: 0, bonusDamage: 0 };
+      hero._towerAfflictionToll.energyDrain = Math.max(Number(hero._towerAfflictionToll.energyDrain || 0), 1);
+      hero._towerAfflictionToll.bonusDamage = Math.max(Number(hero._towerAfflictionToll.bonusDamage || 0), 1);
     }
   },
-  cinderTaxII: {
-    id: 'cinderTaxII',
-    name: 'Cinder Tax II',
-    description: 'First time each round you apply Burn, reduce that target\'s Energy by 1 and deal +2 damage (ignores armor).',
+  agonyTollII: {
+    id: 'agonyTollII',
+    name: 'Agony Toll II',
+    description: 'First time each round you apply Burn or Bleed, reduce that target\'s Energy by 1 and deal +3 damage (ignores armor).',
     tier: 'rare',
     type: 'special',
     apply: (hero) => {
-      hero._towerCinderTax = hero._towerCinderTax || { energyDrain: 0, bonusDamage: 0 };
-      hero._towerCinderTax.energyDrain = Number(hero._towerCinderTax.energyDrain || 0) + 1;
-      hero._towerCinderTax.bonusDamage = Number(hero._towerCinderTax.bonusDamage || 0) + 2;
-    }
-  },
-  hemorrhageTaxI: {
-    id: 'hemorrhageTaxI',
-    name: 'Hemorrhage Tax I',
-    description: 'First time each round you apply Bleed, also reduce that target\'s Energy by 1.',
-    tier: 'uncommon',
-    type: 'special',
-    apply: (hero) => {
-      hero._towerHemorrhageTax = hero._towerHemorrhageTax || { energyDrain: 0, bonusDamage: 0 };
-      hero._towerHemorrhageTax.energyDrain = Number(hero._towerHemorrhageTax.energyDrain || 0) + 1;
-    }
-  },
-  hemorrhageTaxII: {
-    id: 'hemorrhageTaxII',
-    name: 'Hemorrhage Tax II',
-    description: 'First time each round you apply Bleed, reduce that target\'s Energy by 1 and deal +2 damage (armor applies).',
-    tier: 'rare',
-    type: 'special',
-    apply: (hero) => {
-      hero._towerHemorrhageTax = hero._towerHemorrhageTax || { energyDrain: 0, bonusDamage: 0 };
-      hero._towerHemorrhageTax.energyDrain = Number(hero._towerHemorrhageTax.energyDrain || 0) + 1;
-      hero._towerHemorrhageTax.bonusDamage = Number(hero._towerHemorrhageTax.bonusDamage || 0) + 2;
+      hero._towerAfflictionToll = hero._towerAfflictionToll || { energyDrain: 0, bonusDamage: 0 };
+      hero._towerAfflictionToll.energyDrain = Math.max(Number(hero._towerAfflictionToll.energyDrain || 0), 1);
+      hero._towerAfflictionToll.bonusDamage = Math.max(Number(hero._towerAfflictionToll.bonusDamage || 0), 3);
     }
   },
   severanceI: {
     id: 'severanceI',
     name: 'Severance I',
-    description: 'When your spell removes an enemy buff/debuff, gain +1 Speed and your next damage spell gets +1 damage.',
+    description: 'When your spell removes a debuff, heal that target for 3.',
     tier: 'rare',
     type: 'special',
     apply: (hero) => {
-      hero._towerSeverance = hero._towerSeverance || { speedGain: 0, empowerDamage: 0 };
-      hero._towerSeverance.speedGain = Number(hero._towerSeverance.speedGain || 0) + 1;
-      hero._towerSeverance.empowerDamage = Number(hero._towerSeverance.empowerDamage || 0) + 1;
+      hero._towerSeverance = hero._towerSeverance || { healAmount: 0 };
+      hero._towerSeverance.healAmount = Math.max(Number(hero._towerSeverance.healAmount || 0), 3);
     }
   },
   severanceII: {
     id: 'severanceII',
     name: 'Severance II',
-    description: 'When your spell removes an enemy buff/debuff, gain +2 Speed and your next damage spell gets +2 damage.',
+    description: 'When your spell removes a debuff, heal that target for 5.',
     tier: 'epic',
     type: 'special',
     apply: (hero) => {
-      hero._towerSeverance = hero._towerSeverance || { speedGain: 0, empowerDamage: 0 };
-      hero._towerSeverance.speedGain = Number(hero._towerSeverance.speedGain || 0) + 2;
-      hero._towerSeverance.empowerDamage = Number(hero._towerSeverance.empowerDamage || 0) + 2;
+      hero._towerSeverance = hero._towerSeverance || { healAmount: 0 };
+      hero._towerSeverance.healAmount = Math.max(Number(hero._towerSeverance.healAmount || 0), 5);
     }
   },
 
@@ -634,7 +705,7 @@ export const AUGMENTS = {
     id: 'quicknessAugmentII',
     name: 'Quickness II',
     description: 'Starts with Quickness II (+2 Speed, +2 Spell Power)',
-    tier: 'rare',
+    tier: 'epic',
     type: 'effect',
     effectName: 'QuicknessII',
     apply: (hero) => {
@@ -646,7 +717,7 @@ export const AUGMENTS = {
     id: 'dexterityAugment',
     name: 'Natural Agility',
     description: 'Starts with Dexterity (+1 Armor, +1 Speed)',
-    tier: 'rare',
+    tier: 'uncommon',
     type: 'effect',
     effectName: 'Dexterity',
     apply: (hero) => {
@@ -658,7 +729,7 @@ export const AUGMENTS = {
     id: 'dexterityAugmentII',
     name: 'Natural Agility II',
     description: 'Starts with Dexterity II (+2 Armor, +2 Speed)',
-    tier: 'epic',
+    tier: 'rare',
     type: 'effect',
     effectName: 'DexterityII',
     apply: (hero) => {
@@ -669,17 +740,6 @@ export const AUGMENTS = {
   deathPactAugment: {
     id: 'deathPactAugment',
     name: 'Soul Mirror I',
-    description: 'When damaged by an enemy spell, reflect 25% of that damage to the attacker.',
-    tier: 'uncommon',
-    type: 'special',
-    effectName: 'DeathPact25',
-    apply: (hero) => {
-      hero._towerDeathPactPercent = Math.max(Number(hero._towerDeathPactPercent || 0), 0.25);
-    }
-  },
-  deathPactAugmentII: {
-    id: 'deathPactAugmentII',
-    name: 'Soul Mirror II',
     description: 'When damaged by an enemy spell, reflect 50% of that damage to the attacker.',
     tier: 'rare',
     type: 'special',
@@ -688,9 +748,9 @@ export const AUGMENTS = {
       hero._towerDeathPactPercent = Math.max(Number(hero._towerDeathPactPercent || 0), 0.5);
     }
   },
-  deathPactAugmentIII: {
-    id: 'deathPactAugmentIII',
-    name: 'Soul Mirror III',
+  deathPactAugmentII: {
+    id: 'deathPactAugmentII',
+    name: 'Soul Mirror II',
     description: 'When damaged by an enemy spell, reflect 75% of that damage to the attacker.',
     tier: 'epic',
     type: 'special',
@@ -699,9 +759,9 @@ export const AUGMENTS = {
       hero._towerDeathPactPercent = Math.max(Number(hero._towerDeathPactPercent || 0), 0.75);
     }
   },
-  deathPactAugmentIV: {
-    id: 'deathPactAugmentIV',
-    name: 'Soul Mirror IV',
+  deathPactAugmentIII: {
+    id: 'deathPactAugmentIII',
+    name: 'Soul Mirror III',
     description: 'When damaged by an enemy spell, reflect 100% of that damage to the attacker.',
     tier: 'legendary',
     type: 'special',
@@ -714,7 +774,7 @@ export const AUGMENTS = {
     id: 'soulLinkAugment',
     name: 'Guardian Spirit',
     description: 'Starts with Soul Link (absorbs half damage from adjacent allies)',
-    tier: 'epic',
+    tier: 'uncommon',
     type: 'effect',
     effectName: 'SoulLink',
     apply: (hero) => {
@@ -985,16 +1045,6 @@ export const AUGMENTS = {
   vampiric: {
     id: 'vampiric',
     name: 'Vampiric I',
-    description: 'Heal for 25% of damage dealt (rounded down)',
-    tier: 'uncommon',
-    type: 'special',
-    apply: (hero) => {
-      hero._towerVampiricPercent = Math.max(Number(hero._towerVampiricPercent || 0), 0.25);
-    }
-  },
-  vampiricII: {
-    id: 'vampiricII',
-    name: 'Vampiric II',
     description: 'Heal for 50% of damage dealt (rounded down)',
     tier: 'rare',
     type: 'special',
@@ -1002,9 +1052,9 @@ export const AUGMENTS = {
       hero._towerVampiricPercent = Math.max(Number(hero._towerVampiricPercent || 0), 0.5);
     }
   },
-  vampiricIII: {
-    id: 'vampiricIII',
-    name: 'Vampiric III',
+  vampiricII: {
+    id: 'vampiricII',
+    name: 'Vampiric II',
     description: 'Heal for 75% of damage dealt (rounded down)',
     tier: 'epic',
     type: 'special',
@@ -1012,9 +1062,9 @@ export const AUGMENTS = {
       hero._towerVampiricPercent = Math.max(Number(hero._towerVampiricPercent || 0), 0.75);
     }
   },
-  vampiricIV: {
-    id: 'vampiricIV',
-    name: 'Vampiric IV',
+  vampiricIII: {
+    id: 'vampiricIII',
+    name: 'Vampiric III',
     description: 'Heal for 100% of damage dealt (rounded down)',
     tier: 'legendary',
     type: 'special',
@@ -1026,8 +1076,8 @@ export const AUGMENTS = {
   executioner: {
     id: 'executioner',
     name: 'Executioner I',
-    description: '+25% damage to targets below 50% health',
-    tier: 'uncommon',
+    description: '+25% damage to targets below 70% health',
+    tier: 'common',
     type: 'special',
     apply: (hero) => {
       hero._towerExecutionerPercent = Math.max(Number(hero._towerExecutionerPercent || 0), 0.25);
@@ -1036,8 +1086,8 @@ export const AUGMENTS = {
   executionerII: {
     id: 'executionerII',
     name: 'Executioner II',
-    description: '+50% damage to targets below 50% health',
-    tier: 'rare',
+    description: '+50% damage to targets below 70% health',
+    tier: 'uncommon',
     type: 'special',
     apply: (hero) => {
       hero._towerExecutionerPercent = Math.max(Number(hero._towerExecutionerPercent || 0), 0.5);
@@ -1046,8 +1096,8 @@ export const AUGMENTS = {
   executionerIII: {
     id: 'executionerIII',
     name: 'Executioner III',
-    description: '+75% damage to targets below 50% health',
-    tier: 'epic',
+    description: '+75% damage to targets below 70% health',
+    tier: 'rare',
     type: 'special',
     apply: (hero) => {
       hero._towerExecutionerPercent = Math.max(Number(hero._towerExecutionerPercent || 0), 0.75);
@@ -1056,8 +1106,8 @@ export const AUGMENTS = {
   executionerIV: {
     id: 'executionerIV',
     name: 'Executioner IV',
-    description: '+100% damage to targets below 50% health',
-    tier: 'legendary',
+    description: '+100% damage to targets below 70% health',
+    tier: 'epic',
     type: 'special',
     apply: (hero) => {
       hero._towerExecutionerPercent = Math.max(Number(hero._towerExecutionerPercent || 0), 1);
@@ -1078,7 +1128,7 @@ export const AUGMENTS = {
   lastStand: {
     id: 'lastStand',
     name: 'Last Stand',
-    description: '+8 Spell Power when below 25% health',
+    description: '+8 Spell Power when below 40% health',
     tier: 'rare',
     type: 'special',
     apply: (hero) => {
@@ -1089,7 +1139,7 @@ export const AUGMENTS = {
   firstStrike: {
     id: 'firstStrike',
     name: 'First Strike I',
-    description: '+25% damage on first spell cast each battle',
+    description: '+25% Attack Power on first spell cast each battle',
     tier: 'uncommon',
     type: 'special',
     apply: (hero) => {
@@ -1099,7 +1149,7 @@ export const AUGMENTS = {
   firstStrikeII: {
     id: 'firstStrikeII',
     name: 'First Strike II',
-    description: '+50% damage on first spell cast each battle',
+    description: '+50% Attack Power on first spell cast each battle',
     tier: 'rare',
     type: 'special',
     apply: (hero) => {
@@ -1109,7 +1159,7 @@ export const AUGMENTS = {
   firstStrikeIII: {
     id: 'firstStrikeIII',
     name: 'First Strike III',
-    description: '+75% damage on first spell cast each battle',
+    description: '+75% Attack Power on first spell cast each battle',
     tier: 'epic',
     type: 'special',
     apply: (hero) => {
@@ -1119,7 +1169,7 @@ export const AUGMENTS = {
   firstStrikeIV: {
     id: 'firstStrikeIV',
     name: 'First Strike IV',
-    description: '+100% damage on first spell cast each battle',
+    description: '+100% Attack Power on first spell cast each battle',
     tier: 'legendary',
     type: 'special',
     apply: (hero) => {
@@ -1161,6 +1211,23 @@ export const AUGMENTS = {
     }
   },
 
+  shatteredChampionsCrown: {
+    id: 'shatteredChampionsCrown',
+    name: 'Crown of Shattered Champions',
+    description: 'Reduce all incoming damage by 25%',
+    tier: 'legendary',
+    type: 'special',
+    bossExclusive: true,
+    valueRange: [0.25, 0.25],
+    apply: (hero, value) => {
+      const reduction = Math.max(0, Math.min(0.95, Number(value || 0)));
+      const currentMultiplier = Number.isFinite(Number(hero._towerIncomingDamageMultiplier))
+        ? Number(hero._towerIncomingDamageMultiplier)
+        : 1;
+      hero._towerIncomingDamageMultiplier = Math.max(0, currentMultiplier * (1 - reduction));
+    }
+  },
+
   voidShieldI: {
     id: 'voidShieldI',
     name: 'Void Shield I',
@@ -1189,7 +1256,7 @@ export const AUGMENTS = {
     id: 'periodicPulseI',
     name: 'Sustained Pulse I',
     description: '+{value} to periodic damage and healing effects',
-    tier: 'rare',
+    tier: 'uncommon',
     type: 'special',
     valueRange: [1, 1],
     apply: (hero, value) => {
@@ -1212,11 +1279,11 @@ export const AUGMENTS = {
   doubleStrike: {
     id: 'doubleStrike',
     name: 'Double Strike',
-    description: '20% chance to cast spell twice',
+    description: '50% chance to cast spell twice',
     tier: 'legendary',
     type: 'special',
     apply: (hero) => {
-      hero._towerDoubleStrike = 0.2;
+      hero._towerDoubleStrike = 0.5;
     }
   },
 
@@ -1234,7 +1301,7 @@ export const AUGMENTS = {
   spellEcho: {
     id: 'spellEcho',
     name: 'Spell Echo',
-    description: 'Back spell casts twice (second cast is free)',
+    description: 'Back spell casts twice)',
     tier: 'legendary',
     type: 'special',
     apply: (hero) => {
@@ -1288,17 +1355,9 @@ export function getRandomAugments(level, count = 3, excludeIds = [], options = {
 
   if (availableAugments.length === 0) return [];
 
-  // Weight by tier - higher levels have better chances for rare augments
-  const levelBonus = Math.floor(level / 5); // Every 5 levels, better augments more likely
-  
   const weighted = [];
   availableAugments.forEach(aug => {
-    const tierInfo = AUGMENT_TIERS[aug.tier];
-    // Base weight + bonus for higher levels making rare augments more common
-    let weight = tierInfo.weight;
-    if (aug.tier === 'rare') weight += levelBonus * 5;
-    if (aug.tier === 'epic') weight += levelBonus * 10;
-    if (aug.tier === 'legendary') weight += levelBonus * 15;
+    const weight = getAugmentTierWeight(aug.tier, level);
     
     for (let i = 0; i < weight; i++) {
       weighted.push(aug);
@@ -1378,4 +1437,4 @@ export function applyAugmentsToHero(hero, augments) {
   });
 }
 
-export default { AUGMENTS, AUGMENT_TIERS, getRandomAugments, applyAugmentsToHero };
+export default { AUGMENTS, AUGMENT_TIERS, getAugmentTierWeight, getRandomAugments, applyAugmentsToHero };

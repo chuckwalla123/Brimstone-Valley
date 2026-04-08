@@ -22,6 +22,7 @@ const toPlayerKey = (side) => (
 
 export default function League4Mode({ gameState, socket, localSide, matchPlayers, onExit }) {
   const [now, setNow] = useState(Date.now());
+  const [serverTimeOffsetMs, setServerTimeOffsetMs] = useState(0);
   const [isCompact, setIsCompact] = useState(typeof window !== 'undefined' ? window.innerWidth < 900 : false);
   const [arrangeMainIds, setArrangeMainIds] = useState(Array(LEAGUE_MAIN_SLOT_COUNT).fill(null));
   const [arrangeReserveIds, setArrangeReserveIds] = useState(Array(LEAGUE_RESERVE_SLOT_COUNT).fill(null));
@@ -33,9 +34,6 @@ export default function League4Mode({ gameState, socket, localSide, matchPlayers
   const [livePairState, setLivePairState] = useState(null);
   const [livePairMeta, setLivePairMeta] = useState(null);
   const [livePairKey, setLivePairKey] = useState(null);
-  const [clockP1Ms, setClockP1Ms] = useState(CHESS_TIME_MS);
-  const [clockP2Ms, setClockP2Ms] = useState(CHESS_TIME_MS);
-  const [clockActive, setClockActive] = useState(null);
   const livePairKeyRef = useRef(null);
   const livePairExitTimerRef = useRef(null);
   const battleSocketHandlersRef = useRef({});
@@ -53,6 +51,12 @@ export default function League4Mode({ gameState, socket, localSide, matchPlayers
   }, []);
 
   useEffect(() => {
+    if (Number.isFinite(Number(gameState?.serverNowTs))) {
+      setServerTimeOffsetMs(Number(gameState.serverNowTs) - Date.now());
+    }
+  }, [gameState?.serverNowTs]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     const onResize = () => setIsCompact(window.innerWidth < 900);
     onResize();
@@ -60,8 +64,9 @@ export default function League4Mode({ gameState, socket, localSide, matchPlayers
     return () => window.removeEventListener('resize', onResize);
   }, []);
 
+  const syncedNow = now + serverTimeOffsetMs;
   const decision = league?.decision || { type: 'none', deadlineTs: 0, submissions: {} };
-  const msLeft = Math.max(0, Number(decision.deadlineTs || 0) - now);
+  const msLeft = Math.max(0, Number(decision.deadlineTs || 0) - syncedNow);
   const secondsLeft = Math.ceil(msLeft / 1000);
   const mySubmission = myPlayerKey ? decision.submissions?.[myPlayerKey] : null;
   const myTeam = myPlayerKey ? league.teams?.[myPlayerKey] : null;
@@ -339,6 +344,18 @@ export default function League4Mode({ gameState, socket, localSide, matchPlayers
     livePairKeyRef.current = livePairKey;
   }, [livePairKey]);
 
+  const liveClockState = livePairState?.clockState || null;
+  const clockActive = liveClockState?.activePlayerKey || null;
+  const clockElapsedMs = Math.max(0, syncedNow - Number(liveClockState?.lastUpdatedTs || syncedNow));
+  const clockP1Ms = Math.max(
+    0,
+    Number(liveClockState?.player1Ms ?? CHESS_TIME_MS) - (clockActive === 'player1' ? clockElapsedMs : 0)
+  );
+  const clockP2Ms = Math.max(
+    0,
+    Number(liveClockState?.player2Ms ?? CHESS_TIME_MS) - (clockActive === 'player2' ? clockElapsedMs : 0)
+  );
+
   const scheduleLivePairExit = (delayMs = 3200) => {
     if (livePairExitTimerRef.current) {
       clearTimeout(livePairExitTimerRef.current);
@@ -348,7 +365,6 @@ export default function League4Mode({ gameState, socket, localSide, matchPlayers
       setLivePairState(null);
       setLivePairMeta(null);
       setLivePairKey(null);
-      setClockActive(null);
       livePairExitTimerRef.current = null;
     }, Math.max(0, Number(delayMs || 0)));
   };
@@ -365,6 +381,9 @@ export default function League4Mode({ gameState, socket, localSide, matchPlayers
     const handlePairState = (payload) => {
       if (!payload || !payload.pairKey || !payload.state) return;
       if (payload.a !== myPlayerKey && payload.b !== myPlayerKey) return;
+      if (Number.isFinite(Number(payload.serverNowTs))) {
+        setServerTimeOffsetMs(Number(payload.serverNowTs) - Date.now());
+      }
       setLivePairKey(payload.pairKey);
       setLivePairMeta({ a: payload.a, b: payload.b });
       setLivePairState(payload.state);
@@ -441,40 +460,6 @@ export default function League4Mode({ gameState, socket, localSide, matchPlayers
   };
 
   useEffect(() => {
-    if (!livePairState || !livePairMeta) {
-      setClockActive(null);
-      return;
-    }
-    if (livePairState.phase !== 'movement') {
-      setClockActive(null);
-      return;
-    }
-    const mover = livePairState?.movementPhase?.sequence?.[livePairState?.movementPhase?.index];
-    if (mover === 'p1') setClockActive('player1');
-    else if (mover === 'p2') setClockActive('player2');
-    else setClockActive(null);
-  }, [livePairState, livePairMeta]);
-
-  useEffect(() => {
-    if (!livePairState || !clockActive) return;
-    const tickMs = 200;
-    const timer = setInterval(() => {
-      if (clockActive === 'player1') {
-        setClockP1Ms((prev) => Math.max(0, prev - tickMs));
-      } else if (clockActive === 'player2') {
-        setClockP2Ms((prev) => Math.max(0, prev - tickMs));
-      }
-    }, tickMs);
-    return () => clearInterval(timer);
-  }, [clockActive, livePairState]);
-
-  useEffect(() => {
-    if (livePairState) return;
-    setClockP1Ms(CHESS_TIME_MS);
-    setClockP2Ms(CHESS_TIME_MS);
-  }, [livePairState]);
-
-  useEffect(() => {
     if (!livePairState) return;
     if (pairAlreadyReported) {
       scheduleLivePairExit(3200);
@@ -488,7 +473,6 @@ export default function League4Mode({ gameState, socket, localSide, matchPlayers
       setLivePairState(null);
       setLivePairMeta(null);
       setLivePairKey(null);
-      setClockActive(null);
     }
   }, [livePairState, pairAlreadyReported, livePairKey, currentPairKeyForMe, decision.type]);
 

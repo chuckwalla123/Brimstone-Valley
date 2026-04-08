@@ -16,6 +16,11 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
   const [showOptions, setShowOptions] = useState(false);
   const [playerStats, setPlayerStats] = useState(null);
   const [pendingMatchRequest, setPendingMatchRequest] = useState(null); // { payload, searchingMessage }
+  const [serverInstanceId, setServerInstanceId] = useState('');
+
+  const sessionPlayFabId = String(session?.playFabId || '');
+  const serverAuthedPlayFabId = String(playFabUser?.playFabId || '');
+  const hasMatchingServerAuth = !!sessionPlayFabId && sessionPlayFabId === serverAuthedPlayFabId;
 
   // Fetch player stats when session changes or online menu is shown
   useEffect(() => {
@@ -58,9 +63,17 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
     if (!socket) return;
     const onQueued = (payload) => {
       const pos = payload && typeof payload.position === 'number' ? ` (queue #${payload.position})` : '';
-      setMatchStatus(`Searching for match...${pos}`);
+      const nextServerInstanceId = payload?.serverInstanceId ? String(payload.serverInstanceId) : '';
+      if (nextServerInstanceId) {
+        setServerInstanceId(nextServerInstanceId);
+      }
+      const instanceText = nextServerInstanceId ? ` on ${nextServerInstanceId}` : '';
+      setMatchStatus(`Searching for match...${pos}${instanceText}`);
     };
     const onFound = (payload) => {
+      if (payload?.serverInstanceId) {
+        setServerInstanceId(String(payload.serverInstanceId));
+      }
       setMatchStatus('Match found!');
       setMatchInfo(payload || null);
       if (onMatchFound) onMatchFound(payload || null);
@@ -81,12 +94,12 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
 
   useEffect(() => {
     if (!socket || !pendingMatchRequest) return;
-    if (!socket.connected || !playFabUser) return;
+    if (!socket.connected || !hasMatchingServerAuth) return;
 
     setMatchStatus(pendingMatchRequest.searchingMessage || 'Searching for match...');
     socket.emit('findMatch', pendingMatchRequest.payload || {});
     setPendingMatchRequest(null);
-  }, [socket, pendingMatchRequest, playFabUser]);
+  }, [socket, pendingMatchRequest, hasMatchingServerAuth]);
 
   useEffect(() => {
     if (!socket) return;
@@ -104,6 +117,13 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
       socket.off('connect', onConnect);
     };
   }, [socket, session?.sessionTicket, playFabUser]);
+
+  useEffect(() => {
+    const nextServerInstanceId = playFabUser?.serverInstanceId ? String(playFabUser.serverInstanceId) : '';
+    if (nextServerInstanceId) {
+      setServerInstanceId(nextServerInstanceId);
+    }
+  }, [playFabUser?.serverInstanceId]);
   const buttonStyle = {
     width: '350px',
     height: '90px',
@@ -144,11 +164,13 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
     }
 
     const doRequest = () => {
-      if (!playFabUser) {
+      const currentSession = getStoredSession();
+      const currentSessionPlayFabId = String(currentSession?.playFabId || session?.playFabId || '');
+      const currentServerPlayFabId = String(playFabUser?.playFabId || '');
+      if (!currentSessionPlayFabId || currentServerPlayFabId !== currentSessionPlayFabId) {
         setPendingMatchRequest({ payload: payload || {}, searchingMessage });
         setMatchStatus('Waiting for server auth...');
-        const s = getStoredSession();
-        if (s && s.sessionTicket) socket.emit('auth', { sessionTicket: s.sessionTicket });
+        if (currentSession?.sessionTicket) socket.emit('auth', { sessionTicket: currentSession.sessionTicket });
         return;
       }
       setMatchStatus(searchingMessage);
@@ -517,8 +539,18 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
       <div style={{ width: '100%', maxWidth: 520, background: 'rgba(0,0,0,0.2)', padding: 16, borderRadius: 12, marginTop: 10 }}>
         <div style={{ fontWeight: 700, marginBottom: 8 }}>Online Matchmaking</div>
         <div style={{ fontSize: 12, marginBottom: 6, color: '#fff', fontWeight: 600 }}>
-          Server auth: {playFabUser ? 'OK' : 'Pending'}
+          Server auth: {hasMatchingServerAuth ? 'OK' : (playFabUser ? 'Refreshing' : 'Pending')}
         </div>
+        {serverInstanceId && (
+          <div style={{ fontSize: 11, marginBottom: 8, color: 'rgba(255,255,255,0.7)' }}>
+            Server instance: {serverInstanceId}
+          </div>
+        )}
+        {sessionPlayFabId && serverAuthedPlayFabId && !hasMatchingServerAuth && (
+          <div style={{ fontSize: 11, marginBottom: 8, color: '#ffd166' }}>
+            Waiting for server to switch accounts before matchmaking.
+          </div>
+        )}
         {/* Player Stats Display */}
         {session && playerStats && (
           <div style={{ 

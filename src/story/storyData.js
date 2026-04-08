@@ -162,77 +162,49 @@ export const STORY_ARCS = {
           id: 'chapter1_complete',
           type: 'choice',
           title: 'Chapter I Complete: Ashes of Honor',
-          description: 'Varric withdraws with a warning, and the recovered caravan rolls back toward the capital under uneasy cheers.',
+          description: 'Varric withdraws with a warning, and before the caravan can cool in the capital, the queen dispatches you toward Halbrecht\'s besieged fortress.',
           choices: [
-            { id: 'to_wardens_pass', label: "Continue to Warden's Pass", next: 'warden_pass' }
+            { id: 'to_wardens_pass', label: "Ride for Halbrecht's Fortress", next: 'warden_pass' }
           ]
         },
         {
           id: 'warden_pass',
           type: 'battle',
-          title: "Warden's Pass",
-          description: 'Deserters have turned the old garrison into a toll gate.',
+          title: 'Chapter II: Siege of the Iron Wolves',
+          description: 'Halbrecht\'s fortress is under siege, and saving it may buy the crown its last honorable ally.',
           presentation: {
-            backgroundKey: 'brave_wardens_pass',
-            ambientKey: 'amb_brave_wind_ash',
+            backgroundKey: 'brave_halbrecht_fortress_courtyard',
+            ambientKey: 'amb_brave_fortress_siege',
             stingers: { intro: 'stinger_confrontation', victory: 'stinger_gate_breach' },
-            vfxTags: ['vfx_ash_debris', 'vfx_fog_illusion'],
-            musicIntensity: 'low'
+            vfxTags: ['vfx_ash_debris'],
+            musicIntensity: 'mediumHigh'
           },
           preBattle: [
-            'The eastern trade route, once the lifeblood of the Brave Kingdom\'s commerce, now chokes under the shadow of Warden\'s Pass. The garrison that stood sentinel for generations has become a mockery of its former glory. Its stone walls, meant to repel invaders and safeguard merchants, now house deserters who have traded their oaths for greed. The royal banner hangs in tatters from the battlements, a symbol of how far the kingdom has fallen.',
-            'These are not mere bandits or opportunistic raiders. They are former soldiers who once swore fealty to the Crown, men who stood in formation during the border wars that bankrupted the realm. But when the mercenary lords bought their contracts and the pay stopped flowing, they deserted their posts. Now they demand tribute from any who wish to pass—relic fragments, gold, or blood. Their toll is not just a barrier; it\'s a statement that the old order has crumbled, and survival belongs to those ruthless enough to seize it.',
-            'Warrior and Lancer approach the pass with heavy hearts. These deserters were comrades once, brothers-in-arms who shared the same trenches and the same dreams of a prosperous kingdom. But the Contract Age has poisoned even the bonds of loyalty. The warband must choose: pay the toll and admit defeat before the journey truly begins, or fight and risk becoming the monsters they seek to destroy. The pass represents more than a geographical obstacle; it\'s a test of resolve, a mirror reflecting the kingdom\'s fractured soul.',
-            'As the warband draws near, they can hear the deserters\' laughter echoing from the walls, mingled with the clink of coin and the sharpening of blades. Scouts report that an ice mage leads the garrison now—a sorcerer who deserted the royal academy when the Crown could no longer afford his salary. His magic chills the air around the pass, making the stones slick with frost and the guards\' breath visible even in the valley\'s perpetual warmth. This is no simple toll collection; it\'s a deliberate provocation, a gauntlet thrown at any who still believe in the kingdom\'s old ideals.'
+            'The victory at the caravan buys the crown no peace. Before the recovered relic crates can even be inventoried, Queen Aralyn sends Lancer and Warrior east with a harsher assignment: secure an alliance with Lord Halbrecht, the last mercenary commander whose code still resembles the old kingdom\'s honor.',
+            'Halbrecht\'s fortress rises from the ash plains like a broken tooth of stone, but when the warband arrives, it is already under assault. The Iron Wolves have breached the outer yard, their ladders hooked to the walls and their raiders hammering at the inner gate. Smoke crawls over the battlements. Halbrecht\'s defenders are disciplined, but they are being ground down by sheer brutality.',
+            'Garruk the Red leads the siege with the confidence of a man who thinks the outcome has already been purchased. He fights for Varric\'s growing coalition, and his message is simple: join the mercenary future, or be trampled beneath it. If Halbrecht falls today, Varric gains more than a fortress. He gains legitimacy, veterans, and another symbol that the crown cannot protect its own.',
+            'Lancer sees a chance to prove the Brave Kingdom still deserves loyalty. Warrior sees a negotiation conducted at sword point, the only language men like Halbrecht still trust. Whatever their motives, both know the same truth: if they do not break the siege, the kingdom loses one of its last chances to survive what comes next.'
           ],
           dialogue: [
-            { speaker: 'Warrior', side: 'left', text: 'Look at these walls, Lancer. They were built with our sweat and blood. Now they guard thieves who wear our old colors.' },
-            { speaker: 'Lancer', side: 'right', text: 'The colors mean nothing now. The Crown sold them along with the army. These men are just trying to survive in the world we helped create.' },
-            { speaker: 'Warrior', side: 'left', text: 'Survival doesn\'t excuse betrayal. They swore oaths, not contracts. Oaths don\'t expire when the pay runs thin.' },
-            { speaker: 'Lancer', side: 'right', text: 'And what of our oaths? We march for a Crown that bankrupted the realm and sold our brothers to the highest bidder. Are we any different?' },
-            { speaker: 'Warrior', side: 'left', text: 'We march for the people who still till the fields and work the forges. The Crown may be broken, but the kingdom lives in them. If we don\'t fight for something beyond coin, then the mercenary lords have already won.' },
-            { speaker: 'Lancer', side: 'right', text: 'Then let\'s make this pass remember what real loyalty looks like. No toll. No tribute. We take what\'s ours by right of blood and steel.' },
-            { speaker: 'Warrior', side: 'left', text: 'Those men up there... they were our shield-brothers once. Friends who shared our victories and our losses.' },
-            { speaker: 'Lancer', side: 'right', text: 'And now they stand against us. The Contract Age turns brothers into enemies. Let their last service be a warning to every mercenary lord watching from their towers.' },
-            { speaker: 'Warrior', side: 'left', text: 'If we break them here, we prove that some oaths still hold weight. The kingdom needs heroes, not more deserters.' },
-            { speaker: 'Lancer', side: 'right', text: 'Then let\'s show them what heroes look like. Forward, for the Brave Kingdom and the people who still believe in it.' }
+            { speaker: 'Lancer', side: 'left', text: 'The queen sent us for an alliance, not a funeral pyre. If Halbrecht falls here, the crown loses the last commander who still remembers duty.' },
+            { speaker: 'Warrior', side: 'right', text: 'Halbrecht remembers leverage, not duty. Saving his walls buys us a hearing. Failing buys Varric another lord and another army.' },
+            { speaker: 'Lancer', side: 'left', text: 'Then we hold the gate and make our case with steel. Let Halbrecht see that the kingdom still produces soldiers worth trusting.' },
+            { speaker: 'Warrior', side: 'right', text: 'Trust is expensive. Today we pay for it in bodies. Garruk and the Iron Wolves won\'t break just because we ask politely.' },
+            { speaker: 'Lancer', side: 'left', text: 'Good. I\'m finished with polite. Varric has been buying loyalty one siege at a time. We stop that here.' },
+            { speaker: 'Warrior', side: 'right', text: 'Then stop talking and take the flank. If Halbrecht survives, he\'ll remember who came when his banners were burning.' }
           ],
           battleDialogue: [
             {
-              speaker: 'Ice Mage',
+              speaker: 'Garruk the Red',
               side: 'right',
               leftPortraits: [
                 { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Ice Mage', image: '/images/heroes/Ice Mage Cropped.jpg' }
+                { name: 'Garruk the Red', image: '/images/heroes/Axeman Cropped.jpg' }
               ],
-              text: 'The bridge is closed. The Council sold this contract to keep our towers warm. You think you can just march through with your rusty ideals?'
-            },
-            {
-              speaker: 'Warrior',
-              side: 'left',
-              leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
-                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
-              ],
-              rightPortraits: [
-                { name: 'Ice Mage', image: '/images/heroes/Ice Mage Cropped.jpg' }
-              ],
-              text: 'Your Council sells winter to our farmers, then charges a toll for the thaw. You were trained in the royal academy, sworn to protect the realm.'
-            },
-            {
-              speaker: 'Ice Mage',
-              side: 'right',
-              leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
-                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
-              ],
-              rightPortraits: [
-                { name: 'Ice Mage', image: '/images/heroes/Ice Mage Cropped.jpg' }
-              ],
-              text: 'The academy stopped paying my stipend. The Crown couldn\'t afford scholars or soldiers. I learned to survive, just like these men behind me.'
+              text: 'You\'re late, crown dogs. Halbrecht\'s walls are already sold. Varric offered him a future. I\'m here to collect the signature in blood.'
             },
             {
               speaker: 'Lancer',
@@ -242,21 +214,21 @@ export const STORY_ARCS = {
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Ice Mage', image: '/images/heroes/Ice Mage Cropped.jpg' }
+                { name: 'Garruk the Red', image: '/images/heroes/Axeman Cropped.jpg' }
               ],
-              text: 'We are here for the relic, not your prejudice. The valley calls to all who seek its power, but we come with the kingdom\'s blessing.'
+              text: 'The Brave Kingdom does not yield its allies to raiders. Call off your wolves and leave the fortress standing.'
             },
             {
-              speaker: 'Ice Mage',
+              speaker: 'Garruk the Red',
               side: 'right',
               leftPortraits: [
                 { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Ice Mage', image: '/images/heroes/Ice Mage Cropped.jpg' }
+                { name: 'Garruk the Red', image: '/images/heroes/Axeman Cropped.jpg' }
               ],
-              text: 'Blessing? The Crown\'s blessing is worth less than the ash we stand on. I\'ve seen kingdoms fall and lords rise. Power respects strength, not parchment.'
+              text: 'Allies? Halbrecht is a relic in a stone box. Varric is building something real. Men follow him because he pays them to win.'
             },
             {
               speaker: 'Warrior',
@@ -266,21 +238,22 @@ export const STORY_ARCS = {
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Ice Mage', image: '/images/heroes/Ice Mage Cropped.jpg' }
+                { name: 'Garruk the Red', image: '/images/heroes/Axeman Cropped.jpg' }
               ],
-              text: 'Then let strength decide. We don\'t seek to destroy you, but we will not be denied passage. The relic belongs to those who can claim it.'
+              text: 'Winning one siege doesn\'t make a future, Garruk. It just proves you know how to burn what someone else built.'
             },
             {
-              speaker: 'Ice Mage',
+              speaker: 'Halbrecht',
               side: 'right',
               leftPortraits: [
                 { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Ice Mage', image: '/images/heroes/Ice Mage Cropped.jpg' }
+                { name: 'Halbrecht', image: '/images/heroes/Halbrecht Cropped.png' },
+                { name: 'Garruk the Red', image: '/images/heroes/Axeman Cropped.jpg' }
               ],
-              text: 'Brave knights speak of honor while their Crown begs for coin. I will not let you pass. The pass is mine, bought with blood and betrayal.'
+              text: 'If you\'ve come to save my fortress, prove it in the yard. If you\'ve come to watch it fall, get out of my sight.'
             },
             {
               speaker: 'Lancer',
@@ -290,272 +263,301 @@ export const STORY_ARCS = {
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Ice Mage', image: '/images/heroes/Ice Mage Cropped.jpg' }
+                { name: 'Halbrecht', image: '/images/heroes/Halbrecht Cropped.png' },
+                { name: 'Garruk the Red', image: '/images/heroes/Axeman Cropped.jpg' }
               ],
-              text: 'Then we will take it back. For the kingdom, for the people who still believe, and for the oaths you\'ve forgotten.'
+              text: 'Then watch closely, Lord Halbrecht. We did not ride here to bargain over ruins. We came to keep them standing.'
+            },
+            {
+              speaker: 'Garruk the Red',
+              side: 'right',
+              leftPortraits: [
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Garruk the Red', image: '/images/heroes/Axeman Cropped.jpg' }
+              ],
+              text: 'Enough speeches. Iron Wolves, break them at the gate. Let Varric hear Halbrecht scream from the plains.'
+            },
+            {
+              speaker: 'Warrior',
+              side: 'left',
+              leftPortraits: [
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Garruk the Red', image: '/images/heroes/Axeman Cropped.jpg' }
+              ],
+              text: 'Come take it yourself, Garruk. We\'ll show your wolves what disciplined steel does to hired fury.'
             }
           ],
-          enemyTeam: 'brave_warden_pass',
+          enemyTeam: 'brave_iron_wolves_siege',
           next: ['ashbridge']
         },
         {
           id: 'ashbridge',
           type: 'battle',
-          title: 'Ashbridge Toll',
-          description: 'A mercenary company blocks the bridge. They demand proof of strength.',
+          title: 'Chapter III: The Blood Golem\'s Advance',
+          description: 'Halbrecht chooses the crown, and Varric answers with a blood golem and a second siege meant to break that oath before dawn.',
           presentation: {
-            backgroundKey: 'brave_ashbridge_toll',
-            ambientKey: 'amb_brave_bridge_fire',
-            stingers: { intro: 'stinger_confrontation', victory: 'stinger_gate_breach' },
-            vfxTags: ['vfx_ash_debris'],
-            musicIntensity: 'medium'
+            backgroundKey: 'brave_halbrecht_fortress_courtyard',
+            ambientKey: 'amb_brave_fortress_siege',
+            stingers: { intro: 'stinger_betrayal', victory: 'stinger_betrayal' },
+            vfxTags: ['vfx_ash_debris', 'vfx_vault_pulse'],
+            musicIntensity: 'high'
           },
           preBattle: [
-            'Ashbridge spans a chasm of black water and ancient ash, a narrow ribbon of stone that has connected the kingdom\'s eastern and western provinces for centuries. But the Contract Age has transformed this vital artery into a weapon. A mercenary company, their banners a patchwork of stolen colors and forged crests, has raised a steel gate across the span. Their demands are simple: pay in relic fragments, gold, or prove your worth in combat. The bridge that once facilitated trade now strangles it.',
-            'These mercenaries are not the desperate deserters of Warden\'s Pass. They are professionals, well-fed and well-armed, their equipment maintained by someone else\'s wealth. Scouts report that their leader is a fire mage, a pyromancer who defected from the royal arcane corps when the Crown could no longer afford his research stipend. His magic keeps the bridge alight with unnatural flame, making the stones hot to the touch and filling the air with the acrid scent of brimstone.',
-            'The warband approaches with caution. Crossing Ashbridge is not merely a matter of geography; it\'s a statement of intent. Paying the toll would validate the mercenary system, admitting that strength and wealth are the only currencies that matter. Fighting would escalate their journey from a quest to a crusade, drawing the attention of every contract lord in the region. Yet the alternative—turning back—is unthinkable. The valley calls, and the kingdom\'s fate hangs in the balance.',
-            'As they draw near, the mercenaries make their presence known. Torches flare along the bridge\'s edges, and armored figures patrol the span. The fire mage stands at the center, his robes billowing in the unnatural heat. This is no simple toll collection; it\'s a deliberate challenge, a test of whether Warrior and Lancer\'s ideals can survive contact with the Contract Age\'s harsh realities. The bridge represents the kingdom\'s fractured infrastructure, now held hostage by those who profit from its division.'
+            'Halbrecht\'s fortress still smolders from the Iron Wolves\' assault when the arguments begin. In the great hall, Lancer speaks for unity, for a kingdom rebuilt through discipline and reform. Warrior speaks for adaptation, for accepting that relics and contracts now shape power more surely than decrees. Halbrecht listens to both men and finds truth in both, which only deepens the unease in the room.',
+            'By midnight, the fortress feels less like a sanctuary than a held breath. Halbrecht\'s lieutenants watch the visitors. Lancer watches Warrior. Warrior watches the dark plains beyond the ramparts, where Varric\'s influence seems to move like weather. When dawn finally breaks, Halbrecht gives his answer: he will support the Brave Kingdom, but only if Prince Rowan comes in person and swears an oath of reform.',
+            'There is no time to carry those terms home. Scouts crash into the courtyard with ash on their cloaks and blood on their boots. Varric is already marching. This time he does not come with raiders testing the walls. He comes with Outcast assassins, rogue mages hurling relic-fire, and a towering blood golem stitched together by forbidden bindings. The message is blunt enough to hear through the alarm bells: Halbrecht belongs to Varric, or the fortress dies around him.',
+            'Lancer takes the breach as proof that the kingdom still has allies worth saving. Warrior reads something darker in it. The attack is too immediate, too perfectly timed, as if Varric knew the moment Halbrecht made his choice. When the blood golem lumbers toward the gate and the first ladders hit the stone, both men understand that the battle ahead will test more than the walls. It will test which future Warrior is truly willing to fight for.'
           ],
           dialogue: [
-            { speaker: 'Warrior', side: 'left', text: 'Every bridge is a knife now. The merc lords didn\'t rebuild them; they simply collected the tolls. This span was built with kingdom gold, for kingdom trade.' },
-            { speaker: 'Lancer', side: 'right', text: 'And now it serves their greed. Look at these men—they\'re well-fed, well-armed. Someone\'s paying them handsomely to strangle our own commerce.' },
-            { speaker: 'Warrior', side: 'left', text: 'The Crown should have seen this coming. When you sell your army, you sell your borders too. These mercenaries are just the symptom.' },
-            { speaker: 'Lancer', side: 'right', text: 'Then we treat the symptom. We take this bridge back, not just for passage, but to show that some things still belong to the kingdom.' },
-            { speaker: 'Warrior', side: 'left', text: 'But at what cost? If we fight every toll gate between here and the valley, we\'ll arrive with an army at our backs and no strength left for the real battle.' },
-            { speaker: 'Lancer', side: 'right', text: 'And if we pay every toll, we validate their system. The people watching from the riverbanks need to see that resistance is possible.' },
-            { speaker: 'Warrior', side: 'left', text: 'The people need food in their bellies more than symbols. But you\'re right—we can\'t let this stand. The bridge opens, or we break it.' },
-            { speaker: 'Lancer', side: 'right', text: 'Then let\'s break it. For the farmers who can\'t cross with their wagons, for the merchants who pay in blood instead of coin.' },
-            { speaker: 'Warrior', side: 'left', text: 'And for the kingdom that built this span. Forward—we reclaim what\'s ours.' }
+            { speaker: 'Halbrecht', side: 'right', text: 'You both speak of futures. But neither of you speaks of cost.' },
+            { speaker: 'Lancer', side: 'left', text: 'The cost is worth paying if it restores the kingdom.' },
+            { speaker: 'Warrior', side: 'right', text: 'The cost is inevitable. Better to choose who collects it.' },
+            { speaker: 'Halbrecht', side: 'right', text: 'And what of the people? The farmers who starve while nobles hoard grain? The soldiers abandoned after the meltdown? The mercenaries who fight because they have no home?' },
+            { speaker: 'Lancer', side: 'left', text: 'We rebuild. Together.' },
+            { speaker: 'Warrior', side: 'right', text: 'Or we adapt. Together.' },
+            { speaker: 'Halbrecht', side: 'right', text: 'I will give you my answer at dawn.' },
+            { speaker: 'Lancer', side: 'left', text: 'You spoke well tonight. Too well. It sounded like you\'d already chosen the mercenary lords.' },
+            { speaker: 'Warrior', side: 'right', text: 'Maybe I\'m tired of serving a kingdom that won\'t save itself. The queen is drowning, Lancer. She\'ll drag all of us down with her.' },
+            { speaker: 'Lancer', side: 'left', text: 'If you betray the kingdom, say it plainly.' },
+            { speaker: 'Warrior', side: 'right', text: 'I\'m not betraying anything. I\'m surviving.' },
+            { speaker: 'Halbrecht', side: 'right', text: 'I have made my choice. I will support the Brave Kingdom, but only if Prince Rowan comes here and swears an oath of reform.' },
+            { speaker: 'Warrior', side: 'right', text: 'The prince will never agree to that.' },
+            { speaker: 'Lancer', side: 'left', text: 'Then I will carry your terms myself.' }
           ],
           battleDialogue: [
             {
-              speaker: 'Fire Mage',
+              speaker: 'Varric',
               side: 'right',
               leftPortraits: [
                 { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Fire Mage', image: '/images/heroes/Fire Mage Cropped.jpg' }
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' },
+                { name: 'Blood Golem', image: '/images/heroes/Blood Golem.jpg' }
               ],
-              text: 'The bridge burns with old magic. Cross without tribute and you invite war. The flames will consume you before you reach the span.'
+              text: 'Halbrecht had his chance. Now he gets my answer in flesh and iron. Stand aside and the fortress burns quickly. Stand against me and the golem feeds until dawn.'
             },
             {
-              speaker: 'Warrior',
+              speaker: 'Halbrecht',
               side: 'left',
               leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Halbrecht', image: '/images/heroes/Halbrecht Cropped.png' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Fire Mage', image: '/images/heroes/Fire Mage Cropped.jpg' }
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' },
+                { name: 'Blood Golem', image: '/images/heroes/Blood Golem.jpg' }
               ],
-              text: 'War already found us. This toll only chooses who starves. You were trained in the royal arcane corps—sworn to protect the realm, not extort it.'
-            },
-            {
-              speaker: 'Fire Mage',
-              side: 'right',
-              leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
-                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
-              ],
-              rightPortraits: [
-                { name: 'Fire Mage', image: '/images/heroes/Fire Mage Cropped.jpg' }
-              ],
-              text: 'The corps stopped funding my research. The Crown couldn\'t afford scholars or spells. I learned to monetize my talents, just like these soldiers learned to sell their swords.'
+              text: 'You had your no, Varric. Here is mine again. Come for these walls if you like. My answer will still be waiting under your dead.'
             },
             {
               speaker: 'Lancer',
+              side: 'right',
+              leftPortraits: [
+                { name: 'Halbrecht', image: '/images/heroes/Halbrecht Cropped.png' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' },
+                { name: 'Blood Golem', image: '/images/heroes/Blood Golem.jpg' }
+              ],
+              text: 'You will not buy this fortress with fear. If you want Halbrecht, you come through us first.'
+            },
+            {
+              speaker: 'Varric',
               side: 'left',
               leftPortraits: [
                 { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Fire Mage', image: '/images/heroes/Fire Mage Cropped.jpg' }
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' },
+                { name: 'Blood Golem', image: '/images/heroes/Blood Golem.jpg' }
               ],
-              text: 'Then you\'ve forgotten what magic was meant to serve. The arcane arts were gifts to the kingdom, not weapons for personal gain.'
-            },
-            {
-              speaker: 'Fire Mage',
-              side: 'right',
-              leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
-                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
-              ],
-              rightPortraits: [
-                { name: 'Fire Mage', image: '/images/heroes/Fire Mage Cropped.jpg' }
-              ],
-              text: 'Gifts? The Crown treated us like servants, paying us in scraps while hoarding the real wealth. Now I take what I\'m owed, and this bridge is my due.'
+              text: 'Us? Careful, Lancer. You still think the lines are clean. They aren\'t. Ask Warrior which banner he hears when the walls start shaking.'
             },
             {
               speaker: 'Warrior',
-              side: 'left',
-              leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
-                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
-              ],
-              rightPortraits: [
-                { name: 'Fire Mage', image: '/images/heroes/Fire Mage Cropped.jpg' }
-              ],
-              text: 'Then we\'ll take it back. The kingdom built this span for trade and unity, not division and greed. Your fire won\'t stop us.'
-            },
-            {
-              speaker: 'Fire Mage',
               side: 'right',
               leftPortraits: [
                 { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Fire Mage', image: '/images/heroes/Fire Mage Cropped.jpg' }
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' },
+                { name: 'Blood Golem', image: '/images/heroes/Blood Golem.jpg' }
               ],
-              text: 'Then let the bridge remember your names. The flames will write your epitaph in ash and cinder.'
+              text: 'Leave my name out of your mouth, Varric. If you want this breach, you earn it the hard way.'
             },
             {
-              speaker: 'Lancer',
+              speaker: 'Varric',
               side: 'left',
               leftPortraits: [
                 { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Fire Mage', image: '/images/heroes/Fire Mage Cropped.jpg' }
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' },
+                { name: 'Blood Golem', image: '/images/heroes/Blood Golem.jpg' }
               ],
-              text: 'And we\'ll remember yours as the man who stood in the way of justice. The bridge falls today—for the kingdom and the people you\'ve forgotten.'
+              text: 'Good. I was hoping you\'d choose in public. Blood Golem, open the gate.'
+            },
+            {
+              speaker: 'Lancer',
+              side: 'right',
+              leftPortraits: [
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' },
+                { name: 'Blood Golem', image: '/images/heroes/Blood Golem.jpg' }
+              ],
+              text: 'Then hold the line. If the golem reaches the inner gate, the choice is made for all of us.'
             }
           ],
-          enemyTeam: 'brave_ashbridge',
+          enemyTeam: 'brave_blood_golem_advance',
           next: ['phalanx']
         },
         {
           id: 'phalanx',
-          type: 'miniboss',
-          title: 'The Unbroken Phalanx',
-          description: 'Former royal guards now sell their oaths to the highest bidder.',
+          type: 'battle',
+          title: 'Chapter IV: Ambush at Dawnfall Bridge',
+          description: 'Queen Aralyn rides to Halbrecht to swear the oath herself, and Rowan sends Warrior to stop her before the alliance becomes unbreakable.',
           presentation: {
-            backgroundKey: 'brave_unbroken_phalanx',
+            backgroundKey: 'brave_dawnfall_bridge',
             ambientKey: 'amb_brave_wind_ash',
-            stingers: { intro: 'stinger_confrontation', victory: 'stinger_relic_reveal' },
-            vfxTags: ['vfx_ash_debris'],
-            musicIntensity: 'mediumHigh'
+            stingers: { intro: 'stinger_betrayal', victory: 'stinger_betrayal' },
+            vfxTags: ['vfx_fog_illusion', 'vfx_ash_debris'],
+            musicIntensity: 'high'
           },
           preBattle: [
-            'The Unbroken Phalanx marches with the precision of royal guards, their formation a testament to the discipline that once made the Brave Kingdom formidable. But their shields, once emblazoned with the kingdom\'s crest, now bear a layer of gold paint that cannot hide the shame beneath. These are not mercenaries hired for a season; they are the kingdom\'s own elite soldiers, the men who once protected the Crown and defended the borders.',
-            'Their leader, a paladin whose faith has been corrupted by coin, commands them with the same barked orders that once held the line against invaders. But now their spears point inward, guarding not the realm but the interests of the mercenary lords who bought their loyalty. The Contract Age has turned protectors into predators, and the phalanx represents the ultimate betrayal—the kingdom\'s own strength turned against it.',
-            'Warrior and Lancer watch from a ridge as the formation advances, their hearts heavy with recognition. These men were comrades, brothers-in-arms who shared the same hardships and victories. But hunger and broken promises have driven them to this. The warband must decide: attempt to reason with them, appealing to the oaths they once swore, or fight and prove that some ideals cannot be purchased.',
-            'As the phalanx halts and forms a defensive line, their paladin leader steps forward. His armor gleams with relic enhancements, bought with the same gold that starves the kingdom. This confrontation is more than a battle; it\'s a reckoning with the Contract Age\'s toll on the human spirit. The phalanx stands as a mirror, reflecting what Warrior and Lancer might become if they lose their way in the valley\'s depths.'
+            'The road back to the capital is colder than the ash wind. Halbrecht has declared for the crown, but his support comes with a demand Prince Rowan will never accept: the prince must swear an oath of reform in person. When Lancer brings those terms home, the court finally cracks open. Rowan stops pretending he can serve both kingdom and mercenary future. He has already been speaking with Varric, and now even Warrior can no longer hide how close he has drifted to that orbit.',
+            'Queen Aralyn moves fast. Fearing Rowan\'s influence inside the capital, she decides to ride for Halbrecht\'s fortress herself and swear the oath in person before the prince can poison the alliance. Lancer escorts her with a thin protective column of guards and shield maidens, hoping speed will matter more than numbers. But the road to Dawnfall Bridge is narrow, exposed, and perfect for treachery.',
+            'Rowan cannot allow the queen to reach Halbrecht. He dispatches a covert strike force of rogue mercenaries, compromised palace guards, and a dark mage whose illusions turn fog into a weapon. Warrior is ordered to lead the operation. He accepts before he knows Lancer is riding with the queen. By the time the truth reveals itself through the mist, the bridge is already a kill box and both men are trapped inside the consequences of every choice they refused to name.',
+            'As the caravan rolls onto the stone span, false silhouettes bloom in the fog and the ravine below disappears behind conjured shadow. Lancer feels the trap tighten instantly. Then Warrior steps out of the haze, steel in hand, no longer a rumor or a suspicion but the point of Rowan\'s spear. What follows will decide more than whether the queen escapes. It will decide whether anything remains of the bond that once held the Brave Kingdom together.'
           ],
           dialogue: [
-            { speaker: 'Warrior', side: 'left', text: 'Those were the Crown\'s sworn shields. I recognize the formation—we drilled it together in the border wars. How did it come to this?' },
-            { speaker: 'Lancer', side: 'right', text: 'Oaths are brittle when hunger is sharper than steel. The Crown couldn\'t pay them, so the merc lords did. Now they guard the same vaults they once protected.' },
-            { speaker: 'Warrior', side: 'left', text: 'But they still wear the crest, even if it\'s painted over. If we break them here, we end the lie that honor can be purchased like a commodity.' },
-            { speaker: 'Lancer', side: 'right', text: 'And if we don\'t, we validate their choice. The people need to see that some lines cannot be crossed, even for survival.' },
-            { speaker: 'Warrior', side: 'left', text: 'These men were our brothers. I don\'t want to kill them, but I won\'t let them block our path. The relic could restore what\'s been lost.' },
-            { speaker: 'Lancer', side: 'right', text: 'Then we give them a choice: stand aside and reclaim their honor, or fall and become a lesson for every soldier watching.' },
-            { speaker: 'Warrior', side: 'left', text: 'The paladin leading them... he was a man of faith once. What corrupted him so thoroughly?' },
-            { speaker: 'Lancer', side: 'right', text: 'The same thing that corrupts us all—the fear of watching your family starve. But fear is no excuse for betrayal.' },
-            { speaker: 'Warrior', side: 'left', text: 'Then let\'s remind them what real strength looks like. Forward—for the kingdom and the oaths we still honor.' }
+            { speaker: 'Queen Aralyn', side: 'right', text: 'If Rowan refuses reform, then I will swear the oath myself. Halbrecht must see that the crown can still bind itself to duty.' },
+            { speaker: 'Lancer', side: 'left', text: 'Then we move quickly and quietly. Dawnfall Bridge is exposed ground. If Rowan guesses your route, he\'ll try to break this convoy before we clear the ravine.' },
+            { speaker: 'Queen Aralyn', side: 'right', text: 'He is still my son. I keep telling myself there is a line he will not cross.' },
+            { speaker: 'Lancer', side: 'left', text: 'Then let us pray the line is farther out than it looks from here.' },
+            { speaker: 'Warrior', side: 'right', text: 'You always did mistake hesitation for mercy, Lancer. Rowan calls this survival. Varric calls it leverage. Either way, the bridge belongs to the future now.' },
+            { speaker: 'Lancer', side: 'left', text: 'You took his order. That means this was never about reform or survival. It was about choosing who gets to call betrayal necessary.' },
+            { speaker: 'Warrior', side: 'right', text: 'Stand aside and I can still end this cleanly.' },
+            { speaker: 'Lancer', side: 'left', text: 'No. If you want the queen, you come through me and every oath you taught me to believe in.' }
           ],
           battleDialogue: [
             {
-              speaker: 'Paladin',
+              speaker: 'Warrior',
               side: 'right',
               leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Queen Aralyn', image: '/images/heroes/Queen Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Paladin', image: '/images/heroes/Paladin Cropped.jpg' }
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' }
               ],
-              text: 'We held the line when the Crown sold its own army. We stood firm when the mercenaries came to collect their contracts. We will not be shamed for surviving.'
+              text: 'Lancer... stand aside. I didn\'t come here to butcher a convoy. I came to stop a mistake before it becomes a kingdom-wide war.'
             },
             {
               speaker: 'Warrior',
               side: 'left',
               leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Queen Aralyn', image: '/images/heroes/Queen Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Paladin', image: '/images/heroes/Paladin Cropped.jpg' }
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' }
               ],
-              text: 'Survival bought with stolen oaths is not honor. You were the kingdom\'s shield, sworn to protect the people, not extort them. How did faith become a commodity?'
+              text: 'You chose Rowan\'s knife hand and you still talk about mistakes? Look around. This bridge is your answer.'
             },
             {
-              speaker: 'Paladin',
+              speaker: 'Rogue Mage',
               side: 'right',
               leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Queen Aralyn', image: '/images/heroes/Queen Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Paladin', image: '/images/heroes/Paladin Cropped.jpg' }
+                { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' },
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' }
               ],
-              text: 'Faith? The gods abandoned us when the Crown bankrupted the temples. My prayers went unanswered when my family starved. The mercenary lords offered gold, not salvation.'
+              text: 'The fog is set, commander. One word and the bridge will kill them for us. We can leave their bodies arguing with shadows.'
             },
             {
               speaker: 'Lancer',
               side: 'left',
               leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Queen Aralyn', image: '/images/heroes/Queen Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Paladin', image: '/images/heroes/Paladin Cropped.jpg' }
+                { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' },
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' }
               ],
-              text: 'Stand aside. The relics are not your wage. They belong to the kingdom that built this phalanx, not the lords who bought your soul.'
-            },
-            {
-              speaker: 'Paladin',
-              side: 'right',
-              leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
-                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
-              ],
-              rightPortraits: [
-                { name: 'Paladin', image: '/images/heroes/Paladin Cropped.jpg' }
-              ],
-              text: 'My soul was never for sale—it was taken. The Crown took our pay, the lords took our loyalty. Now we take what we can. Prove your claim in formation, or join the ranks of the defeated.'
+              text: 'Shield wall around the queen. Ignore the phantoms. Cut down anything that bleeds.'
             },
             {
               speaker: 'Warrior',
-              side: 'left',
-              leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
-                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
-              ],
-              rightPortraits: [
-                { name: 'Paladin', image: '/images/heroes/Paladin Cropped.jpg' }
-              ],
-              text: 'We\'ll prove it. But know this—breaking you here isn\'t victory. It\'s mercy. The Contract Age ends today, one broken oath at a time.'
-            },
-            {
-              speaker: 'Paladin',
               side: 'right',
               leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Queen Aralyn', image: '/images/heroes/Queen Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Paladin', image: '/images/heroes/Paladin Cropped.jpg' }
+                { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' },
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' }
               ],
-              text: 'Mercy? The Crown showed us none when they sold our contracts. Form up, brothers—these idealists come to test our resolve.'
+              text: 'I told you to stand aside. Don\'t make me prove this road has already chosen its side.'
+            },
+            {
+              speaker: 'Queen Aralyn',
+              side: 'left',
+              leftPortraits: [
+                { name: 'Queen Aralyn', image: '/images/heroes/Queen Cropped.jpg' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' }
+              ],
+              text: 'My son sends assassins and illusions against his own crown. If there is mercy left on this bridge, it isn\'t coming from Rowan.'
+            },
+            {
+              speaker: 'Rogue Mage',
+              side: 'right',
+              leftPortraits: [
+                { name: 'Queen Aralyn', image: '/images/heroes/Queen Cropped.jpg' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' },
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' }
+              ],
+              text: 'Then let the queen die in mist, commander. One spell and this bridge belongs to ghosts.'
             },
             {
               speaker: 'Lancer',
               side: 'left',
               leftPortraits: [
-                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Queen Aralyn', image: '/images/heroes/Queen Cropped.jpg' },
                 { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
               ],
               rightPortraits: [
-                { name: 'Paladin', image: '/images/heroes/Paladin Cropped.jpg' }
+                { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' },
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' }
               ],
-              text: 'Then let the formation break. For the kingdom, for the oaths you\'ve forgotten, and for the people who still believe in honor.'
+              text: 'Then come through me. I won\'t give you the queen, and I won\'t give you what\'s left of us without a fight.'
             }
           ],
-          enemyTeam: 'brave_phalanx',
+          enemyTeam: 'brave_dawnfall_bridge',
           reward: 'relic',
           next: ['fork_of_oaths']
         },

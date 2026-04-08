@@ -300,21 +300,36 @@ function getIncomingPostCalculationDamageBonus(tile) {
   return Math.max(0, bonus);
 }
 
-function applyVoidShieldReduction(tile, damage) {
+function getIncomingDamageMultiplier(tile) {
+  if (!tile) return 1;
+  const multiplier = Number((tile.hero && tile.hero._towerIncomingDamageMultiplier) || 1);
+  if (!Number.isFinite(multiplier) || multiplier <= 0) return 1;
+  return Math.max(0, multiplier);
+}
+
+function applyVoidShieldReduction(tile, damage, options = {}) {
   const raw = Math.max(0, Number(damage || 0));
-  const vs = getVoidShieldValue(tile);
-  const reduced = (vs > 0 && raw > 0) ? Math.max(0, raw - vs) : raw;
-  const incomingBonus = (raw > 0) ? getIncomingPostCalculationDamageBonus(tile) : 0;
+  const skipVoidShield = !!options.skipVoidShield;
+  const skipIncomingBonus = !!options.skipIncomingBonus;
+  const multiplier = getIncomingDamageMultiplier(tile);
+  const scaled = raw > 0 ? Math.max(0, Math.round(raw * multiplier)) : raw;
+  const vs = skipVoidShield ? 0 : getVoidShieldValue(tile);
+  const reduced = (vs > 0 && scaled > 0) ? Math.max(0, scaled - vs) : scaled;
+  const incomingBonus = (raw > 0 && !skipIncomingBonus) ? getIncomingPostCalculationDamageBonus(tile) : 0;
   const amplified = Math.max(0, reduced + incomingBonus);
   return {
     damage: amplified,
     reducedBy: Math.max(0, raw - reduced),
+    percentReducedBy: Math.max(0, raw - scaled),
+    voidShieldReducedBy: Math.max(0, scaled - reduced),
     increasedBy: Math.max(0, amplified - reduced)
   };
 }
 
 function getPeriodicPulseBonus(tile) {
+  const effect = arguments.length > 1 ? arguments[1] : null;
   if (!tile || !tile.hero) return 0;
+  if (effect && effect._hidden) return 0;
   return Math.max(0, Number(tile.hero._towerPeriodicPulseBonus || 0));
 }
 
@@ -521,16 +536,15 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
     try {
       if (tile.hero && tile.hero._towerWarmUp) tile._towerWarmUpUsedRound = false;
       if (tile.hero && tile.hero._towerEchoCaster) tile._towerEchoCasterUsedRound = false;
-      if (tile.hero && tile.hero._towerCinderTax) tile._towerCinderTaxUsedRound = false;
-      if (tile.hero && tile.hero._towerHemorrhageTax) tile._towerHemorrhageTaxUsedRound = false;
+      if (tile.hero && (tile.hero._towerAfflictionToll || tile.hero._towerCinderTax || tile.hero._towerHemorrhageTax)) {
+        tile._towerAfflictionTollUsedRound = false;
+        tile._towerCinderTaxUsedRound = false;
+        tile._towerHemorrhageTaxUsedRound = false;
+      }
       if (roundNumber === 1 && tile.hero && tile.hero._towerMomentum) tile._towerMomentumGains = 0;
       if (tile._towerArcaneExchangePending) {
         tile._towerArcaneExchangeReady = true;
         tile._towerArcaneExchangePending = false;
-      }
-      if (tile._towerPredatorPacePending) {
-        applyEffectsToTile(tile, [{ name: 'Predator\'s Pace', kind: 'buff', duration: 1, modifiers: { speed: 2 }, _hidden: true }], addLog, { boardName: tile.boardName, index: tile.index, tile });
-        tile._towerPredatorPacePending = false;
       }
     } catch (e) {}
     // initialize baseline runtime fields if missing
@@ -553,11 +567,18 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
         const row = indexToRow(tile.index, side);
         if (tile._lastRow != null && row !== tile._lastRow) {
           if (tile.hero && tile.hero._towerAttunement) {
-            tile.currentEnergy = (typeof tile.currentEnergy === 'number' ? tile.currentEnergy : (tile.hero && tile.hero.energy) || 0) + 1;
+            const attunement = (typeof tile.hero._towerAttunement === 'object' && tile.hero._towerAttunement)
+              ? tile.hero._towerAttunement
+              : { energy: 1, spellPower: 1 };
+            const attunementEnergy = Math.max(0, Number(attunement.energy || 0));
+            const attunementSpellPower = Math.max(0, Number(attunement.spellPower || 0));
+            tile.currentEnergy = (typeof tile.currentEnergy === 'number' ? tile.currentEnergy : (tile.hero && tile.hero.energy) || 0) + attunementEnergy;
             clampEnergy(tile);
-            applyEffectsToTile(tile, [{ name: 'Attunement', kind: 'buff', duration: 1, modifiers: { spellPower: 1 }, _hidden: true }], addLog, { boardName: tile.boardName, index: tile.index, tile });
+            applyEffectsToTile(tile, [{ name: 'Attunement', kind: 'buff', duration: 1, modifiers: { spellPower: attunementSpellPower }, _hidden: true }], addLog, { boardName: tile.boardName, index: tile.index, tile });
           }
           if (tile.hero && tile.hero._towerTacticalSwap) {
+            ensureTileHealthInitialized(tile);
+            tile.currentHealth = capHealthForTile(tile, Number(tile.currentHealth || 0) + 5);
             applyEffectsToTile(tile, [{ name: 'Tactical Swap', kind: 'buff', duration: 1, modifiers: { armor: 2 }, _hidden: true }], addLog, { boardName: tile.boardName, index: tile.index, tile });
           }
         }
@@ -599,6 +620,7 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
       const reviveHealth = Math.max(1, Math.ceil(base * 0.25));
       tile.hero._towerPhoenixUsed = true;
       tile._dead = false;
+      tile.currentHealth = Math.max(0, Number(tile.currentHealth || 0));
       tile.currentHealth = capHealthForTile(tile, reviveHealth);
       addLog && addLog(`  > Phoenix Rebirth: ${boardName}[${index}] revived at ${tile.currentHealth} HP`);
       return true;
@@ -701,33 +723,35 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
     if (!boardName || boardName.includes('reserve')) return;
     if (typeof tile.index !== 'number') return;
     const slot = slotForIndex(tile.boardName, tile.index);
-    if (tile.hero._towerFrontlineVanguard) {
+    const frontlineVanguardBonus = Math.max(0, Number(tile.hero._towerFrontlineVanguard || 0));
+    if (frontlineVanguardBonus > 0) {
       if (typeof tile.hero._towerFrontlineVanguardActive !== 'boolean') {
         tile.hero._towerFrontlineVanguardActive = slot === 'front';
       }
       if (tile.hero._towerFrontlineVanguardActive) {
         if (!tile.hero._towerFrontlineVanguardCastsApplied && tile._castsRemaining) {
-          tile._castsRemaining.front = Number(tile._castsRemaining.front || 0) + 1;
+          tile._castsRemaining.front = Number(tile._castsRemaining.front || 0) + frontlineVanguardBonus;
           tile.hero._towerFrontlineVanguardCastsApplied = true;
         }
         if (!tile.hero._towerFrontlineVanguardEnergyApplied) {
           tile.hero._towerFrontlineVanguardEnergyApplied = true;
-          tile.currentEnergy = Number(tile.currentEnergy || 0) + 1;
+          tile.currentEnergy = Number(tile.currentEnergy || 0) + frontlineVanguardBonus;
         }
       }
     }
-    if (tile.hero._towerRearguard) {
+    const rearguardBonus = Math.max(0, Number(tile.hero._towerRearguard || 0));
+    if (rearguardBonus > 0) {
       if (typeof tile.hero._towerRearguardActive !== 'boolean') {
         tile.hero._towerRearguardActive = slot === 'back';
       }
       if (tile.hero._towerRearguardActive) {
         if (!tile.hero._towerRearguardCastsApplied && tile._castsRemaining) {
-          tile._castsRemaining.back = Number(tile._castsRemaining.back || 0) + 1;
+          tile._castsRemaining.back = Number(tile._castsRemaining.back || 0) + rearguardBonus;
           tile.hero._towerRearguardCastsApplied = true;
         }
         if (!tile.hero._towerRearguardEnergyApplied) {
           tile.hero._towerRearguardEnergyApplied = true;
-          tile.currentEnergy = Number(tile.currentEnergy || 0) + 1;
+          tile.currentEnergy = Number(tile.currentEnergy || 0) + rearguardBonus;
         }
       }
     }
@@ -851,13 +875,13 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
               try { v = Number(roundNumber || 1); } catch (e) { v = Number(pulse.value || 0); }
             }
             const applierRef = resolveEffectApplierForPulse(effect);
-            const periodicBonus = getPeriodicPulseBonus((applierRef && applierRef.tile) ? applierRef.tile : tile);
+            const periodicBonus = getPeriodicPulseBonus((applierRef && applierRef.tile) ? applierRef.tile : tile, effect);
             if (periodicBonus > 0) {
               v = Math.max(0, v + periodicBonus);
             }
             const vsResult = applyVoidShieldReduction(tile, v);
             if (vsResult.reducedBy > 0) {
-              addLog && addLog(`  > Void Shield reduced effect damage by ${vsResult.reducedBy} on ${boardName}[${idx}]`);
+              addLog && addLog(`  > Incoming damage mitigation reduced effect damage by ${vsResult.reducedBy} on ${boardName}[${idx}]`);
             }
             const finalPulseDamage = vsResult.damage;
             addLog && addLog(`  > ${effect.name || 'Effect'} pulse will deal ${finalPulseDamage} to ${boardName}[${idx}]`);
@@ -910,7 +934,7 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
                 let healAmount = (typeof healSpec === 'number')
                   ? Number(healSpec || 0)
                   : (healSpec && typeof healSpec.amount === 'number' ? Number(healSpec.amount || 0) : 0);
-                const periodicBonus = getPeriodicPulseBonus((applierRef && applierRef.tile) ? applierRef.tile : tile);
+                const periodicBonus = getPeriodicPulseBonus((applierRef && applierRef.tile) ? applierRef.tile : tile, effect);
                 if (periodicBonus > 0) {
                   healAmount = Math.max(0, healAmount + periodicBonus);
                 }
@@ -980,7 +1004,7 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
             } catch (e) {}
           } else if (pulse.type === 'heal') {
             const applierRef = resolveEffectApplierForPulse(effect);
-            const periodicBonus = getPeriodicPulseBonus((applierRef && applierRef.tile) ? applierRef.tile : tile);
+            const periodicBonus = getPeriodicPulseBonus((applierRef && applierRef.tile) ? applierRef.tile : tile, effect);
             const v = Math.max(0, Number(pulse.value || 0) + periodicBonus);
             addLog && addLog(`  > ${effect.name || 'Effect'} pulse will heal ${v} to ${boardName}[${idx}]`);
             
@@ -1337,7 +1361,7 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
 
         const rawDamage = Math.max(0, Number((mineMeta && mineMeta.damage) || 7));
         const armor = Math.max(0, Number((tile.currentArmor != null ? tile.currentArmor : (tile.hero && tile.hero.armor) || 0) || 0));
-        const dealt = Math.max(0, Math.round(rawDamage - armor));
+  const dealt = applyVoidShieldReduction(tile, Math.max(0, Math.round(rawDamage - armor))).damage;
         const source = (mineMeta && mineMeta.source) ? mineMeta.source : { boardName, index: idx };
         const animation = (mineMeta && mineMeta.triggerAnimation) || 'Landmine Explosions_2x2_4frames';
 
@@ -1454,6 +1478,8 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
           try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: castAction }); } catch (e) {}
         }
 
+        const finalDamage = applyVoidShieldReduction(tile, damage).damage;
+
         if (typeof onStep === 'function') {
           const pulseAction = {
             type: 'effectPulse',
@@ -1461,13 +1487,13 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
             source,
             effectName: 'Pay The Toll',
             action: 'damage',
-            amount: damage
+            amount: finalDamage
           };
           try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: pulseAction }); } catch (e) {}
         }
 
-        applyHealthDelta(tile, -damage);
-        addLog && addLog(`Round-start Pay The Toll dealt ${damage} to ${boardName}[${idx}]`);
+        applyHealthDelta(tile, -finalDamage);
+        addLog && addLog(`Round-start Pay The Toll dealt ${finalDamage} to ${boardName}[${idx}]`);
       });
 
       (reserve || []).forEach((tile) => {
@@ -1532,6 +1558,93 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
     // Emit gameState after all energy increments applied
     if (typeof onStep === 'function') {
       onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'energyApplied' } });
+    }
+  } catch (e) {}
+
+  // Finalize any round-start deaths before spell collection so dead heroes cannot be targeted or cast.
+  try {
+    const allBoardsLocal = [
+      { arr: cP1, name: 'p1Board' },
+      { arr: cP2, name: 'p2Board' },
+      { arr: cP3, name: 'p3Board' },
+      { arr: cR1, name: 'p1Reserve' },
+      { arr: cR2, name: 'p2Reserve' },
+      { arr: cR3, name: 'p3Reserve' }
+    ];
+    const deadNow = [];
+    allBoardsLocal.forEach(b => {
+      (b.arr || []).forEach((tile, index) => {
+        if (!tile || !tile.hero || tile._dead) return;
+        const hp = Number(tile.currentHealth != null ? tile.currentHealth : ((tile.hero && tile.hero.health) || 0));
+        if (hp > 0) return;
+
+        let shouldDie = true;
+        try {
+          if (!tile._passives && tile.hero && Array.isArray(tile.hero.passives)) {
+            tile._passives = tile.hero.passives.map(e => ({ ...e }));
+          }
+          if (Array.isArray(tile._passives)) {
+            const ur = tile._passives.find(p => p && (p.name === 'Undying Rage' || p.name === 'UndyingRage') && !p._used);
+            if (ur) {
+              ur._used = true;
+              tile.currentHealth = 1;
+              shouldDie = false;
+            }
+            const rg = tile._passives.find(p => p && (p.name === 'Regeloop' || p.name === 'RegelOOP' || p.name === 'REGLOOP'));
+            if (rg && (rg._uses == null || rg._uses < 3)) {
+              rg._uses = Number(rg._uses || 0) + 1;
+              tile.currentHealth = 4;
+              tile.effects = (tile.effects || []).filter(e => !(e && (e.kind === 'buff' || e.kind === 'debuff')));
+              try { recomputeModifiers(tile); } catch (e) {}
+              shouldDie = false;
+            }
+          }
+        } catch (e) {}
+
+        if (shouldDie && tryBossPhaseRevive(tile, b.name, index)) {
+          shouldDie = false;
+        }
+        if (shouldDie && tryPhoenixRebirth(tile, b.name, index)) {
+          shouldDie = false;
+        }
+        if (!shouldDie) return;
+
+        deadNow.push({ boardName: b.name, index, tile });
+      });
+    });
+
+    if (deadNow.length > 0 && typeof onStep === 'function') {
+      try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'preDeath' } }); } catch (e) {}
+    }
+
+    deadNow.forEach(({ boardName, index, tile }) => {
+      try {
+        if (!tile) return;
+        if (tile.hero && tile.hero.leavesCorpse === false) {
+          const removedName = tile.hero && tile.hero.name ? tile.hero.name : 'minion';
+          tile.hero = null;
+          tile._dead = false;
+          tile.effects = [];
+          tile.currentHealth = null;
+          tile.currentArmor = null;
+          tile.currentSpeed = null;
+          tile.currentEnergy = null;
+          tile.spellCasts = [];
+          tile._castsRemaining = null;
+          tile._passives = null;
+          addLog && addLog(`  > Removed ${removedName} from ${boardName}[${index}] before cast collection`);
+          return;
+        }
+        tile._dead = true;
+        tile.effects = [];
+        tile.spellCasts = [];
+        tile.currentEnergy = 0;
+        addLog && addLog(`  > Marked ${boardName}[${index}] as dead before cast collection`);
+      } catch (e) {}
+    });
+
+    if (deadNow.length > 0 && typeof onStep === 'function') {
+      try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'deathApplied' } }); } catch (e) {}
     }
   } catch (e) {}
 
@@ -1618,13 +1731,14 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
           const alreadyAtThresholdWhenReapBecameActive = !hadActiveReapThreat && hp <= 2 && hp > 0;
           if (crossedThreshold || alreadyAtThresholdWhenReapBecameActive) {
             const executeDamage = Number(EFFECTS.Reap && EFFECTS.Reap.executeDamage ? EFFECTS.Reap.executeDamage : 999);
+            const finalExecuteDamage = applyVoidShieldReduction(tile, executeDamage).damage;
             if (typeof onStep === 'function') {
-              const lastAction = { type: 'effectPulse', target: { boardName, index: idx }, effectName: 'Reap', action: 'damage', amount: executeDamage, phase: 'secondary' };
+              const lastAction = { type: 'effectPulse', target: { boardName, index: idx }, effectName: 'Reap', action: 'damage', amount: finalExecuteDamage, phase: 'secondary' };
               try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction }); } catch (e) {}
             }
-            applyHealthDelta(tile, -executeDamage);
+            applyHealthDelta(tile, -finalExecuteDamage);
             const reason = crossedThreshold ? 'HP crossed to <= 2' : 'target already at <= 2 when Reap became active';
-            addLog && addLog(`  > Reap (${contextTag}) executed ${boardName}[${idx}] for ${executeDamage} (${reason})`);
+            addLog && addLog(`  > Reap (${contextTag}) executed ${boardName}[${idx}] for ${finalExecuteDamage} (${reason})`);
           }
           tile._lastReapObservedHealth = Number((typeof tile.currentHealth === 'number') ? tile.currentHealth : hp);
           tile._reapThreatActive = true;
@@ -1884,6 +1998,13 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
     const getBonusOptions = (spec, spellIdForSpec) => {
       let bonusDamage = 0;
       let bonusSpellPower = bonusSpellPowerForCast;
+      const isColumnSpell = !!(spec && Array.isArray(spec.targets) && spec.targets.some(t => t && t.type === 'column'));
+      if (casterHero && casterHero._towerFocusedColumn && isColumnSpell) {
+        bonusSpellPower += 2;
+      }
+      if (casterHero && spec && spec.formula && spec.formula.type === 'attackPower') {
+        bonusDamage += Number(casterHero._towerAttackPowerBonus || 0);
+      }
       if (casterHero && casterHero._towerKeenStrike && spellIdForSpec === 'basicAttack') {
         bonusDamage += Number(casterHero._towerKeenStrike || 1);
       }
@@ -1894,20 +2015,12 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       bonusDamage += consumeArcaneExchangeBonus(spec);
       if (casterHero && casterHero._towerLastStand && isDamageSpec(spec)) {
         try {
-          const maxHealth = Number((casterHero && casterHero.health) || 0);
-          const curHealth = Number((src && src.tile && typeof src.tile.currentHealth === 'number') ? src.tile.currentHealth : maxHealth);
-          if (maxHealth > 0 && curHealth / maxHealth <= 0.25) {
+          const baseHealth = Number((casterHero && casterHero.health) || 0);
+          const curHealth = Number((src && src.tile && typeof src.tile.currentHealth === 'number') ? src.tile.currentHealth : baseHealth);
+          if (baseHealth > 0 && curHealth / baseHealth < 0.4) {
             bonusSpellPower += 8;
           }
         } catch (e) {}
-      }
-      if (src && src.tile && isDamageSpec(spec)) {
-        const severanceBonus = Number(src.tile._towerSeveranceEmpowerNext || 0);
-        if (severanceBonus > 0) {
-          bonusDamage += severanceBonus;
-          src.tile._towerSeveranceEmpowerNext = 0;
-          addLog && addLog(`  > Severance empower consumed: +${severanceBonus} damage`);
-        }
       }
       return { bonusSpellPower, bonusDamage };
     };
@@ -2350,74 +2463,51 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         : (String(toRef && toRef.boardName || '').startsWith('p2') ? 'p2' : 'p3');
       return fromSide !== toSide;
     };
-    const triggerSeveranceOnRemoval = (targetRef, removedEffectName = '') => {
+    const triggerSeveranceOnRemoval = (targetRef, removedEffectName = '', removedEffectKind = '') => {
       try {
         if (severanceTriggeredThisCast) return;
         if (!src || !src.tile || !src.tile.hero || !targetRef || !targetRef.tile) return;
         const sev = src.tile.hero._towerSeverance;
-        if (!sev || !isEnemyRef(src, targetRef)) return;
-        const speedGain = Math.max(0, Number(sev.speedGain || 0));
-        const empowerDamage = Math.max(0, Number(sev.empowerDamage || 0));
-        if (speedGain > 0) {
-          src.tile.currentSpeed = (typeof src.tile.currentSpeed === 'number' ? src.tile.currentSpeed : Number((src.tile.hero && src.tile.hero.speed) || 0)) + speedGain;
-        }
-        if (empowerDamage > 0) {
-          src.tile._towerSeveranceEmpowerNext = Number(src.tile._towerSeveranceEmpowerNext || 0) + empowerDamage;
-        }
+        if (!sev || String(removedEffectKind || '').toLowerCase() !== 'debuff') return;
+        const healAmount = Math.max(0, Number(sev.healAmount || 0));
+        if (healAmount <= 0) return;
+        pendingCastChanges.push({ boardName: targetRef.boardName, index: targetRef.index, deltaHealth: healAmount, amount: healAmount, phase: 'secondary' });
         severanceTriggeredThisCast = true;
-        addLog && addLog(`  > Severance triggered by removing ${removedEffectName || 'an effect'}: +${speedGain} Speed and next damage spell +${empowerDamage} damage`);
+        addLog && addLog(`  > Severance triggered by removing ${removedEffectName || 'a debuff'}: healed ${targetRef.boardName}[${targetRef.index}] for ${healAmount}`);
       } catch (e) {}
     };
-    const triggerCinderTaxOnBurnApplied = (targetRef, phase = 'primary') => {
+    const getAfflictionToll = () => {
+      try {
+        if (!src || !src.tile || !src.tile.hero) return null;
+        if (src.tile.hero._towerAfflictionToll) return src.tile.hero._towerAfflictionToll;
+        const legacyCinder = src.tile.hero._towerCinderTax;
+        const legacyHemorrhage = src.tile.hero._towerHemorrhageTax;
+        if (!legacyCinder && !legacyHemorrhage) return null;
+        return {
+          energyDrain: Math.max(Number(legacyCinder?.energyDrain || 0), Number(legacyHemorrhage?.energyDrain || 0)),
+          bonusDamage: Math.max(Number(legacyCinder?.bonusDamage || 0), Number(legacyHemorrhage?.bonusDamage || 0))
+        };
+      } catch (e) {}
+      return null;
+    };
+    const triggerAfflictionTollOnApplied = (effectName, targetRef, phase = 'primary') => {
       try {
         if (!src || !src.tile || !src.tile.hero || !targetRef || !targetRef.tile) return;
-        const cinder = src.tile.hero._towerCinderTax;
-        if (!cinder || src.tile._towerCinderTaxUsedRound) return;
+        const afflictionToll = getAfflictionToll();
+        if (!afflictionToll || src.tile._towerAfflictionTollUsedRound) return;
         if (!isEnemyRef(src, targetRef)) return;
+        src.tile._towerAfflictionTollUsedRound = true;
         src.tile._towerCinderTaxUsedRound = true;
-        const energyDrain = Math.max(0, Number(cinder.energyDrain || 0));
-        if (energyDrain > 0) {
-          pendingCastChanges.push({ boardName: targetRef.boardName, index: targetRef.index, deltaEnergy: -energyDrain, phase });
-        }
-        let bonusDamage = Math.max(0, Number(cinder.bonusDamage || 0));
-        if (bonusDamage > 0) {
-          pendingCastChanges.push({ boardName: targetRef.boardName, index: targetRef.index, deltaHealth: -bonusDamage, amount: bonusDamage, source: 'Cinder Tax', phase });
-        }
-        addLog && addLog(`  > Cinder Tax triggered on ${targetRef.boardName}[${targetRef.index}] (energy -${energyDrain}${bonusDamage > 0 ? `, damage ${bonusDamage}` : ''})`);
-      } catch (e) {}
-    };
-    const triggerHemorrhageTaxOnBleedApplied = (targetRef, phase = 'primary') => {
-      try {
-        if (!src || !src.tile || !src.tile.hero || !targetRef || !targetRef.tile) return;
-        const bleedTax = src.tile.hero._towerHemorrhageTax;
-        if (!bleedTax || src.tile._towerHemorrhageTaxUsedRound) return;
-        if (!isEnemyRef(src, targetRef)) return;
         src.tile._towerHemorrhageTaxUsedRound = true;
-        const energyDrain = Math.max(0, Number(bleedTax.energyDrain || 0));
+        const energyDrain = Math.max(0, Number(afflictionToll.energyDrain || 0));
         if (energyDrain > 0) {
           pendingCastChanges.push({ boardName: targetRef.boardName, index: targetRef.index, deltaEnergy: -energyDrain, phase });
         }
-        const casterPassivesAndEffects = (src && src.tile)
-          ? [
-              ...((Array.isArray(src.tile.effects) ? src.tile.effects : [])),
-              ...((Array.isArray(src.tile._passives)
-                ? src.tile._passives
-                : ((src.tile.hero && Array.isArray(src.tile.hero.passives)) ? src.tile.hero.passives : [])))
-            ]
-          : [];
-        const casterIgnoresArmor = !!(
-          (src && src.tile && src.tile.hero && src.tile.hero._towerIgnoreArmor)
-          || casterPassivesAndEffects.some(e => e && (e.casterSpellsIgnoreArmor === true || e.name === 'Field Upgrade' || e.name === 'Ghost'))
-        );
-        let bonusDamage = Math.max(0, Number(bleedTax.bonusDamage || 0));
-        if (bonusDamage > 0 && !casterIgnoresArmor) {
-          const armor = Math.max(0, Number((targetRef.tile.currentArmor != null ? targetRef.tile.currentArmor : (targetRef.tile.hero && targetRef.tile.hero.armor) || 0) || 0));
-          bonusDamage = Math.max(0, Math.round(bonusDamage - armor));
-        }
+        const bonusDamage = Math.max(0, Number(afflictionToll.bonusDamage || 0));
         if (bonusDamage > 0) {
-          pendingCastChanges.push({ boardName: targetRef.boardName, index: targetRef.index, deltaHealth: -bonusDamage, amount: bonusDamage, source: 'Hemorrhage Tax', phase });
+          pendingCastChanges.push({ boardName: targetRef.boardName, index: targetRef.index, deltaHealth: -bonusDamage, amount: bonusDamage, source: 'Agony Toll', phase, ignoreArmor: true });
         }
-        addLog && addLog(`  > Hemorrhage Tax triggered on ${targetRef.boardName}[${targetRef.index}] (energy -${energyDrain}${bonusDamage > 0 ? `, damage ${bonusDamage}` : ''})`);
+        addLog && addLog(`  > Agony Toll triggered by ${effectName || 'an affliction'} on ${targetRef.boardName}[${targetRef.index}] (energy -${energyDrain}${bonusDamage > 0 ? `, damage ${bonusDamage}` : ''})`);
       } catch (e) {}
     };
     const hasPendingDeathPrevention = (tile) => {
@@ -2443,6 +2533,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
     let placeMineApplied = false;
     let damageCasterApplied = false;
     let postImpactOccurred = false;
+    const movedHeroLocationsThisCast = [];
     const ensureHeroMovementKey = (hero) => {
       try {
         if (!hero) return null;
@@ -2672,7 +2763,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             const t = tref && tref.tile ? tref.tile : null;
             const maxHp = Number((t && t.hero && typeof t.hero.health === 'number') ? t.hero.health : (t && typeof t.currentHealth === 'number' ? t.currentHealth : 0));
             const curHp = Number((t && typeof t.currentHealth === 'number') ? t.currentHealth : maxHp);
-            if (maxHp > 0 && curHp / maxHp <= 0.5) {
+            if (maxHp > 0 && curHp / maxHp <= 0.7) {
               per.value = Math.round(Number(per.value || 0) * (1 + executionerPercent));
             }
           }
@@ -2889,7 +2980,6 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             const removed = tref.tile.effects[idx];
             pendingEffectRemovals.push({ type: 'removeTopDebuff', target: tref, effectName: removed && removed.name });
             addLog && addLog(`  > Queued removal of top debuff ${removed && removed.name} from ${tref.boardName}[${tref.index}] due to post.removeTopDebuff`);
-            triggerSeveranceOnRemoval(tref, removed && removed.name);
             try {
               const applyIfRemoved = runtimePayload && runtimePayload.post && runtimePayload.post.applyEffectIfRemoved;
               if (applyIfRemoved) {
@@ -3014,7 +3104,6 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
           if (idx !== -1) {
             pendingEffectRemovals.push({ type: 'removeTopEffectByName', target: tref, effectName: removeName });
             addLog && addLog(`  > Queued removal of top effect ${removeName} from ${tref.boardName}[${tref.index}] due to post.removeTopEffectByName`);
-            triggerSeveranceOnRemoval(tref, removeName);
             if (onRemoved) {
               const casterSpellPower = (src && src.tile && typeof src.tile.currentSpellPower === 'number') ? Number(src.tile.currentSpellPower) : 0;
               const hasAttackPowerDamage = typeof onRemoved.damageTargetAttackPower === 'number';
@@ -3091,7 +3180,6 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             const removed = tref.tile.effects[idx];
             pendingEffectRemovals.push({ type: 'removeTopPositiveEffect', target: tref, effectName: removed && removed.name });
             addLog && addLog(`  > Queued removal of top positive effect ${removed && removed.name} from ${tref.boardName}[${tref.index}] due to post.removeTopPositiveEffect`);
-            triggerSeveranceOnRemoval(tref, removed && removed.name);
 
             if (stealTopToCaster && removed && src && src.tile && !src.tile._dead) {
               try {
@@ -3178,10 +3266,10 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         if (effectsToApply.length > 0) {
           pendingEffects.push({ target: tref, effects: effectsToApply, applier: src, phase: phaseTag });
           if ((effectsToApply || []).some(e => (typeof e === 'string' ? e : (e && e.name)) === 'Burn')) {
-            triggerCinderTaxOnBurnApplied(tref, phaseTag);
+            triggerAfflictionTollOnApplied('Burn', tref, phaseTag);
           }
           if ((effectsToApply || []).some(e => (typeof e === 'string' ? e : (e && e.name)) === 'Bleed')) {
-            triggerHemorrhageTaxOnBleedApplied(tref, phaseTag);
+            triggerAfflictionTollOnApplied('Bleed', tref, phaseTag);
           }
         }
         effectsApplied = (effectsToApply || []).map(e => e && e.name).filter(Boolean);
@@ -3258,8 +3346,8 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             if (eff) {
               pendingEffects.push({ target: tref, effects: [eff], applier: src, phase: phaseTag });
               effectsApplied.push(eff.name);
-              if (eff.name === 'Burn') triggerCinderTaxOnBurnApplied(tref, phaseTag);
-              if (eff.name === 'Bleed') triggerHemorrhageTaxOnBleedApplied(tref, phaseTag);
+              if (eff.name === 'Burn') triggerAfflictionTollOnApplied('Burn', tref, phaseTag);
+              if (eff.name === 'Bleed') triggerAfflictionTollOnApplied('Bleed', tref, phaseTag);
             }
           }
         }
@@ -3295,8 +3383,8 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                   if (eff) {
                     pendingEffects.push({ target: tref, effects: [eff], applier: src, phase: phaseTag });
                     effectsApplied.push(eff.name);
-                    if (eff.name === 'Burn') triggerCinderTaxOnBurnApplied(tref, phaseTag);
-                    if (eff.name === 'Bleed') triggerHemorrhageTaxOnBleedApplied(tref, phaseTag);
+                    if (eff.name === 'Burn') triggerAfflictionTollOnApplied('Burn', tref, phaseTag);
+                    if (eff.name === 'Bleed') triggerAfflictionTollOnApplied('Bleed', tref, phaseTag);
                   }
                 });
               }
@@ -3319,8 +3407,8 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                   addLog && addLog(`  > applyEffectWithChance: queued ${eff.name} on ${tref && tref.boardName}[${tref && tref.index}] (chance ${chance})`);
                   pendingEffects.push({ target: tref, effects: [eff], applier: src, phase: phaseTag });
                   effectsApplied.push(eff.name);
-                  if (eff.name === 'Burn') triggerCinderTaxOnBurnApplied(tref, phaseTag);
-                  if (eff.name === 'Bleed') triggerHemorrhageTaxOnBleedApplied(tref, phaseTag);
+                  if (eff.name === 'Burn') triggerAfflictionTollOnApplied('Burn', tref, phaseTag);
+                  if (eff.name === 'Bleed') triggerAfflictionTollOnApplied('Bleed', tref, phaseTag);
                 } else {
                 addLog && addLog(`  > applyEffectWithChance: roll failed for ${effectName} (chance ${chance})`);
               }
@@ -3762,19 +3850,20 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               : (src.tile.hero && typeof src.tile.hero.armor === 'number' ? Number(src.tile.hero.armor) : 0);
             dealt = Math.max(0, raw - Math.max(0, armor));
           }
-          if (Number(dealt) > 0 && typeof onStep === 'function') {
+          const finalCasterDamage = applyVoidShieldReduction(src.tile, Number(dealt)).damage;
+          if (finalCasterDamage > 0 && typeof onStep === 'function') {
             const lastAction = {
               type: 'effectPulse',
               target: { boardName: src.boardName, index: src.index },
               effectName: 'Spell',
               action: 'damage',
-              amount: Number(dealt),
+              amount: finalCasterDamage,
               phase: 'primary'
             };
             onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction });
           }
-          applyHealthDelta(src.tile, -Number(dealt));
-          addLog && addLog(`  > post.damageCaster dealt ${Number(dealt)} damage to caster ${src.boardName}[${src.index}]`);
+          applyHealthDelta(src.tile, -finalCasterDamage);
+          addLog && addLog(`  > post.damageCaster dealt ${finalCasterDamage} damage to caster ${src.boardName}[${src.index}]`);
         }
       } catch (e) {}
 
@@ -4869,6 +4958,9 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
           const afterLoc = movementSnapshotAfter.get(key);
           if (!afterLoc) return;
           if (beforeLoc.boardName === afterLoc.boardName && Number(beforeLoc.index) === Number(afterLoc.index)) return;
+          if (!movedHeroLocationsThisCast.some(loc => loc && loc.boardName === afterLoc.boardName && Number(loc.index) === Number(afterLoc.index))) {
+            movedHeroLocationsThisCast.push({ boardName: afterLoc.boardName, index: Number(afterLoc.index) });
+          }
           queuePayTheTollDamageForLocation(afterLoc, 'secondary');
         });
       } catch (e) {}
@@ -5409,19 +5501,22 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         };
         const applyVoidShieldToChange = (ch) => {
           if (!ch || ch.voidShieldApplied) return;
-          if (String(ch.spellId || '') === 'basicAttack') return;
           if (typeof ch.deltaHealth !== 'number' || Number(ch.deltaHealth) >= 0) return;
           const arr = getBoardByName(ch.boardName);
           const tile = (arr || [])[ch.index];
           if (!tile) return;
           const dmg = Math.abs(Number(ch.amount || ch.deltaHealth || 0));
-          const vsResult = applyVoidShieldReduction(tile, dmg);
+          const isBasicAttack = String(ch.spellId || '') === 'basicAttack';
+          const vsResult = applyVoidShieldReduction(tile, dmg, {
+            skipVoidShield: isBasicAttack,
+            skipIncomingBonus: isBasicAttack
+          });
           if (vsResult.reducedBy > 0 || vsResult.increasedBy > 0) {
             ch.deltaHealth = -vsResult.damage;
             ch.amount = vsResult.damage;
             ch.voidShieldApplied = true;
             if (vsResult.reducedBy > 0) {
-              addLog && addLog(`  > Void Shield reduced deferred damage by ${vsResult.reducedBy} on ${ch.boardName}[${ch.index}]`);
+              addLog && addLog(`  > Incoming damage mitigation reduced deferred damage by ${vsResult.reducedBy} on ${ch.boardName}[${ch.index}]`);
             }
             if (vsResult.increasedBy > 0) {
               addLog && addLog(`  > Post-calculation damage increased by ${vsResult.increasedBy} on ${ch.boardName}[${ch.index}]`);
@@ -5498,8 +5593,9 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                 return -1;
               })();
               if (idx !== -1) {
+                const removed = tile.effects[idx];
                 tile.effects.splice(idx, 1);
-                triggerSeveranceOnRemoval(rem.target, rem.effectName || 'debuff');
+                triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'debuff', removed && removed.kind || 'debuff');
               }
             } else if (rem.type === 'removeTopEffectByName') {
               const idx = (() => {
@@ -5510,8 +5606,9 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                 return -1;
               })();
               if (idx !== -1) {
+                const removed = tile.effects[idx];
                 tile.effects.splice(idx, 1);
-                triggerSeveranceOnRemoval(rem.target, rem.effectName || 'effect');
+                triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'effect', removed && removed.kind || '');
               }
             } else if (rem.type === 'removeTopPositiveEffect') {
               const idx = (() => {
@@ -5522,8 +5619,9 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                 return -1;
               })();
               if (idx !== -1) {
+                const removed = tile.effects[idx];
                 tile.effects.splice(idx, 1);
-                triggerSeveranceOnRemoval(rem.target, rem.effectName || 'buff');
+                triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'buff', removed && removed.kind || 'buff');
               }
             }
           } catch (e) {}
@@ -5912,11 +6010,15 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                       try { if (typeof onStep === 'function') onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), priorityPlayer, lastAction: { type: 'bountyActivated', source: { boardName: srcBoardName, index: srcIndex }, victim: { boardName: boardName, index: index }, heal: 2, appliedEffect: 'Strength' } }); } catch (e) {}
                     }
 
-                    // Predator's Pace: on kill, gain +2 Speed next round
+                    // Predator's Pace: on kill, gain +2 Energy and heal 4 immediately
                     try {
                       if (srcTile.hero && srcTile.hero._towerPredatorPace) {
-                        srcTile._towerPredatorPacePending = true;
-                        addLog && addLog(`  > Predator's Pace: queued +2 Speed next round for ${srcBoardName}[${srcIndex}]`);
+                        ensureTileHealthInitialized(srcTile);
+                        srcTile.currentEnergy = Number(srcTile.currentEnergy != null ? srcTile.currentEnergy : ((srcTile.hero && srcTile.hero.energy) || 0)) + 2;
+                        clampEnergy(srcTile);
+                        srcTile.currentHealth = capHealthForTile(srcTile, Number(srcTile.currentHealth || 0) + 4);
+                        addLog && addLog(`  > Predator's Pace: ${srcBoardName}[${srcIndex}] gained +2 Energy and healed 4 HP`);
+                        try { if (typeof onStep === 'function') onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), priorityPlayer, lastAction: { type: 'effectPulse', target: { boardName: srcBoardName, index: srcIndex }, effectName: 'Predator\'s Pace', action: 'heal', amount: 4 } }); } catch (e) {}
                       }
                     } catch (e) {}
 
@@ -5984,8 +6086,27 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       // Notify UI that engine is pausing between casts (duration in ms)
       try { if (typeof onStep === 'function') onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), priorityPlayer, lastAction: { type: 'postCastWait', duration: scaledPostCastDelayMs } }); } catch (e) {}
       await new Promise(res => setTimeout(res, scaledPostCastDelayMs));
+      if (movedHeroLocationsThisCast.length > 0) {
+        const getBoardByName = (boardName) => {
+          if ((boardName || '').startsWith('p1')) return cP1;
+          if ((boardName || '').startsWith('p2')) return cP2;
+          if ((boardName || '').startsWith('p3')) return cP3;
+          return null;
+        };
+        movedHeroLocationsThisCast.forEach(({ boardName, index }) => {
+          try {
+            const arr = getBoardByName(boardName);
+            const tile = (arr || [])[index];
+            if (!tile || !tile.hero || tile._dead) return;
+            tile.spellCasts = [];
+            tile._lastAutoCastEnergy = Number.NEGATIVE_INFINITY;
+            addLog && addLog(`  > Recalculating queued casts for relocated hero ${boardName}[${index}]`);
+          } catch (e) {}
+        });
+      }
       autoCastFromBoard(cP1, 'p1Board');
       autoCastFromBoard(cP2, 'p2Board');
+      if (isFfa3) autoCastFromBoard(cP3, 'p3Board');
       // Rebuild pendingCasts from current tile.spellCasts, excluding any already processed
       pendingCasts = collectSpellCasts(cP1, cP2, cP3, cR1, cR2, cR3).filter(pc => !(pc.payload && typeof pc.payload.queuedId !== 'undefined' && processedQueuedIds.has(pc.payload.queuedId)));
       if (pendingCasts.length > 0) addLog && addLog(`Found ${pendingCasts.length} pending cast(s) after re-collect`);

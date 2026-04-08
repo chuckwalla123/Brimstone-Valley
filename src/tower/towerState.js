@@ -26,7 +26,21 @@ const AUGMENT_ID_MIGRATIONS = {
 };
 
 function buildEnemyDraftPool() {
-  return HEROES.filter(hero => hero && hero.id && hero.isMinion !== true);
+  return HEROES.filter(hero => hero && hero.id && hero.isMinion !== true && hero.draftable !== false);
+}
+
+function stripTowerRuntimeState(hero) {
+  if (!hero || typeof hero !== 'object') return hero;
+  Object.keys(hero).forEach((key) => {
+    if (key.startsWith('_tower')) delete hero[key];
+  });
+  delete hero._passives;
+  delete hero.effects;
+  delete hero.spellCasts;
+  delete hero._dead;
+  delete hero._startingEffectsApplied;
+  delete hero._reserveBonusApplied;
+  return hero;
 }
 
 function draftRandomEnemyHeroIds(enemyCount) {
@@ -114,6 +128,7 @@ function createEnemyHero(heroId) {
   }
 
   const hero = JSON.parse(JSON.stringify(baseHero));
+  stripTowerRuntimeState(hero);
   hero.towerNoHealthCap = true;
   hero.currentHealth = hero.health;
   hero.currentEnergy = hero.energy;
@@ -651,6 +666,7 @@ export function getPlayerHeroesForBattle(runState) {
     
     // Deep clone the hero
     const hero = JSON.parse(JSON.stringify(baseHero));
+    stripTowerRuntimeState(hero);
     hero.towerNoHealthCap = true;
     
     // Initialize current stats
