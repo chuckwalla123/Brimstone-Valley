@@ -6,6 +6,7 @@ import DifficultySelect from "./DifficultySelect";
 import DraftBoard from "./DraftBoard";
 import BattlePhase from "./BattlePhase";
 import TestBattle from "./TestBattle";
+import SpellLab from './SpellLab';
 import musicManager from "./MusicManager";
 import { createOfflineSocket } from "./offline/LocalGameEngine";
 import getAssetPath from "./utils/assetPath";
@@ -73,6 +74,7 @@ initializeUIScale();
 function App() {
   // If the URL contains ?testBattle, render the TestBattle harness
   const params = new URLSearchParams(window.location.search);
+  const spellLabMode = params.has('spellLab');
   const testMode = params.has("testBattle");
 
   const [currentScreen, setCurrentScreen] = useState('start');
@@ -118,8 +120,8 @@ function App() {
   }, [currentScreen, gameState, forceDraft]);
 
   useEffect(() => {
-    // Don't connect to server in test mode - TestBattle handles its own connection
-    if (testMode) return;
+    // Don't connect to server in dev harness modes.
+    if (testMode || spellLabMode) return;
 
     // If forcing offline mode, use local engine
     if (forceOffline || offlineMode) {
@@ -253,7 +255,7 @@ function App() {
     return () => {
       if (newSocket) newSocket.close();
     };
-  }, [testMode, offlineMode]);
+  }, [testMode, spellLabMode, offlineMode]);
 
   const resetGameOnServer = () => {
     pendingResetRef.current = true;
@@ -432,6 +434,10 @@ function App() {
     setIsSinglePlayer(false);
     isSinglePlayerRef.current = false;
   };
+
+  if (spellLabMode) {
+    return <SpellLab />;
+  }
 
   if (testMode) {
     return <TestBattle />;

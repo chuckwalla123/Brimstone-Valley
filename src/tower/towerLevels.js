@@ -668,7 +668,7 @@ export const BOSSES = {
         back: { id: 'acidPool', cost: 3, casts: 5 }
       },
       passives: [],
-      augments: ['keenStrike', 'thornsStrong', 'randomAugment']
+      augments: ['keenStrikeII', 'thornsStrong', 'randomAugment']
     },
     {
       id: 'boss_flame_lord',
@@ -695,7 +695,7 @@ export const BOSSES = {
         back: { id: 'level5ConsumedByFlames', cost: 2, casts: 12 }
       },
       passives: [],
-      augments: ['keenStrike', 'burningSpellsAll', 'randomAugment']
+      augments: ['keenStrikeII', 'burningSpellsAll', 'randomAugment']
     },
     {
       id: 'boss_shadow_blade',
@@ -722,7 +722,7 @@ export const BOSSES = {
         back: { id: 'priorityTarget', cost: 3, casts: 2 }
       },
       passives: [],
-      augments: ['keenStrike', 'lieInWaitLevel5Augment', 'poisonSpellsAll', 'firstStrike', 'randomAugment']
+      augments: ['keenStrikeII', 'lieInWaitLevel5Augment', 'poisonSpellsAll', 'firstStrikeII', 'randomAugment']
     }
   ],
 
@@ -750,7 +750,7 @@ export const BOSSES = {
         back: { id: 'zeusWrath', cost: 12, casts: 1 }
       },
       passives: [],
-      augments: ['keenStrike', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeII', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_blood_lord',
@@ -772,7 +772,7 @@ export const BOSSES = {
         back: { id: 'leech', cost: 2, casts: 6 }
       },
       passives: [EFFECTS.Frenzy],
-      augments: ['keenStrike', 'vampiric', 'bleedSpellsAll', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeII', 'vampiricII', 'bleedSpellsAll', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_ice_king',
@@ -794,7 +794,7 @@ export const BOSSES = {
         back: { id: 'blizzard', cost: 5, casts: 3 }
       },
       passives: [],
-      augments: ['keenStrike', 'slowSpellsAll', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeII', 'slowSpellsAll', 'randomAugment', 'randomAugment']
     }
   ],
 
@@ -866,7 +866,7 @@ export const BOSSES = {
         back: { id: 'retribution', cost: 2, casts: 3 }
       },
       passives: [EFFECTS.Retribution],
-      augments: ['keenStrikeII', 'curseSpellsAll', 'deathPactAugment',  'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeII', 'curseSpellsAll', 'deathPactAugmentII',  'randomAugment', 'randomAugment', 'randomAugment']
     }
   ],
 
@@ -966,7 +966,7 @@ export const BOSSES = {
         back: { id: 'gravity', cost: 4, casts: 4 }
       },
       passives: [],
-      augments: ['keenStrikeIII', 'vampiric', 'curseSpellsAll', 'executioner', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeIII', 'vampiricII', 'curseSpellsAll', 'executionerII', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_blood_golem_alpha',
@@ -988,7 +988,7 @@ export const BOSSES = {
         back: { id: 'soulDrain', cost: 2, casts: 5 }
       },
       passives: [],
-      augments: ['keenStrikeIII', 'vampiric', 'thornsStrong', 'regenAugment',  'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeIII', 'vampiricII', 'thornsStrong', 'regenAugmentII',  'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_celestial_judge',

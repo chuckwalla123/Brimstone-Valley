@@ -9,7 +9,7 @@ const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3002';
 const draftableHeroes = HEROES.filter(hero => hero && hero.draftable !== false);
 
 export default function TestBattle() {
-  // Build boards for testing: 2 Witch Doctors + 1 Lancer on each side, no reserves
+  // Build boards for testing the requested matchup, no reserves.
   const { p1Main, p1Reserve, p2Main, p2Reserve } = useMemo(() => {
     const clone = (v) => JSON.parse(JSON.stringify(v));
     const p1Main = makeEmptyMain('p1');
@@ -23,11 +23,14 @@ export default function TestBattle() {
       console.error('Error listing HEROES ids', e);
     }
 
+    const bileCreature = HEROES.find(h => h.id === 'bileCreatureID');
     const witchDoctor = HEROES.find(h => h.id === 'witchDoctorID');
-    const lancer = HEROES.find(h => h.id === 'lancerID');
-    
+    const bloodMage = HEROES.find(h => h.id === 'bloodmageID');
+    const warrior = HEROES.find(h => h.id === 'warriorID');
+    const dragon = HEROES.find(h => h.id === 'dragonID');
+    const arcaneMage = HEROES.find(h => h.id === 'arcaneMageID');
 
-    if (witchDoctor && lancer) {
+    if (bileCreature && witchDoctor && bloodMage && warrior && dragon && arcaneMage) {
       const prepare = (hero) => {
         const h = clone(hero);
         h.currentHealth = hero.health;
@@ -38,15 +41,22 @@ export default function TestBattle() {
         return h;
       };
 
-      p1Main[0].hero = prepare(witchDoctor);
+      p1Main[0].hero = prepare(bileCreature);
       p1Main[1].hero = prepare(witchDoctor);
-      p1Main[2].hero = prepare(lancer);
+      p1Main[2].hero = prepare(bloodMage);
 
-      p2Main[0].hero = prepare(witchDoctor);
-      p2Main[1].hero = prepare(witchDoctor);
-      p2Main[2].hero = prepare(lancer);
+      p2Main[0].hero = prepare(warrior);
+      p2Main[1].hero = prepare(dragon);
+      p2Main[2].hero = prepare(arcaneMage);
     } else {
-      console.warn('Required heroes not found; test placement skipped.', { witchDoctor: !!witchDoctor, lancer: !!lancer });
+      console.warn('Required heroes not found; test placement skipped.', {
+        bileCreature: !!bileCreature,
+        witchDoctor: !!witchDoctor,
+        bloodMage: !!bloodMage,
+        warrior: !!warrior,
+        dragon: !!dragon,
+        arcaneMage: !!arcaneMage
+      });
     }
 
     return { p1Main, p1Reserve, p2Main, p2Reserve };
@@ -59,7 +69,7 @@ export default function TestBattle() {
     // Connect to server
     const newSocket = io(SERVER_URL);
 
-    // Create initial gameState with mirrored Witch Doctor + Lancer test boards
+    // Create initial gameState with the requested test boards
     const initialGameState = {
       p1Main,
       p1Reserve,
@@ -168,7 +178,7 @@ export default function TestBattle() {
 
   return (
     <div style={{ padding: 12 }}>
-      <div style={{ marginBottom: 8, fontWeight: 700 }}>Test: 2 Witch Doctors + 1 Lancer per side</div>
+      <div style={{ marginBottom: 8, fontWeight: 700 }}>Test: Bile Creature, Witch Doctor, Blood Mage vs Warrior, Dragon, Arcane Mage</div>
       <button onClick={handleResetTestBattle} style={{ marginBottom: 8 }}>Reset Test Battle</button>
       {console.debug && console.debug('TestBattle boards', { p1Main, p1Reserve, p2Main, p2Reserve })}
       <BattlePhase

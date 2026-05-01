@@ -22,7 +22,10 @@ const BASE_AUGMENT_CAP = 2;
 const AUGMENT_ID_MIGRATIONS = {
   counter: 'thornsStrong',
   deletedCounter: 'thornsStrong',
-  earlySpark: 'earlySparkI'
+  earlySpark: 'earlySparkI',
+  earlySparkIII: 'earlySparkII',
+  earlySparkIV: 'earlySparkII',
+  earlySparkV: 'earlySparkII'
 };
 
 function buildEnemyDraftPool() {
@@ -273,6 +276,34 @@ function buildFixedEnemyTeam(level, difficulty, augmentCount, playerMainBoard, f
 function migrateRunAugments(runState) {
   if (!runState || !Array.isArray(runState.selectedHeroes)) return runState;
   let changed = false;
+
+  if (Array.isArray(runState.pendingAugmentChoice)) {
+    const updatedPending = runState.pendingAugmentChoice
+      .map(entry => {
+        if (!entry || !entry.id) return null;
+        const migratedId = AUGMENT_ID_MIGRATIONS[entry.id] || entry.id;
+        const augmentDef = AUGMENTS[migratedId];
+        if (!augmentDef) {
+          changed = true;
+          return null;
+        }
+        if (entry.id !== migratedId) {
+          changed = true;
+        }
+        return {
+          ...entry,
+          id: migratedId,
+          tier: augmentDef.tier,
+          rolledValue: entry.rolledValue != null ? entry.rolledValue : augmentDef.valueRange?.[0] ?? null
+        };
+      })
+      .filter(Boolean);
+
+    if (updatedPending.length !== runState.pendingAugmentChoice.length || updatedPending.some((entry, index) => entry !== runState.pendingAugmentChoice[index])) {
+      runState.pendingAugmentChoice = updatedPending;
+      changed = true;
+    }
+  }
 
   runState.selectedHeroes.forEach(hero => {
     if (!hero || !Array.isArray(hero.augments)) return;

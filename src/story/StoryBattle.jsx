@@ -14,6 +14,20 @@ import getAssetPath from '../utils/assetPath.js';
 
 const DEFAULT_STORY_BACKGROUND = '/images/background/BSVBackground.png';
 
+const STORY_BACKGROUND_IMAGE_BY_KEY = {
+  brave_wardens_pass: '/images/background/Caravan Ambush.png',
+  brave_ashbridge_toll: '/images/background/Halbrecht Fortress.png',
+  brave_unbroken_phalanx: '/images/background/Dawnfall Bridge.png',
+  brave_warcamp: '/images/background/Illusion Fog.png',
+  brave_watchtower: '/images/background/TowerBackground.png',
+  brave_iron_regent_chamber: '/images/background/Ruined Vault.png',
+  brave_dawnfall_bridge: '/images/background/Dawnfall Bridge.png',
+  brave_halbrecht_fortress_courtyard: '/images/background/Halbrecht Fortress.png',
+  brave_vault_of_echoes: '/images/background/Relic Vault.png',
+  brave_lightning_road: '/images/background/Lightning Road Mountain Pass.png',
+  brave_throne_room_fracture: '/images/background/Throne Room.png'
+};
+
 function buildPresentationConfig(node) {
   const presentation = node?.presentation || {};
 
@@ -22,6 +36,10 @@ function buildPresentationConfig(node) {
     backgroundCandidates.push(presentation.backgroundImage);
   }
   if (typeof presentation.backgroundKey === 'string' && presentation.backgroundKey) {
+    const mappedBackground = STORY_BACKGROUND_IMAGE_BY_KEY[presentation.backgroundKey];
+    if (mappedBackground) {
+      backgroundCandidates.push(mappedBackground);
+    }
     backgroundCandidates.push(`/images/background/story/${presentation.backgroundKey}.webp`);
     backgroundCandidates.push(`/images/background/story/${presentation.backgroundKey}.jpg`);
     backgroundCandidates.push(`/images/background/story/${presentation.backgroundKey}.png`);
@@ -89,7 +107,7 @@ const styles = {
   }
 };
 
-export default function StoryBattle({ runState, node, onBattleEnd }) {
+export default function StoryBattle({ runState, node, guestAssignment, onBattleEnd }) {
   const [socket, setSocket] = useState(null);
   const [gameState, setGameState] = useState(null);
   const ambientAudioRef = useRef(null);
@@ -166,6 +184,7 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     localSocket.on('gameState', (state) => {
       setGameState(state);
     });
+
     return () => {
       localSocket.close();
     };
@@ -244,7 +263,20 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     const p2Main = makeEmptyMain('player2');
     const p2Reserve = makeReserve('player2');
 
-    const playerEntries = runState.selectedHeroes || [];
+    const playerEntries = Array.isArray(runState?.selectedHeroes)
+      ? [...runState.selectedHeroes]
+      : [];
+    if (guestAssignment?.guestHeroId && guestAssignment?.replacedHeroId) {
+      const replacedIndex = playerEntries.findIndex(entry => entry?.heroId === guestAssignment.replacedHeroId);
+      if (replacedIndex >= 0) {
+        const replacedEntry = playerEntries[replacedIndex];
+        playerEntries[replacedIndex] = {
+          heroId: guestAssignment.guestHeroId,
+          position: replacedEntry?.position ?? null,
+          augments: Array.isArray(node?.guestHero?.augments) ? node.guestHero.augments : []
+        };
+      }
+    }
     const reserveEntries = [];
 
     playerEntries.forEach(entry => {
@@ -294,24 +326,38 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     };
     battleStateRef.current = battleState;
     battleLaunchedRef.current = false;
+    setGameState(null);
     setSceneIndex(0);
     setSceneActive(sceneSteps.length > 0);
     setBattleDialogueIndex(0);
     setBattleDialogueActive(false);
+
     if (sceneSteps.length === 0) {
-      socket.emit('setTestState', battleState);
-      battleLaunchedRef.current = true;
+      if (battleDialogueSteps.length > 0) {
+        setBattleDialogueIndex(0);
+        setBattleDialogueActive(true);
+      } else {
+        battleLaunchedRef.current = true;
+        socket.emit('setTestState', battleState);
+      }
     }
-  }, [socket, runState, node, sceneSteps.length]);
+  }, [socket, runState, node, guestAssignment, sceneSteps.length, battleDialogueSteps.length]);
+
+  const launchBattle = () => {
+    if (!socket || !battleStateRef.current) return;
+    setGameState(null);
+    socket.emit('setTestState', battleStateRef.current);
+  };
 
   const startBattle = () => {
     if (!socket || !battleStateRef.current || battleLaunchedRef.current) return;
     if (battleDialogueSteps.length > 0) {
       setBattleDialogueIndex(0);
       setBattleDialogueActive(true);
+    } else {
+      launchBattle();
     }
     battleLaunchedRef.current = true;
-    socket.emit('setTestState', battleStateRef.current);
   };
 
   const handleSceneAdvance = () => {
@@ -333,6 +379,7 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     if (!battleDialogueSteps.length) return;
     if (battleDialogueIndex >= battleDialogueSteps.length - 1) {
       setBattleDialogueActive(false);
+      launchBattle();
       return;
     }
     setBattleDialogueIndex(prev => prev + 1);
@@ -340,6 +387,7 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
 
   const handleBattleDialogueSkip = () => {
     setBattleDialogueActive(false);
+    launchBattle();
   };
 
   useEffect(() => {
@@ -491,9 +539,21 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     const step = activeSteps[activeIndex];
     const isDialogue = step && step.type === 'dialogue';
     const isNarration = step && step.type === 'narration';
+    const speakerAliases = {
+      'Palace Guard Captain': 'Palace Guard'
+    };
     const speakerImages = {
       Warrior: '/images/heroes/Warrior Cropped.jpg',
       Lancer: '/images/heroes/Lancer Cropped.jpg',
+      Halbrecht: '/images/heroes/Halbrecht Cropped.png',
+      Varric: '/images/heroes/Varric Cropped.png',
+      'Queen Aralyn': '/images/heroes/Queen Cropped.jpg',
+      'Prince Rowan': '/images/heroes/Prince Cropped.jpg',
+      'Rogue Mage': '/images/heroes/Dark Mage Cropped.jpg',
+      'Palace Guard': '/images/heroes/Palace Guard Cropped.jpg',
+      'Garruk the Red': '/images/heroes/Axeman Cropped.jpg',
+      'Blood Golem': '/images/heroes/Blood Golem.jpg',
+      'Stonecased King': '/images/heroes/Stone cased king cropped.jpg',
       'Ice Mage': '/images/heroes/Ice Mage Cropped.jpg',
       'Fire Mage': '/images/heroes/Fire Mage Cropped.jpg',
       Paladin: '/images/heroes/Paladin Cropped.jpg',
@@ -501,6 +561,10 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
       King: '/images/heroes/King Cropped.jpg',
       Berserker: '/images/heroes/Berserker Cropped.jpg',
       'Battle Mage': '/images/heroes/Battle Mage Cropped.jpg'
+    };
+    const resolveSpeakerName = (name) => {
+      if (!name) return '';
+      return speakerAliases[name] || name;
     };
     const leftDefaults = [
       { name: 'Warrior', image: speakerImages.Warrior },
@@ -512,6 +576,23 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     const rightPortraits = Array.isArray(step.rightPortraits) && step.rightPortraits.length > 0
       ? step.rightPortraits
       : [];
+    const resolvedSpeakerName = resolveSpeakerName(step.speaker);
+    const normalizedSpeakerName = resolvedSpeakerName.toLowerCase();
+    const speakerAlreadyShown = [...leftPortraits, ...rightPortraits].some((portrait) => {
+      const portraitName = typeof portrait === 'string'
+        ? portrait
+        : (portrait?.name || '');
+      return portraitName.toLowerCase() === normalizedSpeakerName;
+    });
+    const autoSpeakerPortrait = !speakerAlreadyShown && speakerImages[resolvedSpeakerName]
+      ? { name: resolvedSpeakerName, image: speakerImages[resolvedSpeakerName] }
+      : null;
+    const finalLeftPortraits = autoSpeakerPortrait && step.side !== 'right'
+      ? [...leftPortraits, autoSpeakerPortrait]
+      : leftPortraits;
+    const finalRightPortraits = autoSpeakerPortrait && step.side === 'right'
+      ? [...rightPortraits, autoSpeakerPortrait]
+      : rightPortraits;
     const portraitSize = 120;
     const portraitGap = 12;
     const portraitGroupGap = 300;
@@ -522,23 +603,23 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
       return portrait.name || null;
     };
     
-    const allPortraits = [...leftPortraits, ...rightPortraits];
-    const normalizedSpeaker = step.speaker?.toLowerCase?.() || '';
+    const allPortraits = [...finalLeftPortraits, ...finalRightPortraits];
+    const normalizedSpeaker = normalizedSpeakerName;
     const speakerIndex = allPortraits.findIndex(p => (resolveName(p) || '').toLowerCase() === normalizedSpeaker);
     const safeSpeakerIndex = speakerIndex >= 0 ? speakerIndex : 0;
     
-    const leftGroupWidth = leftPortraits.length > 0 
-      ? leftPortraits.length * portraitSize + Math.max(0, leftPortraits.length - 1) * portraitGap
+    const leftGroupWidth = finalLeftPortraits.length > 0 
+      ? finalLeftPortraits.length * portraitSize + Math.max(0, finalLeftPortraits.length - 1) * portraitGap
       : 0;
-    const rightGroupWidth = rightPortraits.length > 0
-      ? rightPortraits.length * portraitSize + Math.max(0, rightPortraits.length - 1) * portraitGap
+    const rightGroupWidth = finalRightPortraits.length > 0
+      ? finalRightPortraits.length * portraitSize + Math.max(0, finalRightPortraits.length - 1) * portraitGap
       : 0;
     
     let speakerPortraitLeft = 0;
-    if (safeSpeakerIndex < leftPortraits.length) {
+    if (safeSpeakerIndex < finalLeftPortraits.length) {
       speakerPortraitLeft = safeSpeakerIndex * (portraitSize + portraitGap);
     } else {
-      const rightIndex = safeSpeakerIndex - leftPortraits.length;
+      const rightIndex = safeSpeakerIndex - finalLeftPortraits.length;
       speakerPortraitLeft = leftGroupWidth + portraitGroupGap + rightIndex * (portraitSize + portraitGap);
     }
     const speakerPortraitCenter = speakerPortraitLeft + portraitSize / 2;
@@ -563,7 +644,7 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
     };
     const narrationLines = isNarration && Array.isArray(step.lines) ? step.lines : [];
     const narrationCharCount = narrationLines.reduce((total, line) => total + (line?.length || 0), 0);
-    const scrollSpeedMultiplier = 1.3;
+    const scrollSpeedMultiplier = 1.69;
     const charsPerSecond = 4.4 * scrollSpeedMultiplier;
     const secondsByChars = narrationCharCount / charsPerSecond;
     const secondsByLines = (narrationLines.length * 7) / scrollSpeedMultiplier;
@@ -606,7 +687,7 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
                   </div>
                   <div className="story-dialogue__portraits">
                     <div className="story-dialogue__portrait-group left">
-                      {leftPortraits.map((portrait, index) => {
+                      {finalLeftPortraits.map((portrait, index) => {
                         const resolved = resolvePortrait(portrait);
                         return (
                           <div className="story-dialogue__media" key={`left-${index}-${resolved?.label || 'unknown'}`}>
@@ -620,7 +701,7 @@ export default function StoryBattle({ runState, node, onBattleEnd }) {
                       })}
                     </div>
                     <div className="story-dialogue__portrait-group right">
-                      {rightPortraits.map((portrait, index) => {
+                      {finalRightPortraits.map((portrait, index) => {
                         const resolved = resolvePortrait(portrait);
                         return (
                           <div className="story-dialogue__media" key={`right-${index}-${resolved?.label || 'unknown'}`}>

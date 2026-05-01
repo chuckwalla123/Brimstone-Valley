@@ -310,16 +310,20 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
   // Ally/self targets (e.g., Siphon's self-heal) should not make the spell bypass preventSingleTarget.
   const enemyDescriptorsForMulti = (targetDescriptors || []).filter(d => d && d.type !== 'self' && (d.side || 'enemy') === 'enemy');
   const enemyIndependentDescriptors = (enemyDescriptorsForMulti || []).filter(d => d && d.type !== 'lastResolvedTarget');
-  const isPotentiallyMultiTarget = (enemyIndependentDescriptors && Array.isArray(enemyIndependentDescriptors)) ? (
-    enemyIndependentDescriptors.length > 1 || enemyIndependentDescriptors.some(d => ['board','column','adjacent','nearestToLastTarget','projectilePlus1','frontTwoRows','middleRow','backRow','frontmostRowWithHero','backmostRowWithHero','rowWithHighestSumArmor','rowContainingHighestArmor','rowContainingLowestArmor','rowWithMostHeroes','cornerTiles'].includes(d.type))
-  ) : false;
+  const enemyMultiTargetTypes = ['board','column','adjacent','nearestToLastTarget','projectilePlus1','frontTwoRows','middleRow','backRow','frontmostRowWithHero','backmostRowWithHero','rowWithHighestSumArmor','rowContainingHighestArmor','rowContainingLowestArmor','rowWithMostHeroes','cornerTiles'];
+  const enemyIndependentHasMulti = (enemyIndependentDescriptors && Array.isArray(enemyIndependentDescriptors))
+    ? enemyIndependentDescriptors.some(d => enemyMultiTargetTypes.includes(d.type) || (typeof d.max === 'number' && d.max > 1))
+    : false;
+  const enemySequenceAllMaxOne = (enemyDescriptorsForMulti || []).every(d => !d || typeof d.max !== 'number' || d.max <= 1);
+  const isSingleEnemyTargetSequence = enemySequenceAllMaxOne && !enemyIndependentHasMulti && enemyIndependentDescriptors.length <= 1;
+  const isPotentiallyMultiTarget = !isSingleEnemyTargetSequence;
 
   const enemyDescriptors = (targetDescriptors || []).filter(d => d && (d.side || 'enemy') === 'enemy' && d.type !== 'self');
-  const enemyHasMulti = enemyDescriptors.some(d =>
-    ['board','column','adjacent','nearestToLastTarget','projectilePlus1','frontTwoRows','backRow','rowWithHighestSumArmor','rowContainingHighestArmor','rowContainingLowestArmor','rowWithMostHeroes','frontmostRowWithHero','backmostRowWithHero','middleRow','cornerTiles'].includes(d.type)
+  const enemyHasMulti = !isSingleEnemyTargetSequence && enemyDescriptors.some(d =>
+    enemyMultiTargetTypes.includes(d.type)
       || (typeof d.max === 'number' && d.max > 1)
   );
-  const hasSingleEnemyTarget = enemyDescriptors.length === 1 && !enemyHasMulti;
+  const hasSingleEnemyTarget = enemyDescriptors.length > 0 && isSingleEnemyTargetSequence;
   const casterForcesLowestArmor = casterHasEffectFlag(casterRef, 'forceSingleTargetLowestArmor');
   
   // If bypassTriggers is set (e.g., basicAttack), skip all preventSingleTarget checks
@@ -836,6 +840,10 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       for (let i = 0; i < (boardArr || []).length; i++) {
         const t = boardArr[i];
         if (!isOccupiedAndAlive(t)) continue;
+        if (desc && desc.excludeSelf && casterRef && typeof casterRef.index === 'number') {
+          const casterBoard = casterSide;
+          if (targetSide === casterBoard && i === casterRef.index) continue;
+        }
         if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
         const en = (t.currentEnergy != null ? t.currentEnergy : (t.hero && t.hero.energy) || 0);
         candidates.push({ index: i, energy: en });
@@ -852,6 +860,23 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
           pushToken(targetSide, idx, desc);
           break;
         }
+      }
+      continue;
+    }
+
+    if (type === 'frontRow') {
+      const targetSide = resolveSide(side) || casterSide;
+      const boardArr = getBoardArr(targetSide) || [];
+      const map = (targetSide === 'p2') ? P2_INDEX_TO_TILE : (targetSide === 'p3' ? P3_INDEX_TO_TILE : P1_INDEX_TO_TILE);
+      const rowIndices = [];
+      for (let i = 0; i < map.length; i++) {
+        const tileNum = map[i];
+        if (Math.floor((tileNum - 1) / 3) === 0) rowIndices.push(i);
+      }
+      rowIndices.sort((a, b) => (map[a] || 0) - (map[b] || 0));
+      for (const idx of rowIndices) {
+        const slot = (boardArr || [])[idx];
+        if (isOccupiedAndAlive(slot)) out.push({ board: targetSide, index: idx });
       }
       continue;
     }
@@ -1613,7 +1638,6 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
           if (redirect && typeof redirect.index === 'number') {
             out[i] = { board: redirect.board, index: redirect.index };
           }
-          break;
         }
       }
     }

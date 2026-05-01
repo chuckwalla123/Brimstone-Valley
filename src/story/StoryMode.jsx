@@ -8,13 +8,18 @@ import StoryMap from './StoryMap.jsx';
 import StoryBattle from './StoryBattle.jsx';
 import StoryRelicChoice from './StoryRelicChoice.jsx';
 import StoryRecruitChoice from './StoryRecruitChoice.jsx';
+import StoryGuestSelect from './StoryGuestSelect.jsx';
+import StoryRosterTransition from './StoryRosterTransition.jsx';
 import {
   createNewStoryRun,
   loadStoryRun,
   saveStoryRun,
   clearStoryRun,
   getStorySummary,
+  setStoryPartySelections,
   setStoryTeam,
+  getStoryMercenaryChoices,
+  replaceStoryPartyHero,
   getCurrentNode,
   advanceToNextNode,
   resolveChoice
@@ -25,6 +30,8 @@ const SCREEN = {
   MENU: 'menu',
   TEAM: 'team',
   MAP: 'map',
+  GUEST: 'guest',
+  ROSTER: 'roster',
   BATTLE: 'battle',
   RELIC: 'relic',
   RECRUIT: 'recruit',
@@ -35,8 +42,11 @@ const SCREEN = {
 export default function StoryMode({ onExit }) {
   const [screen, setScreen] = useState(SCREEN.MENU);
   const [runState, setRunState] = useState(null);
+  const [draftRunState, setDraftRunState] = useState(null);
   const [activeNode, setActiveNode] = useState(null);
   const [pendingAdvance, setPendingAdvance] = useState(null);
+  const [guestAssignment, setGuestAssignment] = useState(null);
+  const [pendingRosterEvent, setPendingRosterEvent] = useState(null);
 
   useEffect(() => {
     const existing = loadStoryRun();
@@ -44,18 +54,25 @@ export default function StoryMode({ onExit }) {
   }, []);
 
   const arc = useMemo(() => getStoryArc(runState?.kingdomId), [runState?.kingdomId]);
+  const teamArc = useMemo(() => getStoryArc((draftRunState || runState)?.kingdomId), [draftRunState, runState]);
   const summary = useMemo(() => getStorySummary(runState), [runState]);
 
   const handleNewRun = (kingdomId) => {
     const created = createNewStoryRun(kingdomId);
     if (!created) return;
-    saveStoryRun(created);
-    setRunState(created);
+    setDraftRunState(created);
+    setPendingRosterEvent(null);
+    setGuestAssignment(null);
     setScreen(SCREEN.TEAM);
   };
 
   const handleContinue = () => {
     if (!runState) return;
+    if (pendingAdvance && !pendingAdvance.nextId && Array.isArray(runState.pendingRecruitChoice) && runState.pendingRecruitChoice.length > 0) {
+      const updated = setStoryPartySelections(runState, runState.selectedHeroes || []);
+      finalizePendingAdvance(updated);
+      return;
+    }
     if (pendingAdvance && Array.isArray(runState.pendingRecruitChoice) && runState.pendingRecruitChoice.length > 0) {
       setScreen(SCREEN.RECRUIT);
       return;
@@ -78,18 +95,105 @@ export default function StoryMode({ onExit }) {
   const handleAbandon = () => {
     clearStoryRun();
     setRunState(null);
+    setDraftRunState(null);
+    setPendingRosterEvent(null);
+    setGuestAssignment(null);
     setScreen(SCREEN.MENU);
   };
 
   const handleTeamConfirm = (heroSelections) => {
-    const updated = setStoryTeam(runState, heroSelections);
+    const baseRunState = draftRunState || runState;
+    if (!baseRunState) return;
+    const updated = setStoryTeam(baseRunState, heroSelections);
+    saveStoryRun(updated);
     setRunState({ ...updated });
+    setDraftRunState(null);
     setScreen(SCREEN.MAP);
+  };
+
+  const routeToBattleStart = (node) => {
+    if (node?.guestHero?.heroId) {
+      setScreen(SCREEN.GUEST);
+      return;
+    }
+    setScreen(SCREEN.BATTLE);
+  };
+
+  const buildRosterEvent = (node, phase, sourceRunState = runState) => {
+    const config = phase === 'pre_battle' ? node?.preBattleRosterEvent : node?.postRelicRosterEvent;
+    if (!config || !sourceRunState) return null;
+
+    if (config.mode === 'choose_incoming') {
+      const outgoingExists = (sourceRunState.selectedHeroes || []).some(entry => entry?.heroId === config.outgoingHeroId);
+      if (!outgoingExists) return null;
+      const mercChoices = getStoryMercenaryChoices(
+        sourceRunState,
+        config.choiceCount || 3,
+        config.excludeHeroIds || []
+      );
+      if (!mercChoices.length) return null;
+      return {
+        ...config,
+        id: `${node.id}-${phase}-${config.outgoingHeroId}`,
+        phase,
+        nodeId: node.id,
+        incomingChoices: mercChoices.map(hero => hero.id)
+      };
+    }
+
+    if (config.mode === 'choose_outgoing') {
+      const incomingAlreadyPresent = (sourceRunState.selectedHeroes || []).some(entry => entry?.heroId === config.incomingHeroId);
+      if (incomingAlreadyPresent) return null;
+      const blockedIds = new Set(config.excludedOutgoingHeroIds || []);
+      const eligibleOutgoing = (sourceRunState.selectedHeroes || []).filter(
+        entry => entry?.heroId && entry.heroId !== config.incomingHeroId && !blockedIds.has(entry.heroId)
+      );
+      if (!eligibleOutgoing.length) return null;
+      return {
+        ...config,
+        id: `${node.id}-${phase}-${config.incomingHeroId}`,
+        phase,
+        nodeId: node.id
+      };
+    }
+
+    return null;
   };
 
   const handleStartBattle = (node) => {
     setActiveNode(node);
+    setGuestAssignment(null);
+    const rosterEvent = buildRosterEvent(node, 'pre_battle');
+    if (rosterEvent) {
+      setPendingRosterEvent(rosterEvent);
+      setScreen(SCREEN.ROSTER);
+      return;
+    }
+    routeToBattleStart(node);
+  };
+
+  const handleGuestConfirm = (selection) => {
+    setGuestAssignment(selection);
     setScreen(SCREEN.BATTLE);
+  };
+
+  const handleRosterEventConfirm = (selectedHeroId) => {
+    if (!pendingRosterEvent || !selectedHeroId) return;
+
+    const updated = pendingRosterEvent.mode === 'choose_incoming'
+      ? replaceStoryPartyHero(runState, pendingRosterEvent.outgoingHeroId, selectedHeroId)
+      : replaceStoryPartyHero(runState, selectedHeroId, pendingRosterEvent.incomingHeroId);
+
+    setRunState({ ...updated });
+    const completedEvent = pendingRosterEvent;
+    setPendingRosterEvent(null);
+
+    if (completedEvent.phase === 'pre_battle') {
+      routeToBattleStart(activeNode || getCurrentNode(updated));
+      return;
+    }
+
+    finalizePendingAdvance(updated);
   };
 
   const handleChoosePath = (nextId) => {
@@ -100,6 +204,8 @@ export default function StoryMode({ onExit }) {
 
   const handleBattleEnd = (winner) => {
     if (!activeNode) return;
+    setGuestAssignment(null);
+    setPendingRosterEvent(null);
     if (winner !== 'player1') {
       setScreen(SCREEN.DEFEAT);
       return;
@@ -144,6 +250,16 @@ export default function StoryMode({ onExit }) {
 
   const handleRelicConfirm = (updatedRun) => {
     setRunState({ ...updatedRun });
+    if (pendingAdvance && !pendingAdvance.nextId) {
+      finalizePendingAdvance(updatedRun);
+      return;
+    }
+    const rosterEvent = buildRosterEvent(activeNode, 'post_relic', updatedRun);
+    if (rosterEvent) {
+      setPendingRosterEvent(rosterEvent);
+      setScreen(SCREEN.ROSTER);
+      return;
+    }
     setScreen(SCREEN.RECRUIT);
   };
 
@@ -151,12 +267,21 @@ export default function StoryMode({ onExit }) {
     finalizePendingAdvance(updatedRun);
   };
 
+  const handleRecruitSkip = (updatedRun) => {
+    const nextRun = updatedRun || setStoryPartySelections(runState, runState?.selectedHeroes || []);
+    finalizePendingAdvance(nextRun);
+  };
+
   const handleRelicExit = () => {
+    setGuestAssignment(null);
+    setPendingRosterEvent(null);
     saveStoryRun(runState);
     setScreen(SCREEN.MENU);
   };
 
   const handleRetry = () => {
+    setGuestAssignment(null);
+    setPendingRosterEvent(null);
     setScreen(SCREEN.MAP);
   };
 
@@ -176,9 +301,13 @@ export default function StoryMode({ onExit }) {
   if (screen === SCREEN.TEAM) {
     return (
       <StoryTeamSelect
-        arc={arc}
+        arc={teamArc}
+        showOverwriteWarning={Boolean(draftRunState && runState)}
         onConfirm={handleTeamConfirm}
-        onBack={() => setScreen(SCREEN.MENU)}
+        onBack={() => {
+          setDraftRunState(null);
+          setScreen(SCREEN.MENU);
+        }}
       />
     );
   }
@@ -195,11 +324,34 @@ export default function StoryMode({ onExit }) {
     );
   }
 
+  if (screen === SCREEN.GUEST) {
+    return (
+      <StoryGuestSelect
+        runState={runState}
+        node={activeNode || getCurrentNode(runState)}
+        onConfirm={handleGuestConfirm}
+        onBack={() => setScreen(SCREEN.MAP)}
+      />
+    );
+  }
+
+  if (screen === SCREEN.ROSTER) {
+    return (
+      <StoryRosterTransition
+        runState={runState}
+        event={pendingRosterEvent}
+        onConfirm={handleRosterEventConfirm}
+        onBack={() => setScreen(pendingRosterEvent?.phase === 'pre_battle' ? SCREEN.MAP : SCREEN.MENU)}
+      />
+    );
+  }
+
   if (screen === SCREEN.BATTLE) {
     return (
       <StoryBattle
         runState={runState}
         node={activeNode || getCurrentNode(runState)}
+        guestAssignment={guestAssignment}
         onBattleEnd={handleBattleEnd}
       />
     );
@@ -220,6 +372,7 @@ export default function StoryMode({ onExit }) {
       <StoryRecruitChoice
         runState={runState}
         onConfirm={handleRecruitConfirm}
+        onSkip={handleRecruitSkip}
         onExit={handleRelicExit}
       />
     );

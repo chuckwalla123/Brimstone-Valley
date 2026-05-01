@@ -7,6 +7,76 @@ import { HEROES } from '../heroes.js';
 
 const STORY_STORAGE_KEY = 'brimstone_story_run';
 export const STORY_PARTY_MAX = 7;
+export const STORY_MAIN_MAX = 5;
+export const STORY_RESERVE_MAX = 2;
+
+const DEPRECATED_BRAVE_NODE_IDS = new Set(['fork_of_oaths', 'warcamp', 'watchtower', 'iron_regent']);
+
+function migrateLoadedStoryRun(runState) {
+  if (!runState || runState.kingdomId !== 'brave') return runState;
+
+  let changed = false;
+  const completedNodeIds = Array.isArray(runState.completedNodeIds)
+    ? runState.completedNodeIds.filter(nodeId => !DEPRECATED_BRAVE_NODE_IDS.has(nodeId))
+    : [];
+
+  if ((runState.completedNodeIds || []).length !== completedNodeIds.length) {
+    runState.completedNodeIds = completedNodeIds;
+    changed = true;
+  }
+
+  if (DEPRECATED_BRAVE_NODE_IDS.has(runState.currentNodeId)) {
+    runState.currentNodeId = 'lightning_road';
+    changed = true;
+  }
+
+  if (changed) {
+    runState.lastPlayedAt = Date.now();
+    saveStoryRun(runState);
+  }
+
+  return runState;
+}
+
+export function normalizeStoryPartySelections(heroSelections) {
+  const normalized = [];
+  const usedBoardPositions = new Set();
+  let boardCount = 0;
+  let reserveCount = 0;
+
+  (heroSelections || []).slice(0, STORY_PARTY_MAX).forEach(selection => {
+    if (!selection?.heroId) return;
+
+    const requestedPosition = selection.position;
+    const canUseBoardPosition = Number.isInteger(requestedPosition)
+      && requestedPosition >= 0
+      && requestedPosition <= 8
+      && !usedBoardPositions.has(requestedPosition)
+      && boardCount < STORY_MAIN_MAX;
+
+    if (canUseBoardPosition) {
+      usedBoardPositions.add(requestedPosition);
+      boardCount += 1;
+      normalized.push({
+        heroId: selection.heroId,
+        position: requestedPosition,
+        augments: selection.augments || []
+      });
+      return;
+    }
+
+    if (reserveCount < STORY_RESERVE_MAX) {
+      reserveCount += 1;
+      normalized.push({
+        heroId: selection.heroId,
+        position: null,
+        augments: selection.augments || []
+      });
+    }
+  });
+
+  return normalized;
+}
 
 export function createNewStoryRun(kingdomId) {
   const arc = getStoryArc(kingdomId);
@@ -38,7 +108,7 @@ export function saveStoryRun(runState) {
 export function loadStoryRun() {
   try {
     const saved = localStorage.getItem(STORY_STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) return migrateLoadedStoryRun(JSON.parse(saved));
   } catch (e) {
     console.error('Failed to load story run:', e);
   }
@@ -72,11 +142,7 @@ export function getStorySummary(runState) {
 
 export function setStoryTeam(runState, heroSelections) {
   if (!runState) return runState;
-  runState.selectedHeroes = heroSelections.map(sel => ({
-    heroId: sel.heroId,
-    position: sel.position,
-    augments: sel.augments || []
-  }));
+  runState.selectedHeroes = normalizeStoryPartySelections(heroSelections);
   runState.lastPlayedAt = Date.now();
   saveStoryRun(runState);
   return runState;
@@ -84,13 +150,7 @@ export function setStoryTeam(runState, heroSelections) {
 
 export function setStoryPartySelections(runState, heroSelections) {
   if (!runState) return runState;
-  runState.selectedHeroes = heroSelections
-    .slice(0, STORY_PARTY_MAX)
-    .map(sel => ({
-      heroId: sel.heroId,
-      position: sel.position,
-      augments: sel.augments || []
-    }));
+  runState.selectedHeroes = normalizeStoryPartySelections(heroSelections);
   runState.pendingRecruitChoice = null;
   runState.lastPlayedAt = Date.now();
   saveStoryRun(runState);
@@ -122,6 +182,21 @@ export function generateRecruitChoices(runState, count = 3) {
   runState.lastPlayedAt = Date.now();
   saveStoryRun(runState);
   return choices;
+}
+
+export function getStoryMercenaryChoices(runState, count = 3, excludeHeroIds = []) {
+  if (!runState) return [];
+  const blockedHeroIds = new Set([
+    ...(runState.selectedHeroes || []).map(entry => entry.heroId),
+    ...excludeHeroIds
+  ]);
+  const availableHeroes = HEROES.filter(
+    hero => hero.draftable !== false && !blockedHeroIds.has(hero.id)
+  );
+
+  return [...availableHeroes]
+    .sort(() => Math.random() - 0.5)
+    .slice(0, Math.min(count, availableHeroes.length));
 }
 
 function getFirstOpenBoardPosition(selectedHeroes) {
@@ -166,6 +241,34 @@ export function recruitHeroToStoryParty(runState, heroId) {
     augments: []
   });
   runState.pendingRecruitChoice = null;
+  runState.lastPlayedAt = Date.now();
+  saveStoryRun(runState);
+  return runState;
+}
+
+export function replaceStoryPartyHero(runState, outgoingHeroId, incomingHeroId, options = {}) {
+  if (!runState || !Array.isArray(runState.selectedHeroes) || !outgoingHeroId || !incomingHeroId) return runState;
+
+  const outgoingIndex = runState.selectedHeroes.findIndex(entry => entry?.heroId === outgoingHeroId);
+  if (outgoingIndex < 0) return runState;
+  if (runState.selectedHeroes.some((entry, index) => index !== outgoingIndex && entry?.heroId === incomingHeroId)) {
+    return runState;
+  }
+
+  const incomingHero = getHeroById(incomingHeroId);
+  if (!incomingHero) return runState;
+
+  const outgoingEntry = runState.selectedHeroes[outgoingIndex];
+  const inheritedAugments = options.inheritAugments === false
+    ? []
+    : (outgoingEntry?.augments || []).map(augment => ({ ...augment }));
+
+  runState.selectedHeroes[outgoingIndex] = {
+    heroId: incomingHeroId,
+    position: options.preservePosition === false ? null : (outgoingEntry?.position ?? null),
+    augments: inheritedAugments
+  };
+
   runState.lastPlayedAt = Date.now();
   saveStoryRun(runState);
   return runState;

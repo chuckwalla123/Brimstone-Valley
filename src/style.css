@@ -337,7 +337,7 @@ button:focus-visible {
 
 /* Keep disabled tiles visibly muted */
 .db-tile-disabled {
-  pointer-events: none;
+  opacity: 0.85;
 }
 
 /* Minor polish to occupied tiles to keep contrast */

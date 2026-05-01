@@ -119,6 +119,44 @@ export default function StoryMap({ arc, runState, onStartBattle, onChoosePath, o
   if (!arc || !runState) return null;
   const completed = runState.completedNodeIds || [];
   const currentId = runState.currentNodeId;
+  const nodes = arc.map?.nodes || [];
+  const currentNode = nodes.find(node => node.id === currentId) || null;
+  const nodeById = new Map(nodes.map(node => [node.id, node]));
+  const reachableNodeIds = new Set();
+  const stack = [arc.map?.start].filter(Boolean);
+
+  while (stack.length > 0) {
+    const nodeId = stack.pop();
+    if (!nodeId || reachableNodeIds.has(nodeId)) continue;
+    reachableNodeIds.add(nodeId);
+
+    const node = nodeById.get(nodeId);
+    if (!node) continue;
+
+    (node.next || []).forEach(nextId => {
+      if (nextId && !reachableNodeIds.has(nextId)) {
+        stack.push(nextId);
+      }
+    });
+
+    (node.choices || []).forEach(choice => {
+      if (choice?.next && !reachableNodeIds.has(choice.next)) {
+        stack.push(choice.next);
+      }
+    });
+  }
+
+  const currentChoiceTargets = new Set(
+    currentNode?.type === 'choice'
+      ? (currentNode.choices || []).map(choice => choice.next)
+      : []
+  );
+  const visibleNodes = nodes.filter(node => {
+    if (!reachableNodeIds.has(node.id)) return false;
+    if (completed.includes(node.id)) return true;
+    if (node.id === currentId) return true;
+    return currentChoiceTargets.has(node.id);
+  });
 
   const getHero = (id) => HEROES.find(h => h.id === id);
 
@@ -133,7 +171,7 @@ export default function StoryMap({ arc, runState, onStartBattle, onChoosePath, o
 
       <div style={styles.mapGrid}>
         <div style={styles.nodeList}>
-          {(arc.map?.nodes || []).map(node => {
+          {visibleNodes.map(node => {
             const isCurrent = node.id === currentId;
             const isComplete = completed.includes(node.id);
             return (

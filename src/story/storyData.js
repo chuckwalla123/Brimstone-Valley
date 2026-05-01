@@ -75,8 +75,8 @@ export const STORY_ARCS = {
       'But whispers say the relics are not singular. Whoever claims the first may ignite a war for the rest.'
     ],
     outro: [
-      'The Iron Regent falls, and the Heart of Brimstone pulses with a new rhythm.',
-      'Word spreads: the relic is only one piece of a shattered covenant. Other kingdoms are already marching.'
+      'The Heart of Brimstone is no longer just a relic prize. It is the spark that turns the Brave Kingdom\'s civil war into a reckoning.',
+      'Rowan and Varric harden the capital into a fortress while the queen\'s loyalists march under a sky that no longer behaves like weather.'
     ],
     map: {
       start: 'caravan_clash',
@@ -172,6 +172,13 @@ export const STORY_ARCS = {
           type: 'battle',
           title: 'Chapter II: Siege of the Iron Wolves',
           description: 'Halbrecht\'s fortress is under siege, and saving it may buy the crown its last honorable ally.',
+          guestHero: {
+            heroId: 'halbrechtID',
+            title: 'Lord Halbrecht Rides With You',
+            prompt: 'Halbrecht is taking the field to save his fortress. Choose which starting hero he will replace for this battle.',
+            description: 'Halbrecht joins the defense with disciplined shieldwork and command magic. He takes over the selected hero\'s starting slot for this battle only.',
+            excludedOutgoingHeroIds: ['lancerID', 'warriorID']
+          },
           presentation: {
             backgroundKey: 'brave_halbrecht_fortress_courtyard',
             ambientKey: 'amb_brave_fortress_siege',
@@ -301,6 +308,13 @@ export const STORY_ARCS = {
           type: 'battle',
           title: 'Chapter III: The Blood Golem\'s Advance',
           description: 'Halbrecht chooses the crown, and Varric answers with a blood golem and a second siege meant to break that oath before dawn.',
+          guestHero: {
+            heroId: 'halbrechtID',
+            title: 'Halbrecht Holds The Breach',
+            prompt: 'Halbrecht is committing his own blade to the wall. Choose which starting hero he will replace while he fights beside Lancer.',
+            description: 'Halbrecht enters as a temporary guest hero for the defense of the fortress, taking the chosen hero\'s active slot for this encounter.',
+            excludedOutgoingHeroIds: ['lancerID', 'warriorID']
+          },
           presentation: {
             backgroundKey: 'brave_halbrecht_fortress_courtyard',
             ambientKey: 'amb_brave_fortress_siege',
@@ -431,6 +445,14 @@ export const STORY_ARCS = {
           type: 'battle',
           title: 'Chapter IV: Ambush at Dawnfall Bridge',
           description: 'Queen Aralyn rides to Halbrecht to swear the oath herself, and Rowan sends Warrior to stop her before the alliance becomes unbreakable.',
+          preBattleRosterEvent: {
+            mode: 'choose_incoming',
+            outgoingHeroId: 'warriorID',
+            title: 'Warrior Leaves The Expedition',
+            subtitle: 'Before the column reaches Dawnfall Bridge, Warrior breaks from the party and answers Rowan\'s call instead of the crown\'s.',
+            helper: 'Choose a mercenary replacement for the next battle. The new recruit takes Warrior\'s place immediately and inherits every relic currently attached to him.',
+            choiceCount: 3
+          },
           presentation: {
             backgroundKey: 'brave_dawnfall_bridge',
             ambientKey: 'amb_brave_wind_ash',
@@ -559,7 +581,141 @@ export const STORY_ARCS = {
           ],
           enemyTeam: 'brave_dawnfall_bridge',
           reward: 'relic',
-          next: ['fork_of_oaths']
+          next: ['vault_of_echoes']
+        },
+        {
+          id: 'vault_of_echoes',
+          type: 'battle',
+          title: 'Chapter V: The Vault of Echoes',
+          description: 'Halbrecht leads you beneath Dawnfall to seize the oath records before Rowan\'s agents can burn the kingdom\'s last proof.',
+          guestHero: {
+            heroId: 'halbrechtID',
+            title: 'Halbrecht Descends Into The Vault',
+            prompt: 'Halbrecht insists on entering the vault himself. Choose which starting hero he will relieve while he fights beside your party.',
+            description: 'Beneath Dawnfall Bridge, Halbrecht joins the strike team to recover the vault records and break Rowan\'s claim before it hardens into law.',
+            excludedOutgoingHeroIds: ['lancerID']
+          },
+          presentation: {
+            backgroundKey: 'brave_vault_of_echoes',
+            ambientKey: 'amb_brave_vault_instability',
+            stingers: { intro: 'stinger_relic_reveal', victory: 'stinger_collapse' },
+            vfxTags: ['vfx_vault_pulse', 'vfx_spectral_chains', 'vfx_ash_debris'],
+            musicIntensity: 'high'
+          },
+          preBattle: [
+            'Dawnfall Bridge does not merely span a ravine. Beneath its oldest pylons lies the Vault of Echoes, a sealed archive from before the Contract Age where the Brave Kingdom stored oath tablets, campaign ledgers, and relic-imprinted testimony from its greatest wars. Halbrecht knows the place because he once swore his own commission there. If Rowan seizes it first, he can burn every record tying the crown\'s army to the old code and replace duty with whatever contract keeps him in power.',
+            'The queen rides on toward safety while Lancer, Halbrecht, and a handpicked detachment break away under torchlight. The bridge ambush bought Rowan time, and he uses every heartbeat. Palace defectors descend into the vault ahead of them with a rogue mage guiding them through wards built to answer only to royal blood and old command sigils. Those wards have started to fracture under relic pressure, bleeding memories into the stone. Voices answer footsteps. Shapes move where no soldiers stand.',
+            'Halbrecht treats the hauntings with contempt. He cares less about ghosts than the political murder underway in the dark. If the oath records survive, Rowan can still be named for what he is: not heir, not reformer, but a prince willing to erase the kingdom\'s own memory to make treason look lawful. Lancer sees another danger in the vault. The relic surge in the masonry feels too familiar, too close to the pulse that shook the fortress walls. Something deeper than Rowan\'s coup is stirring beneath the archive.',
+            'By the time the strike team reaches the gate chamber, the enemy has already begun the purge. Braziers burn beside cracked tablets. A palace guard captain hacks seals from bronze doors while spectral echoes pull themselves out of old battle vows and stagger into the corridor like unfinished regrets. The vault is no longer a library. It is a battlefield made of history, and if Halbrecht is right, losing it may damn the Brave Kingdom before the civil war is even decided.'
+          ],
+          dialogue: [
+            { speaker: 'Halbrecht', side: 'right', text: 'Rowan wants the records dead because dead records cannot contradict a living lie. We take this vault back, or tomorrow he rewrites the kingdom in his own hand.' },
+            { speaker: 'Lancer', side: 'left', text: 'Then we hold the archive and every oath inside it. If the prince wants legitimacy, let him try stealing it from witnesses who still bleed.' },
+            { speaker: 'Halbrecht', side: 'right', text: 'Good. Leave speeches for court. Down here, history survives because someone is willing to kill for it.' },
+            { speaker: 'Lancer', side: 'left', text: 'I didn\'t come to murder history. I came to keep Rowan from burying it.' },
+            { speaker: 'Halbrecht', side: 'right', text: 'Same work. Different prayer.' },
+            { speaker: 'Lancer', side: 'left', text: 'Then let\'s answer him before the last honest record in this kingdom burns.' }
+          ],
+          battleDialogue: [
+            {
+              speaker: 'Rogue Mage',
+              side: 'right',
+              leftPortraits: [
+                { name: 'Halbrecht', image: '/images/heroes/Halbrecht Cropped.png' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' }
+              ],
+              text: 'You came too late. The old oaths are already smoke, and the vault has chosen better ghosts than soldiers to keep what remains.'
+            },
+            {
+              speaker: 'Halbrecht',
+              side: 'left',
+              leftPortraits: [
+                { name: 'Halbrecht', image: '/images/heroes/Halbrecht Cropped.png' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                  { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' }
+              ],
+              text: 'If you wanted these records gone, you should have buried them under better men. Palace thieves and conjured dead won\'t be enough.'
+            },
+            {
+              speaker: 'Palace Guard Captain',
+              side: 'right',
+              leftPortraits: [
+                { name: 'Halbrecht', image: '/images/heroes/Halbrecht Cropped.png' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Palace Guard', image: '/images/heroes/Palace Guard Cropped.jpg' },
+                { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' }
+              ],
+              text: 'The prince orders a clean succession. The queen fled. The king is stone. The future needs new records, not rotting vows from dead campaigns.'
+            },
+            {
+              speaker: 'Lancer',
+              side: 'left',
+              leftPortraits: [
+                { name: 'Halbrecht', image: '/images/heroes/Halbrecht Cropped.png' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Palace Guard', image: '/images/heroes/Palace Guard Cropped.jpg' },
+                { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' }
+              ],
+              text: 'A future built on forgeries is only cowardice with a seal on it. Put down the torch and answer for who sent you.'
+            },
+            {
+              speaker: 'Rogue Mage',
+              side: 'right',
+              leftPortraits: [
+                { name: 'Halbrecht', image: '/images/heroes/Halbrecht Cropped.png' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' }
+              ],
+              text: 'Ask the vault. It remembers every oath the crown broke. Those memories hunger, and I have taught them your names.'
+            },
+            {
+              speaker: 'Halbrecht',
+              side: 'left',
+              leftPortraits: [
+                { name: 'Halbrecht', image: '/images/heroes/Halbrecht Cropped.png' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                  { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' }
+              ],
+              text: 'Then teach them one more thing. Brave soldiers do not kneel to counterfeit princes, and my oath is not finished yet.'
+            },
+            {
+              speaker: 'Lancer',
+              side: 'left',
+              leftPortraits: [
+                { name: 'Halbrecht', image: '/images/heroes/Halbrecht Cropped.png' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Palace Guard', image: '/images/heroes/Palace Guard Cropped.jpg' },
+                { name: 'Rogue Mage', image: '/images/heroes/Dark Mage Cropped.jpg' }
+              ],
+              text: 'Forward. Save the tablets, break the line, and leave Rowan nothing he can hide behind.'
+            }
+          ],
+          enemyTeam: 'brave_vault_of_echoes',
+          reward: 'relic',
+          postRelicRosterEvent: {
+            mode: 'choose_outgoing',
+            incomingHeroId: 'warriorID',
+            title: 'Warrior Returns',
+            subtitle: 'The vault purge breaks Warrior\'s faith in Rowan. He comes back to the expedition asking for one place to make things right.',
+            helper: 'Choose which current teammate Warrior will replace. Lancer cannot be removed in this scene, and Warrior will inherit the departing hero\'s relics and board slot.',
+            excludedOutgoingHeroIds: ['lancerID']
+          },
+          next: ['lightning_road']
         },
         {
           id: 'fork_of_oaths',
@@ -981,6 +1137,116 @@ export const STORY_ARCS = {
             }
           ],
           enemyTeam: 'brave_iron_regent',
+          reward: 'relic',
+          next: ['lightning_road']
+        },
+        {
+          id: 'lightning_road',
+          type: 'battle',
+          title: 'Chapter VI: The Prince\'s Gambit',
+          description: 'Rowan and Varric strike Halbrecht\'s supply line on the Lightning Road, hoping to starve the queen\'s march before it reaches the capital.',
+          presentation: {
+            backgroundKey: 'brave_lightning_road',
+            ambientKey: 'amb_brave_storm_pass',
+            stingers: { intro: 'stinger_confrontation', victory: 'stinger_collapse' },
+            vfxTags: ['vfx_relic_lightning', 'vfx_ash_debris'],
+            musicIntensity: 'high'
+          },
+          preBattle: [
+            'The fall of the Iron Regent does not bring the Brave Kingdom peace. If anything, the shock of the Heart of Brimstone ripples outward and makes every political fracture more violent. Rowan survives the loss of the relic chamber by turning the disaster into a speech, blaming the queen for every tremor, every spectral echo, every frightened rumor spilling through the capital. Varric answers with steel. Between them, they decide the loyalists must be weakened before Halbrecht can march in force.',
+            'Queen Aralyn responds by moving quickly. The Heart is secured, but an army still marches on food, medicine, replacement armor, and relic-stabilizing crystals. Halbrecht sends those supplies ahead through a mountain pass known as the Lightning Road, a winding shelf of stone where storms cling to the cliffs even in clear seasons. The route is dangerous, but it is faster than the valley floor, and speed now matters more than comfort.',
+            'Lancer rides with the convoy, determined to keep the campaign alive. Warrior rides with him now, but the reunion is not a restoration. It is a truce made of necessity, shame, and unfinished loyalty. He has chosen the queen\'s side over Rowan\'s, yet every guard captain in the column remembers the bridge, and every silence between him and Lancer still carries the weight of drawn steel. Halbrecht trusts results more than apologies, so he gives both men the same order: keep the supplies moving.',
+            'Rowan and Varric choose the pass for exactly that reason. If the convoy burns here, the queen\'s march stalls before it can threaten the capital. When the storm breaks overhead, the attack comes with it. Mercenaries pour down the rock faces. A hired lightning mage turns thunder into artillery. Werewolves slam into the outriders while outcast saboteurs cut at the wagons. This is not a raid for plunder. It is a deliberate attempt to starve a kingdom-sized oath before it reaches the city walls.'
+          ],
+          dialogue: [
+            { speaker: 'Halbrecht', side: 'right', text: 'This convoy matters more than a dozen speeches. Lose it, and Rowan buys himself a month we cannot afford.' },
+            { speaker: 'Lancer', side: 'left', text: 'Then he won\'t get it. We hold the wagons, keep the crystals intact, and carve a road through anything he sends.' },
+            { speaker: 'Warrior', side: 'left', text: 'He\'ll send more than mercenaries. Rowan only strikes when he thinks he can break trust as well as bone. Expect a spectacle.' },
+            { speaker: 'Halbrecht', side: 'right', text: 'Good. Let him waste his theatrics on mountain wind. You two hold the line. I\'ll see to the rear wagons.' },
+            { speaker: 'Lancer', side: 'left', text: 'You heard him. No heroics. No wandering. We defend the convoy together or we lose it together.' },
+            { speaker: 'Warrior', side: 'left', text: 'Fair enough. If Rowan wants this road, he can pay for every yard of it.' }
+          ],
+          battleDialogue: [
+            {
+              speaker: 'Varric',
+              side: 'right',
+              leftPortraits: [
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' },
+                { name: 'Lightning Mage', image: '/images/heroes/Lightning Mage Cropped.jpg' }
+              ],
+              text: 'You should have stayed in the valley and counted relics. Instead you dragged a starving kingdom onto my road with wagons too slow to save.'
+            },
+            {
+              speaker: 'Lancer',
+              side: 'left',
+              leftPortraits: [
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' },
+                { name: 'Lightning Mage', image: '/images/heroes/Lightning Mage Cropped.jpg' }
+              ],
+              text: 'This road belongs to the Brave Kingdom, not the carrion flock circling its grave. Turn your men around before the cliffs bury them.'
+            },
+            {
+              speaker: 'Lightning Mage',
+              side: 'right',
+              leftPortraits: [
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Lightning Mage', image: '/images/heroes/Lightning Mage Cropped.jpg' },
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' }
+              ],
+              text: 'No one is turning around. Rowan paid for thunder, and I intend to spend every bolt on those wagons.'
+            },
+            {
+              speaker: 'Warrior',
+              side: 'left',
+              leftPortraits: [
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Lightning Mage', image: '/images/heroes/Lightning Mage Cropped.jpg' },
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' }
+              ],
+              text: 'Then spend them on me first. I\'m done watching Rowan call slaughter strategy and Varric call plunder a future.'
+            },
+            {
+              speaker: 'Varric',
+              side: 'right',
+              leftPortraits: [
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' },
+                { name: 'Werewolf', image: '/images/heroes/Werewolf Cropped.jpg' }
+              ],
+              text: 'There he is. The old conscience finally crawls back when the weather turns bad. Too late, Warrior. Men survive by choosing sooner than you did.'
+            },
+            {
+              speaker: 'Lancer',
+              side: 'left',
+              leftPortraits: [
+                { name: 'Warrior', image: '/images/heroes/Warrior Cropped.jpg' },
+                { name: 'Lancer', image: '/images/heroes/Lancer Cropped.jpg' }
+              ],
+              rightPortraits: [
+                { name: 'Varric', image: '/images/heroes/Varric Cropped.png' },
+                { name: 'Werewolf', image: '/images/heroes/Werewolf Cropped.jpg' }
+              ],
+              text: 'Maybe. But he chose. And today that is enough. Wagons tight, shields up. Break this attack before the mountain breaks with it.'
+            }
+          ],
+          enemyTeam: 'brave_lightning_road',
           reward: 'relic',
           next: []
         }

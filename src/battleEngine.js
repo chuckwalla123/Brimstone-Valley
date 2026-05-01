@@ -540,6 +540,8 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
         tile._towerAfflictionTollUsedRound = false;
         tile._towerCinderTaxUsedRound = false;
         tile._towerHemorrhageTaxUsedRound = false;
+        tile._towerAfflictionTollCastId = null;
+        tile._towerAfflictionTollTriggeredTargets = [];
       }
       if (roundNumber === 1 && tile.hero && tile.hero._towerMomentum) tile._towerMomentumGains = 0;
       if (tile._towerArcaneExchangePending) {
@@ -1272,7 +1274,17 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
                     results: castResults
                   };
                   if (effect.spellSpec.sound) lastAction.sound = effect.spellSpec.sound;
+                  if (effect.spellSpec.soundName) lastAction.soundName = effect.spellSpec.soundName;
                   if (typeof effect.spellSpec.soundVolume === 'number') lastAction.soundVolume = Number(effect.spellSpec.soundVolume);
+                  if (typeof effect.spellSpec.soundDelayMs === 'number') lastAction.soundDelayMs = Number(effect.spellSpec.soundDelayMs);
+                  if (typeof effect.spellSpec.soundStartTime === 'number') lastAction.soundStartTime = Number(effect.spellSpec.soundStartTime);
+                  if (typeof effect.spellSpec.soundEndTime === 'number') lastAction.soundEndTime = Number(effect.spellSpec.soundEndTime);
+                  if (effect.spellSpec.secondarySound) lastAction.secondarySound = effect.spellSpec.secondarySound;
+                  if (effect.spellSpec.secondarySoundName) lastAction.secondarySoundName = effect.spellSpec.secondarySoundName;
+                  if (typeof effect.spellSpec.secondarySoundVolume === 'number') lastAction.secondarySoundVolume = Number(effect.spellSpec.secondarySoundVolume);
+                  if (typeof effect.spellSpec.secondarySoundDelayMs === 'number') lastAction.secondarySoundDelayMs = Number(effect.spellSpec.secondarySoundDelayMs);
+                  if (typeof effect.spellSpec.secondarySoundStartTime === 'number') lastAction.secondarySoundStartTime = Number(effect.spellSpec.secondarySoundStartTime);
+                  if (typeof effect.spellSpec.secondarySoundEndTime === 'number') lastAction.secondarySoundEndTime = Number(effect.spellSpec.secondarySoundEndTime);
                   try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction }); } catch (e) {}
                 }
               }
@@ -1475,6 +1487,9 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
           };
           if (EFFECTS.PayTheToll && EFFECTS.PayTheToll.triggerSound) castAction.sound = EFFECTS.PayTheToll.triggerSound;
           if (EFFECTS.PayTheToll && typeof EFFECTS.PayTheToll.triggerSoundVolume === 'number') castAction.soundVolume = Number(EFFECTS.PayTheToll.triggerSoundVolume);
+          if (EFFECTS.PayTheToll && typeof EFFECTS.PayTheToll.triggerSoundDelayMs === 'number') castAction.soundDelayMs = Number(EFFECTS.PayTheToll.triggerSoundDelayMs);
+          if (EFFECTS.PayTheToll && typeof EFFECTS.PayTheToll.triggerSoundStartTime === 'number') castAction.soundStartTime = Number(EFFECTS.PayTheToll.triggerSoundStartTime);
+          if (EFFECTS.PayTheToll && typeof EFFECTS.PayTheToll.triggerSoundEndTime === 'number') castAction.soundEndTime = Number(EFFECTS.PayTheToll.triggerSoundEndTime);
           try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: castAction }); } catch (e) {}
         }
 
@@ -2002,7 +2017,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       if (casterHero && casterHero._towerFocusedColumn && isColumnSpell) {
         bonusSpellPower += 2;
       }
-      if (casterHero && spec && spec.formula && spec.formula.type === 'attackPower') {
+        if (casterHero && spec && spec.formula && spec.formula.type === 'attackPower' && spellIdForSpec !== 'basicAttack') {
         bonusDamage += Number(casterHero._towerAttackPowerBonus || 0);
       }
       if (casterHero && casterHero._towerKeenStrike && spellIdForSpec === 'basicAttack') {
@@ -2453,7 +2468,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
     let conditionalSecondaryQueued = false;
     let deferredConditionalSecondarySpec = null;
     let deferredConditionalSecondaryShouldQueue = false;
-    let severanceTriggeredThisCast = false;
+    const severanceTriggeredTargetsThisCast = new Set();
     const isEnemyRef = (fromRef, toRef) => {
       const fromSide = String(fromRef && fromRef.boardName || '').startsWith('p1')
         ? 'p1'
@@ -2465,16 +2480,74 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
     };
     const triggerSeveranceOnRemoval = (targetRef, removedEffectName = '', removedEffectKind = '') => {
       try {
-        if (severanceTriggeredThisCast) return;
         if (!src || !src.tile || !src.tile.hero || !targetRef || !targetRef.tile) return;
+        const targetKey = `${targetRef.boardName}[${targetRef.index}]`;
+        if (severanceTriggeredTargetsThisCast.has(targetKey)) return;
         const sev = src.tile.hero._towerSeverance;
         if (!sev || String(removedEffectKind || '').toLowerCase() !== 'debuff') return;
         const healAmount = Math.max(0, Number(sev.healAmount || 0));
         if (healAmount <= 0) return;
         pendingCastChanges.push({ boardName: targetRef.boardName, index: targetRef.index, deltaHealth: healAmount, amount: healAmount, phase: 'secondary' });
-        severanceTriggeredThisCast = true;
+        severanceTriggeredTargetsThisCast.add(targetKey);
         addLog && addLog(`  > Severance triggered by removing ${removedEffectName || 'a debuff'}: healed ${targetRef.boardName}[${targetRef.index}] for ${healAmount}`);
       } catch (e) {}
+    };
+    const processPendingEffectRemovals = () => {
+      if (!Array.isArray(pendingEffectRemovals) || pendingEffectRemovals.length === 0) return;
+      pendingEffectRemovals.forEach(rem => {
+        try {
+          if (!rem || !rem.target || !rem.target.tile) return;
+          const tile = rem.target.tile;
+          tile.effects = Array.isArray(tile.effects) ? tile.effects : [];
+          if (rem.type === 'removeDebuffs') {
+            const removedDebuff = tile.effects.some(e => e && e.kind === 'debuff' && !e._hidden);
+            tile.effects = tile.effects.filter(e => !(e && e.kind === 'debuff' && !e._hidden));
+            if (removedDebuff) {
+              triggerSeveranceOnRemoval(rem.target, rem.effectName || 'debuff', 'debuff');
+            }
+          } else if (rem.type === 'removeTopDebuff') {
+            const idx = (() => {
+              for (let i = tile.effects.length - 1; i >= 0; i--) {
+                const ef = tile.effects[i];
+                if (ef && ef.kind === 'debuff' && !ef._hidden && (!rem.effectName || ef.name === rem.effectName)) return i;
+              }
+              return -1;
+            })();
+            if (idx !== -1) {
+              const removed = tile.effects[idx];
+              tile.effects.splice(idx, 1);
+              triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'debuff', removed && removed.kind || 'debuff');
+            }
+          } else if (rem.type === 'removeTopEffectByName') {
+            const idx = (() => {
+              for (let i = tile.effects.length - 1; i >= 0; i--) {
+                const ef = tile.effects[i];
+                if (ef && (!rem.effectName || ef.name === rem.effectName)) return i;
+              }
+              return -1;
+            })();
+            if (idx !== -1) {
+              const removed = tile.effects[idx];
+              tile.effects.splice(idx, 1);
+              triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'effect', removed && removed.kind || '');
+            }
+          } else if (rem.type === 'removeTopPositiveEffect') {
+            const idx = (() => {
+              for (let i = tile.effects.length - 1; i >= 0; i--) {
+                const ef = tile.effects[i];
+                if (ef && ef.kind === 'buff' && !ef._hidden && (!rem.effectName || ef.name === rem.effectName)) return i;
+              }
+              return -1;
+            })();
+            if (idx !== -1) {
+              const removed = tile.effects[idx];
+              tile.effects.splice(idx, 1);
+              triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'buff', removed && removed.kind || 'buff');
+            }
+          }
+        } catch (e) {}
+      });
+      pendingEffectRemovals.length = 0;
     };
     const getAfflictionToll = () => {
       try {
@@ -2494,11 +2567,31 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       try {
         if (!src || !src.tile || !src.tile.hero || !targetRef || !targetRef.tile) return;
         const afflictionToll = getAfflictionToll();
-        if (!afflictionToll || src.tile._towerAfflictionTollUsedRound) return;
+        if (!afflictionToll) return;
         if (!isEnemyRef(src, targetRef)) return;
-        src.tile._towerAfflictionTollUsedRound = true;
-        src.tile._towerCinderTaxUsedRound = true;
-        src.tile._towerHemorrhageTaxUsedRound = true;
+        const castScopedId = (() => {
+          if (cast && cast.payload && typeof cast.payload.queuedId !== 'undefined' && cast.payload.queuedId !== null) {
+            return `queued:${cast.payload.queuedId}`;
+          }
+          const fallbackSpellId = (cast && cast.payload && cast.payload.spellId) || (runtimePayload && runtimePayload.spellId) || 'unknown';
+          return `fallback:${src.boardName}:${src.index}:${fallbackSpellId}`;
+        })();
+        const claimedCastId = src.tile._towerAfflictionTollCastId || null;
+        if (src.tile._towerAfflictionTollUsedRound && claimedCastId !== castScopedId) return;
+        if (!src.tile._towerAfflictionTollUsedRound) {
+          src.tile._towerAfflictionTollUsedRound = true;
+          src.tile._towerCinderTaxUsedRound = true;
+          src.tile._towerHemorrhageTaxUsedRound = true;
+          src.tile._towerAfflictionTollCastId = castScopedId;
+          src.tile._towerAfflictionTollTriggeredTargets = [];
+        }
+        const targetKey = `${targetRef.boardName}:${targetRef.index}`;
+        const triggeredTargets = Array.isArray(src.tile._towerAfflictionTollTriggeredTargets)
+          ? src.tile._towerAfflictionTollTriggeredTargets
+          : [];
+        if (triggeredTargets.includes(targetKey)) return;
+        triggeredTargets.push(targetKey);
+        src.tile._towerAfflictionTollTriggeredTargets = triggeredTargets;
         const energyDrain = Math.max(0, Number(afflictionToll.energyDrain || 0));
         if (energyDrain > 0) {
           pendingCastChanges.push({ boardName: targetRef.boardName, index: targetRef.index, deltaEnergy: -energyDrain, phase });
@@ -2659,6 +2752,9 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         : (spellDef && spellDef.spec && Array.isArray(spellDef.spec.targets) ? spellDef.spec.targets : []);
       return specTargets.some(t => t && t.type === 'projectilePlus1');
     })();
+    const spellTargetDescriptors = (runtimePayload && runtimePayload._spec && Array.isArray(runtimePayload._spec.targets))
+      ? runtimePayload._spec.targets
+      : (spellDef && spellDef.spec && Array.isArray(spellDef.spec.targets) ? spellDef.spec.targets : []);
     const projectilePlus1SeenByBoard = new Map();
 
     targetTokens.forEach((tdesc, tidx) => {
@@ -3366,6 +3462,10 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               ? 'p1'
               : ((tref && tref.boardName && String(tref.boardName).startsWith('p2')) ? 'p2' : 'p3');
             if (!(casterSide && targetSide && casterSide === targetSide)) {
+              const targetDescriptor = (typeof descriptorIndex === 'number' && Array.isArray(spellTargetDescriptors))
+                ? spellTargetDescriptors[descriptorIndex] || null
+                : null;
+              const isRepeatHitDescriptor = !!(targetDescriptor && targetDescriptor.type === 'lastResolvedTarget');
               let slotKey = (cast && cast.payload && cast.payload.slot) || null;
               if (!slotKey) {
                 const sid = (cast && cast.payload && cast.payload.spellId) || (runtimePayload && runtimePayload.spellId) || null;
@@ -3377,7 +3477,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                 }
               }
               const debuffsForSlot = slotKey ? (debuffAugments[slotKey] || []) : [];
-              if (Array.isArray(debuffsForSlot) && debuffsForSlot.length > 0) {
+              if (!isRepeatHitDescriptor && Array.isArray(debuffsForSlot) && debuffsForSlot.length > 0) {
                 debuffsForSlot.forEach((effectName) => {
                   const eff = effectName && (EFFECTS[effectName] || null);
                   if (eff) {
@@ -3523,11 +3623,13 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         if (cond && cond.secondarySpec && applied && applied.type === 'damage') {
           try {
             // find the pending deferred change we just queued for this target
-            const matchPending = [...pendingCastChanges].reverse().find(ch => ch && ch.boardName === (tref && tref.boardName) && Number(ch.index) === Number(tref && tref.index) && typeof ch.deltaHealth === 'number');
+            const targetPendingChanges = pendingCastChanges.filter(ch => ch && ch.boardName === (tref && tref.boardName) && Number(ch.index) === Number(tref && tref.index) && typeof ch.deltaHealth === 'number');
+            const matchPending = targetPendingChanges[targetPendingChanges.length - 1];
             if (matchPending) {
               const arr = (matchPending.boardName || '').startsWith('p1') ? cP1 : ((matchPending.boardName || '').startsWith('p2') ? cP2 : cP3);
               const tile = (arr || [])[matchPending.index];
-              const newHealth = (tile && typeof tile.currentHealth === 'number' ? tile.currentHealth : (tile && tile.hero && tile.hero.health) || 0) + Number(matchPending.deltaHealth || 0);
+              const projectedDeltaHealth = targetPendingChanges.reduce((sum, change) => sum + Number(change.deltaHealth || 0), 0);
+              const newHealth = (tile && typeof tile.currentHealth === 'number' ? tile.currentHealth : (tile && tile.hero && tile.hero.health) || 0) + projectedDeltaHealth;
               const preventedByDeathPassive = hasPendingDeathPrevention(tile);
               if (newHealth <= 0 && !preventedByDeathPassive && cond.deferConditionalSecondaryUntilAllTargets) {
                 deferredConditionalSecondarySpec = cond.secondarySpec;
@@ -5490,6 +5592,8 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       }
     } catch (e) {}
 
+    processPendingEffectRemovals();
+
     // Emit pulses and apply changes (client handles animation timing)
     try {
       if (typeof pendingCastChanges !== 'undefined' && Array.isArray(pendingCastChanges) && pendingCastChanges.length > 0) {
@@ -5576,57 +5680,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       }
 
       // Apply any pending effect removals after pulses/changes
-      if (Array.isArray(pendingEffectRemovals) && pendingEffectRemovals.length > 0) {
-        pendingEffectRemovals.forEach(rem => {
-          try {
-            if (!rem || !rem.target || !rem.target.tile) return;
-            const tile = rem.target.tile;
-            tile.effects = Array.isArray(tile.effects) ? tile.effects : [];
-            if (rem.type === 'removeDebuffs') {
-              tile.effects = tile.effects.filter(e => !(e && e.kind === 'debuff' && !e._hidden));
-            } else if (rem.type === 'removeTopDebuff') {
-              const idx = (() => {
-                for (let i = tile.effects.length - 1; i >= 0; i--) {
-                  const ef = tile.effects[i];
-                  if (ef && ef.kind === 'debuff' && !ef._hidden && (!rem.effectName || ef.name === rem.effectName)) return i;
-                }
-                return -1;
-              })();
-              if (idx !== -1) {
-                const removed = tile.effects[idx];
-                tile.effects.splice(idx, 1);
-                triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'debuff', removed && removed.kind || 'debuff');
-              }
-            } else if (rem.type === 'removeTopEffectByName') {
-              const idx = (() => {
-                for (let i = tile.effects.length - 1; i >= 0; i--) {
-                  const ef = tile.effects[i];
-                  if (ef && (!rem.effectName || ef.name === rem.effectName)) return i;
-                }
-                return -1;
-              })();
-              if (idx !== -1) {
-                const removed = tile.effects[idx];
-                tile.effects.splice(idx, 1);
-                triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'effect', removed && removed.kind || '');
-              }
-            } else if (rem.type === 'removeTopPositiveEffect') {
-              const idx = (() => {
-                for (let i = tile.effects.length - 1; i >= 0; i--) {
-                  const ef = tile.effects[i];
-                  if (ef && ef.kind === 'buff' && !ef._hidden && (!rem.effectName || ef.name === rem.effectName)) return i;
-                }
-                return -1;
-              })();
-              if (idx !== -1) {
-                const removed = tile.effects[idx];
-                tile.effects.splice(idx, 1);
-                triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'buff', removed && removed.kind || 'buff');
-              }
-            }
-          } catch (e) {}
-        });
-      }
+      processPendingEffectRemovals();
 
       // Apply any pending effects after removals
       if (Array.isArray(pendingEffects) && pendingEffects.length > 0) {
@@ -6140,7 +6194,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
     });
   });
 
-  // End-of-round tower augment hook: cleanse debuffs and heal per removed debuff.
+  // End-of-round tower augment hook: cleanse 1 debuff and heal a flat amount.
   [
     { arr: cP1, boardName: 'p1Board' },
     { arr: cP2, boardName: 'p2Board' },
@@ -6149,16 +6203,15 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
     (arr || []).forEach((tile, index) => {
       if (!tile || !tile.hero || tile._dead) return;
       if (!healingAugmentsActive) return;
-      const healPerDebuff = Number(tile.hero._towerRoundCleanseHealPerDebuff || 0);
-      if (healPerDebuff <= 0) return;
+      const healAmount = Number(tile.hero._towerRoundCleanseHeal || 0);
+      if (healAmount <= 0) return;
 
       const effectList = Array.isArray(tile.effects) ? tile.effects : [];
-      const debuffCount = effectList.filter(e => e && e.kind === 'debuff').length;
-      if (debuffCount <= 0) return;
+      const debuffIndex = effectList.findIndex(e => e && e.kind === 'debuff');
+      if (debuffIndex < 0) return;
 
-      tile.effects = effectList.filter(e => !(e && e.kind === 'debuff'));
-      const totalHeal = Math.max(0, debuffCount * healPerDebuff);
-      if (totalHeal > 0) {
+      tile.effects = effectList.filter((_, effectIndex) => effectIndex !== debuffIndex);
+      if (healAmount > 0) {
         try {
           if (typeof onStep === 'function') {
             onStep({
@@ -6170,15 +6223,15 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
                 target: { boardName, index },
                 effectName: 'Absolving Grace',
                 action: 'heal',
-                amount: totalHeal,
+                  amount: healAmount,
                 phase: 'endRound'
               }
             });
           }
         } catch (e) {}
-        applyHealthDelta(tile, totalHeal);
+        applyHealthDelta(tile, healAmount);
       }
-      addLog && addLog(`  > Absolving Grace cleansed ${debuffCount} debuff(s) and healed ${totalHeal} on ${boardName}[${index}]`);
+      addLog && addLog(`  > Absolving Grace cleansed 1 debuff and healed ${healAmount} on ${boardName}[${index}]`);
       try { recomputeModifiers(tile); } catch (e) {}
     });
   });

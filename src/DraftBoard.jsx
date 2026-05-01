@@ -749,10 +749,10 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
       transition: 'background 0.3s ease'
     }}>
       <div style={{ fontSize: 'var(--font-md, 0.9rem)', fontWeight: 700, color: playerId === 'player1' ? '#4fc3f7' : '#ffb74d' }}>Reserve</div>
-      {reserveTiles.map((tile) => {
+      {reserveTiles.map((tile, index) => {
         const disabled = !isPickForPlayer || !!tile.hero || reserveCount >= 2;
         const highlightFor = isPickForPlayer ? playerId : null;
-        return <Tile key={tile.id} tile={tile} onHeroDrop={handleHeroDropToTile} disabled={disabled} highlightFor={highlightFor} onHover={handleTileHover} onUnhover={handleTileUnhover} />;
+        return <Tile key={tile.id || `${playerId}-reserve-${index}`} tile={tile} onHeroDrop={handleHeroDropToTile} disabled={disabled} highlightFor={highlightFor} onHover={handleTileHover} onUnhover={handleTileUnhover} />;
       })}
     </div>
   );

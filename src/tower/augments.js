@@ -310,43 +310,16 @@ export const AUGMENTS = {
     id: 'earlySparkI',
     name: 'Early Spark I',
     description: 'In round 1, spells gain +{value} Spell Power.',
-    tier: 'common',
+    tier: 'rare',
     type: 'special',
-    valueRange: [2, 2],
+    valueRange: [4, 4],
     apply: (hero, value) => { hero._towerEarlySpark = (hero._towerEarlySpark || 0) + Number(value || 0); }
   },
   earlySparkII: {
     id: 'earlySparkII',
     name: 'Early Spark II',
     description: 'In round 1, spells gain +{value} Spell Power.',
-    tier: 'uncommon',
-    type: 'special',
-    valueRange: [4, 4],
-    apply: (hero, value) => { hero._towerEarlySpark = (hero._towerEarlySpark || 0) + Number(value || 0); }
-  },
-  earlySparkIII: {
-    id: 'earlySparkIII',
-    name: 'Early Spark III',
-    description: 'In round 1, spells gain +{value} Spell Power.',
-    tier: 'rare',
-    type: 'special',
-    valueRange: [6, 6],
-    apply: (hero, value) => { hero._towerEarlySpark = (hero._towerEarlySpark || 0) + Number(value || 0); }
-  },
-  earlySparkV: {
-    id: 'earlySparkV',
-    name: 'Early Spark V',
-    description: 'In round 1, spells gain +{value} Spell Power.',
     tier: 'legendary',
-    type: 'special',
-    valueRange: [10, 10],
-    apply: (hero, value) => { hero._towerEarlySpark = (hero._towerEarlySpark || 0) + Number(value || 0); }
-  },
-  earlySparkIV: {
-    id: 'earlySparkIV',
-    name: 'Early Spark IV',
-    description: 'In round 1, spells gain +{value} Spell Power.',
-    tier: 'epic',
     type: 'special',
     valueRange: [8, 8],
     apply: (hero, value) => { hero._towerEarlySpark = (hero._towerEarlySpark || 0) + Number(value || 0); }
@@ -1312,13 +1285,13 @@ export const AUGMENTS = {
   absolvingGrace: {
     id: 'absolvingGrace',
     name: 'Absolving Grace',
-    description: 'At end of round: cleanse all debuffs, heal {value} per debuff removed.',
+    description: 'At end of round: cleanse 1 debuff and heal {value}.',
     tier: 'legendary',
     type: 'special',
     bossExclusive: true,
-    valueRange: [3, 3],
+    valueRange: [5, 5],
     apply: (hero, value) => {
-      hero._towerRoundCleanseHealPerDebuff = Number(value || 0);
+      hero._towerRoundCleanseHeal = Number(value || 0);
     }
   },
 

@@ -4,7 +4,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { HEROES } from '../heroes.js';
 import getAssetPath from '../utils/assetPath.js';
-import { generateRecruitChoices, setStoryPartySelections, STORY_PARTY_MAX } from './storyState.js';
+import {
+  generateRecruitChoices,
+  normalizeStoryPartySelections,
+  setStoryPartySelections,
+  STORY_MAIN_MAX,
+  STORY_PARTY_MAX,
+  STORY_RESERVE_MAX
+} from './storyState.js';
 
 const styles = {
   container: {
@@ -154,30 +161,26 @@ const displayIndexToBoardIndex = (displayIndex) => (
 
 function buildInitialLayout(heroSelections) {
   const boardPositions = Array(9).fill(null);
-  const reserveHeroes = [];
+  const reserveHeroes = Array(STORY_RESERVE_MAX).fill(null);
+  const normalizedSelections = normalizeStoryPartySelections(heroSelections);
 
-  (heroSelections || []).forEach(entry => {
+  normalizedSelections.forEach(entry => {
     if (Number.isInteger(entry?.position) && entry.position >= 0 && entry.position <= 8) {
       boardPositions[entry.position] = entry.heroId;
       return;
     }
 
-    if (reserveHeroes.length < 2) {
-      reserveHeroes.push(entry.heroId);
-      return;
-    }
-
-    const openBoardIndex = boardPositions.findIndex(id => !id);
-    if (openBoardIndex >= 0) boardPositions[openBoardIndex] = entry.heroId;
+    const openReserveIndex = reserveHeroes.findIndex(id => !id);
+    if (openReserveIndex >= 0) reserveHeroes[openReserveIndex] = entry.heroId;
   });
 
   return {
     boardPositions,
-    reserveHeroes: [reserveHeroes[0] || null, reserveHeroes[1] || null]
+    reserveHeroes
   };
 }
 
-export default function StoryRecruitChoice({ runState, onConfirm, onExit }) {
+export default function StoryRecruitChoice({ runState, onConfirm, onSkip, onExit }) {
   const [choices, setChoices] = useState([]);
   const [selectedRecruitId, setSelectedRecruitId] = useState(null);
   const [selectedHeroId, setSelectedHeroId] = useState(null);
@@ -227,8 +230,12 @@ export default function StoryRecruitChoice({ runState, onConfirm, onExit }) {
 
   const sanitizeLayoutForCurrentHeroes = (board, reserve) => {
     const nextBoard = board.map(heroId => (heroId && currentHeroIds.includes(heroId) ? heroId : null));
-    const nextReserve = reserve.map(heroId => (heroId && currentHeroIds.includes(heroId) ? heroId : null));
+    const nextReserve = Array.from({ length: STORY_RESERVE_MAX }, (_, index) => {
+      const heroId = reserve[index] || null;
+      return heroId && currentHeroIds.includes(heroId) ? heroId : null;
+    });
     const placedHeroIds = new Set([...nextBoard.filter(Boolean), ...nextReserve.filter(Boolean)]);
+    let boardCount = nextBoard.filter(Boolean).length;
 
     currentHeroIds.forEach(heroId => {
       if (placedHeroIds.has(heroId)) return;
@@ -239,10 +246,12 @@ export default function StoryRecruitChoice({ runState, onConfirm, onExit }) {
         return;
       }
 
+      if (boardCount >= STORY_MAIN_MAX) return;
       const emptyBoardIndex = nextBoard.findIndex(id => !id);
       if (emptyBoardIndex >= 0) {
         nextBoard[emptyBoardIndex] = heroId;
         placedHeroIds.add(heroId);
+        boardCount += 1;
       }
     });
 
@@ -263,14 +272,17 @@ export default function StoryRecruitChoice({ runState, onConfirm, onExit }) {
     if (!heroId || slotIndex == null) return;
 
     const nextBoard = [...boardPositions];
-    const nextReserve = [reserveHeroes[0] || null, reserveHeroes[1] || null];
+    const nextReserve = Array.from({ length: STORY_RESERVE_MAX }, (_, index) => reserveHeroes[index] || null);
     const sourceBoardIndex = nextBoard.findIndex(id => id === heroId);
     const sourceReserveIndex = nextReserve.findIndex(id => id === heroId);
     const targetHeroId = nextBoard[slotIndex];
     const heroIsPlaced = sourceBoardIndex >= 0 || sourceReserveIndex >= 0;
+    const boardCount = nextBoard.filter(Boolean).length;
+    const boardCountExcludingHero = boardCount - (sourceBoardIndex >= 0 ? 1 : 0);
 
     if (targetHeroId === heroId) return;
     if (!heroIsPlaced && teamFull && !targetHeroId) return;
+    if (!targetHeroId && boardCountExcludingHero >= STORY_MAIN_MAX) return;
 
     if (sourceBoardIndex >= 0) nextBoard[sourceBoardIndex] = null;
     if (sourceReserveIndex >= 0) nextReserve[sourceReserveIndex] = null;
@@ -307,7 +319,7 @@ export default function StoryRecruitChoice({ runState, onConfirm, onExit }) {
     if (!heroId || reserveIndex == null) return;
 
     const nextBoard = [...boardPositions];
-    const nextReserve = [reserveHeroes[0] || null, reserveHeroes[1] || null];
+    const nextReserve = Array.from({ length: STORY_RESERVE_MAX }, (_, index) => reserveHeroes[index] || null);
     const sourceBoardIndex = nextBoard.findIndex(id => id === heroId);
     const sourceReserveIndex = nextReserve.findIndex(id => id === heroId);
     const targetHeroId = nextReserve[reserveIndex] || null;
@@ -396,13 +408,34 @@ export default function StoryRecruitChoice({ runState, onConfirm, onExit }) {
     onConfirm && onConfirm(updated);
   };
 
+  const handleSkip = () => {
+    const finalHeroIds = [...boardPositions.filter(Boolean), ...reserveHeroes.filter(Boolean)];
+    const uniqueHeroIds = Array.from(new Set(finalHeroIds));
+    const currentAugments = new Map(currentHeroes.map(entry => [entry.heroId, entry.augments || []]));
+    const updatedSelections = uniqueHeroIds.map(heroId => {
+      const boardIndex = boardPositions.findIndex(id => id === heroId);
+      return {
+        heroId,
+        position: boardIndex >= 0 ? boardIndex : null,
+        augments: currentAugments.get(heroId) || []
+      };
+    });
+
+    const updated = setStoryPartySelections(runState, updatedSelections);
+    onSkip && onSkip(updated);
+  };
+
   const currentCount = Array.isArray(runState?.selectedHeroes) ? runState.selectedHeroes.length : 0;
+  const boardCount = boardPositions.filter(Boolean).length;
+  const reserveCount = reserveHeroes.filter(Boolean).length;
   const placedCount = boardPositions.filter(Boolean).length + reserveHeroes.filter(Boolean).length;
   const placedIds = new Set([...boardPositions.filter(Boolean), ...reserveHeroes.filter(Boolean)]);
   const recruitPlaced = Boolean(selectedRecruitId) && placedIds.has(selectedRecruitId);
   const expectedPlacedCount = teamFull ? STORY_PARTY_MAX : Math.min(currentCount + 1, STORY_PARTY_MAX);
   const canConfirm = Boolean(selectedRecruitId)
     && recruitPlaced
+    && boardCount <= STORY_MAIN_MAX
+    && reserveCount <= STORY_RESERVE_MAX
     && placedCount === expectedPlacedCount;
 
   return (
@@ -411,8 +444,8 @@ export default function StoryRecruitChoice({ runState, onConfirm, onExit }) {
       <div style={styles.subtitle}>Choose one hero to join your expedition</div>
       <div style={styles.helper}>
         {teamFull
-          ? 'Your party is full. Choose a recruit, then drag or place them onto an occupied slot to swap someone out. You can still rearrange the rest of the team.'
-          : `Your party will grow from ${currentCount} to ${Math.min(currentCount + 1, STORY_PARTY_MAX)} heroes. Choose the recruit, then place anyone on the main board or reserve however you want.`}
+          ? `Your party is full. Choose a recruit, then drag or place them onto an occupied slot to swap someone out. Story parties are capped at ${STORY_MAIN_MAX} on the main board and ${STORY_RESERVE_MAX} in reserve.`
+          : `Your party will grow from ${currentCount} to ${Math.min(currentCount + 1, STORY_PARTY_MAX)} heroes. Story parties are capped at ${STORY_MAIN_MAX} on the main board and ${STORY_RESERVE_MAX} in reserve.`}
       </div>
 
       <div style={styles.cardRow}>
@@ -538,7 +571,7 @@ export default function StoryRecruitChoice({ runState, onConfirm, onExit }) {
         </div>
 
         <div style={{ ...styles.helper, marginBottom: 0, marginTop: 14 }}>
-          Drag heroes between the roster, main board, and reserve. You can still click a hero and then click a destination if you prefer.
+          Drag heroes between the roster, main board, and reserve. You can still click a hero and then click a destination if you prefer. The recruit screen enforces a maximum of {STORY_MAIN_MAX} heroes on the main board and {STORY_RESERVE_MAX} in reserve.
         </div>
       </div>
 
@@ -546,6 +579,11 @@ export default function StoryRecruitChoice({ runState, onConfirm, onExit }) {
         <button style={{ ...styles.button, ...styles.secondaryButton }} onClick={onExit}>
           Save & Exit
         </button>
+        {teamFull && onSkip && (
+          <button style={{ ...styles.button, ...styles.secondaryButton }} onClick={handleSkip}>
+            Keep Current Team
+          </button>
+        )}
         <button style={{ ...styles.button, ...styles.primaryButton, opacity: canConfirm ? 1 : 0.5 }} onClick={handleConfirm} disabled={!canConfirm}>
           Recruit Hero
         </button>

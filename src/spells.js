@@ -98,8 +98,18 @@
  *   animation: 'Spell Name_2x2_4frames',    // Primary animation key
  *   animationPlacement: 'travel|inplace',   // 'travel' for projectiles, 'inplace' for AoE
  *   animationSecondary: 'Name_2x2_4frames', // Optional: secondary animation
- *   sound: '/images/sounds/Sound.mp3',      // Optional: sound effect
- *   soundVolume: 0.3                        // Optional: volume (0-1)
+ *   sound: '/images/sounds/Sound.mp3',      // Optional override; otherwise /images/sounds/<Spell Name>.mp3 is used
+ *   soundName: 'Spell Name',                // Optional filename stem override for convention-based lookup
+ *   soundVolume: 1,                         // Optional per-spell volume scalar (0-1, default: 1)
+ *   soundDelayMs: 150,                      // Optional playback delay in milliseconds
+ *   soundStartTime: 0.0,                    // Optional clip start time in seconds
+ *   soundEndTime: 0.75                      // Optional clip end time in seconds
+ *   secondarySound: '/images/sounds/Other.mp3', // Optional sound used only for animationSecondary playback
+ *   secondarySoundName: 'Other',            // Optional secondary filename stem override
+ *   secondarySoundVolume: 1,                // Optional secondary volume scalar (0-1, default: 1)
+ *   secondarySoundDelayMs: 150,             // Optional secondary playback delay in milliseconds
+ *   secondarySoundStartTime: 0.0,           // Optional secondary clip start time in seconds
+ *   secondarySoundEndTime: 0.75             // Optional secondary clip end time in seconds
  * }
  * 
  * =============================================================================
@@ -143,7 +153,9 @@ export const SPELLS = {
     animation: 'Basic Attack_2x2_4frames',
     animationPlacement: 'travel',
     sound: '/images/sounds/Basic Attack.mp3',
-    soundVolume: 0.3
+    soundVolume: 1,
+    soundStartTime: 0.0,
+    soundEndTime: 1.2
   },
 
   minionAttack: {
@@ -165,7 +177,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Acid_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Acid.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 500,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   armorMelt: {
@@ -191,7 +208,11 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Acid Pool_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Acid Pool.mp3',
+    soundVolume: 1,
+    soundStartTime: 0.0,
+    soundEndTime: 1.2
   },
 
   // Blood Golem spells
@@ -639,7 +660,9 @@ export const SPELLS = {
     animation: 'Slash_2x2_4frames',
     animationPlacement: 'travel',
     sound: '/images/sounds/Slash.mp3',
-    soundVolume: 0.3
+    soundVolume: 1,
+    soundStartTime: 0.0,
+    soundEndTime: 1.2
   },
   // Iron Golem (new)
   ironHand: {
@@ -1181,12 +1204,27 @@ export const SPELLS = {
     // Use a primary animation for the main target and a secondary for adjacent targets
     animation: 'Arcane Explosion_2x2_4frames',
     animationSecondary: 'Arcane Explosion Secondary_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20,
+    secondarySoundVolume: 1.00,
+    secondarySoundDelayMs: 250,
+    secondarySoundStartTime: 0.00,
+    secondarySoundEndTime: 1.30
   },
 
   // Ice Mage spells removed from here - see end of file
-  arcaneBolt: { id: 'arcaneBolt', name: 'Arcane Bolt', description: 'Targets the enemy with the lowest Health, dealing 5 Attack Power.', spec: { targets: [{ type: 'lowestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 5 }, animationMs: 1200 }, animation: 'Arcane Bolt_2x2_4frames', animationPlacement: 'travel' },
-  arcaneBlast: { id: 'arcaneBlast', name: 'Arcane Blast', description: 'Targets the enemy with the highest Health, dealing 15 Attack Power.', spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 15 }, animationMs: 1000 }, animation: 'Arcane Blast_2x2_4frames', animationPlacement: 'travel' },
+  arcaneBolt: { id: 'arcaneBolt', name: 'Arcane Bolt', description: 'Targets the enemy with the lowest Health, dealing 5 Attack Power.', spec: { targets: [{ type: 'lowestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 5 }, animationMs: 1200 }, animation: 'Arcane Bolt_2x2_4frames', animationPlacement: 'travel', sound: '/images/sounds/Arcane Bolt.mp3', 
+  soundVolume: 0.90,
+  soundDelayMs: 0,
+  soundStartTime: 0.40,
+  soundEndTime: 1.80 },
+  arcaneBlast: { id: 'arcaneBlast', name: 'Arcane Blast', description: 'Targets the enemy with the highest Health, dealing 15 Attack Power.', spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 15 }, animationMs: 1000 }, animation: 'Arcane Blast_2x2_4frames', animationPlacement: 'travel', sound: '/images/sounds/Arcane Blast.mp3', soundVolume: 1.00,
+  soundDelayMs: 0,
+  soundStartTime: 1.00,
+  soundEndTime: 2.40 },
 
   prayer: {
     id: 'prayer', name: 'Prayer',
@@ -1357,7 +1395,7 @@ export const SPELLS = {
   siphon: {
     id: 'siphon', name: 'Siphon',
     description: 'Targets the enemy with the highest Health, dealing 4 Attack Power. Also heals the caster for 4.',
-    spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4 }, post: { secondaryHeal: { amount: 4, side: 'ally', target: 'self' } }, animationMs: 1200 },
+    spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4 }, post: { secondaryHeal: { amount: 3, side: 'ally', target: 'self' } }, animationMs: 1200 },
     animation: 'Siphon_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames'
   },
 
@@ -1405,7 +1443,11 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Affliction_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Affliction.mp3',
+    soundVolume: 1,
+    soundStartTime: 0.0,
+    soundEndTime: 1.2
   },
 
   ritual: {
@@ -1753,7 +1795,12 @@ export const SPELLS = {
     description: 'Targets the enemy with the highest Health, dealing 5 Attack Power and applying Bleed.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 5 }, effects: [EFFECTS.Bleed], animationMs: 1200 },
     animation: 'Cut_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Cut.mp3',
+    soundVolume: 1,
+    soundDelayMs: 400,
+    soundStartTime: 0.0,
+    soundEndTime: 1.2
   },
   transfusion: {
     id: 'transfusion', name: 'Transfusion',
@@ -1909,7 +1956,7 @@ export const SPELLS = {
     name: 'Howl',
     description: 'Targets the enemy front row, reducing Energy by 2.',
     spec: {
-      targets: [{ type: 'frontmostRowWithHero', side: 'enemy' }],
+      targets: [{ type: 'frontRow', side: 'enemy' }],
       post: { deltaEnergy: -2 },
       animationMs: 1200
     },

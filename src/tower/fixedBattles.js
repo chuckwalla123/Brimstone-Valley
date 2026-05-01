@@ -73,11 +73,11 @@ export const TOWER_FIXED_BATTLES = {
   18: {
     title: 'Choir of Ash',
     heroes: [
-      { heroId: 'angelID', slot: 0, fixedAugments: [{ augmentId: 'prayerAugmentII' }, { augmentId: 'healthBoostMassive' }] },
+      { heroId: 'angelID', slot: 0, fixedAugments: [{ augmentId: 'prayerAugmentII' }, { augmentId: 'healthBoostHuge' }] },
       { heroId: 'fallenAngelID', slot: 4 },
-      { heroId: 'demonID', slot: 3, fixedAugments: [{ augmentId: 'spellPowerBoostHuge' }] },
+      { heroId: 'demonID', slot: 3, fixedAugments: [{ augmentId: 'spellPowerBoostMedium' }] },
       { heroId: 'specterID', slot: 8, fixedAugments: [{ augmentId: 'ironForgeAugmentII' }] },
-      { heroId: 'necromancerID', slot: 5, fixedAugments: [{ augmentId: 'speedBoostHuge' }] },
+      { heroId: 'necromancerID', slot: 5, fixedAugments: [{ augmentId: 'speedBoostMedium' }] },
       { heroId: 'nephilimID', slot: 9 },
       { heroId: 'reaperID', slot: 10 }
     ],
@@ -98,7 +98,6 @@ export const TOWER_FIXED_BATTLES = {
         slot: 2,
         fixedAugments: [
           { augmentId: 'ironForgeAugmentII' },
-          { augmentId: 'speedBoostMedium' },
           { augmentId: 'dexterityAugmentII' }
         ]
       },
@@ -106,12 +105,12 @@ export const TOWER_FIXED_BATTLES = {
         heroId: 'vampireID',
         slot: 7,
         fixedAugments: [
-          { augmentId: 'healthBoostHuge' },
+          { augmentId: 'healthBoostMedium' },
           { augmentId: 'periodicPulseII' }
         ]
       },
       { heroId: 'titanID', slot: 3, fixedAugments: [{ augmentId: 'armorBoostHuge' }] },
-      { heroId: 'dragonlingID', slot: 8, fixedAugments: [{ augmentId: 'healthBoostHuge' }] },
+      { heroId: 'dragonlingID', slot: 8, fixedAugments: [{ augmentId: 'healthBoostMedium' }] },
       { heroId: 'giantID', slot: 4, fixedAugments: [{ augmentId: 'healthBoostHuge' }] },
       {
         heroId: 'dragonID',
@@ -144,7 +143,7 @@ export const TOWER_FIXED_BATTLES = {
         heroId: 'fireMageID',
         slot: 7,
         fixedAugments: [
-          { augmentId: 'healthBoostMassive' },
+          { augmentId: 'healthBoostHuge' },
           { augmentId: 'armorBoostMedium' }
         ]
       },
@@ -152,7 +151,7 @@ export const TOWER_FIXED_BATTLES = {
         heroId: 'darkMageID',
         slot: 0,
         fixedAugments: [
-          { augmentId: 'healthBoostMassive' },
+          { augmentId: 'healthBoostHuge' },
           { augmentId: 'armorBoostMedium' }
         ]
       },
@@ -160,7 +159,7 @@ export const TOWER_FIXED_BATTLES = {
         heroId: 'poisonMageID',
         slot: 6,
         fixedAugments: [
-          { augmentId: 'healthBoostMassive' },
+          { augmentId: 'healthBoostHuge' },
           { augmentId: 'armorBoostMedium' },
           { augmentId: 'periodicPulseII' }
         ]
@@ -169,7 +168,7 @@ export const TOWER_FIXED_BATTLES = {
         heroId: 'timeMageID',
         slot: 4,
         fixedAugments: [
-          { augmentId: 'healthBoostMassive' },
+          { augmentId: 'healthBoostHuge' },
           { augmentId: 'armorBoostMedium' }
         ]
       },
@@ -193,7 +192,7 @@ export const TOWER_FIXED_BATTLES = {
         heroId: 'arcaneMageID',
         slot: 10,
         fixedAugments: [
-          { augmentId: 'healthBoostMassive' },
+          { augmentId: 'healthBoostHuge' },
           { augmentId: 'armorBoostMedium' }
         ]
       }
@@ -223,7 +222,7 @@ export const TOWER_FIXED_BATTLES = {
         heroId: 'lancerID',
         slot: 0,
         fixedAugments: [
-          { augmentId: 'firstStrikeIV' },
+          { augmentId: 'firstStrikeIII' },
           { augmentId: 'healthBoostHuge' },
           { augmentId: 'dexterityAugmentII' }
         ]
@@ -232,7 +231,7 @@ export const TOWER_FIXED_BATTLES = {
         heroId: 'tinkererID',
         slot: 4,
         fixedAugments: [
-          { augmentId: 'healthBoostMassive' },
+          { augmentId: 'healthBoostHuge' },
           { augmentId: 'dexterityAugmentII' },
           { augmentId: 'allCastsMedium' },
           { augmentId: 'keenStrikeII' }
@@ -244,7 +243,7 @@ export const TOWER_FIXED_BATTLES = {
         fixedAugments: [
           { augmentId: 'ironForgeAugmentII' },
           { augmentId: 'healthBoostHuge' },
-          { augmentId: 'earlySparkIII' }
+          { augmentId: 'earlySparkI' }
         ]
       },
       {
@@ -292,7 +291,7 @@ export const TOWER_FIXED_BATTLES = {
         slot: 3,
         fixedAugments: [
           { augmentId: 'healthBoostMassive' },
-          { augmentId: 'earlySparkII' }
+          { augmentId: 'earlySparkI' }
         ]
       },
       {
@@ -300,7 +299,7 @@ export const TOWER_FIXED_BATTLES = {
         slot: 2,
         fixedAugments: [
           { augmentId: 'healthBoostMassive' },
-          { augmentId: 'earlySparkII' }
+          { augmentId: 'earlySparkI' }
         ]
       },
       {
@@ -308,7 +307,7 @@ export const TOWER_FIXED_BATTLES = {
         slot: 8,
         fixedAugments: [
           { augmentId: 'healthBoostMassive' },
-          { augmentId: 'earlySparkIV' }
+          { augmentId: 'earlySparkI' }
         ]
       },
       {
@@ -334,8 +333,7 @@ export const TOWER_FIXED_BATTLES = {
         fixedAugments: [
           { augmentId: 'healthBoostMassive' },
           { augmentId: 'vampiricIII' },
-          { augmentId: 'spellPowerBoostHuge' },
-          { augmentId: 'spellPowerBoostMedium' }
+          { augmentId: 'spellPowerBoostLarge' },
         ]
       },
       {
@@ -344,8 +342,7 @@ export const TOWER_FIXED_BATTLES = {
         fixedAugments: [
           { augmentId: 'healthBoostMassive' },
           { augmentId: 'allCastsLarge' },
-          { augmentId: 'spellPowerBoostLarge' },
-          { augmentId: 'arcaneExchange' }
+          { augmentId: 'spellPowerBoostLarge' }
         ]
       }
     ],

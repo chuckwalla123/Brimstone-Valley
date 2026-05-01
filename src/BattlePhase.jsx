@@ -37,6 +37,7 @@ import useAnimations from './animations/useAnimations';
 import { getAI } from './ai';
 import getAssetPath from './utils/assetPath';
 import sfxManager from './SfxManager';
+import resolveSpellSoundProfile from './utils/spellAudio';
 
 const keyedSpriteCache = new Map();
 
@@ -579,7 +580,7 @@ function BoardGrid({ label, tiles = [], movement, player, isReserve = false, isE
             const reserveKey = `${player}:reserve:${i}`;
             const ev = eventsMap && eventsMap[reserveKey];
             const vkey = `${player}:reserve:${i}`;
-            return <SmallTile key={t && t.id ? t.id : `${player}:${i}`} tile={t} movement={movement} player={player} index={i} isReserve={isReserve} events={ev} effectPrecastMap={effectPrecastMap} onHoverTile={onHoverTile} onUnhoverTile={onUnhoverTile} onEffectHover={onEffectHover} onEffectOut={onEffectOut} onTileWheel={onTileWheel} />
+            return <SmallTile key={t && t.id ? t.id : `${player}:reserve:${i}`} tile={t} movement={movement} player={player} index={i} isReserve={isReserve} events={ev} effectPrecastMap={effectPrecastMap} onHoverTile={onHoverTile} onUnhoverTile={onUnhoverTile} onEffectHover={onEffectHover} onEffectOut={onEffectOut} onTileWheel={onTileWheel} />
           })}
         </div>
       ) : (
@@ -1140,6 +1141,15 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
         const endCenter = endAnchor ? endAnchor.center : null;
         if (play && startCenter && endCenter) {
           const pendingRowProps = { ...(pending.props || {}) };
+          if (pending.soundFile) {
+            sfxManager.playSound({
+              src: getAssetPath(pending.soundFile),
+              baseVolume: pending.soundVolume,
+              delayMs: pending.soundDelayMs,
+              startTime: pending.soundStartTime,
+              endTime: pending.soundEndTime
+            });
+          }
           play({ name: pending.name, from: startCenter, to: endCenter, duration: pending.duration, props: pendingRowProps });
           await sleep(Number(pending.duration || 1200));
         }
@@ -1147,6 +1157,15 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
       } else {
         const targetCenter = getTileCenter(targetKey);
         if (play && targetCenter) {
+          if (pending.soundFile) {
+            sfxManager.playSound({
+              src: getAssetPath(pending.soundFile),
+              baseVolume: pending.soundVolume,
+              delayMs: pending.soundDelayMs,
+              startTime: pending.soundStartTime,
+              endTime: pending.soundEndTime
+            });
+          }
           play({ name: pending.name, from: targetCenter, to: targetCenter, duration: pending.duration, props: pending.props || {} });
           await sleep(Number(pending.duration || 1200));
         }
@@ -1435,17 +1454,16 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
         }
 
         // Play sound effect from action override or spell definition
-        const actionSound = lastAction && lastAction.sound ? lastAction.sound : null;
-        const soundFile = actionSound || (spellDef && spellDef.sound ? spellDef.sound : null);
+        const { soundFile, soundVolume, soundDelayMs, soundStartTime, soundEndTime } = resolveSpellSoundProfile(spellDef, lastAction);
         if (soundFile) {
           try {
-            const audio = new Audio(getAssetPath(soundFile));
-            const baseVolume = (lastAction && typeof lastAction.soundVolume === 'number')
-              ? Number(lastAction.soundVolume)
-              : (spellDef && spellDef.soundVolume != null ? spellDef.soundVolume : 0.5);
-            const sfxVolume = sfxManager.getVolume();
-            audio.volume = Math.max(0, Math.min(1, baseVolume * sfxVolume));
-            audio.play().catch(() => {});
+            sfxManager.playSound({
+              src: getAssetPath(soundFile),
+              baseVolume: soundVolume,
+              delayMs: soundDelayMs,
+              startTime: soundStartTime,
+              endTime: soundEndTime
+            });
           } catch (e) {
           }
         }
@@ -1707,6 +1725,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
             const secName = lastAction.secondaryAnimation;
             const secCfg = SPELL_CONFIG[secName];
             const secUiScale = getUiScale();
+            const secondarySoundProfile = resolveSpellSoundProfile(spellDef, lastAction, 'secondary');
             const secProps = secCfg ? {
               sprite: getAssetPath(secCfg.file),
               frames: secCfg.frames,
@@ -1718,6 +1737,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
               name: secName,
               duration: secondaryAnimationDuration,
               props: secProps,
+              ...secondarySoundProfile,
               casterKey,
               casterCenter,
               targets: Array.isArray(lastAction.secondaryTargets) ? lastAction.secondaryTargets : [],
@@ -1741,6 +1761,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
           const secName = lastAction.secondaryAnimation;
           const secCfg = SPELL_CONFIG[secName];
           const secUiScale = getUiScale();
+          const secondarySoundProfile = resolveSpellSoundProfile(spellDef, lastAction, 'secondary');
           const secProps = secCfg ? {
             sprite: getAssetPath(secCfg.file),
             frames: secCfg.frames,
@@ -1752,6 +1773,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
             name: secName,
             duration: secondaryAnimationDuration,
             props: secProps,
+            ...secondarySoundProfile,
             casterKey,
             casterCenter,
             targets: Array.isArray(lastAction.secondaryTargets) ? lastAction.secondaryTargets : [],

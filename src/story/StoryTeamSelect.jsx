@@ -138,6 +138,34 @@ const styles = {
     color: '#c6b89b',
     textAlign: 'center',
     marginTop: '10px'
+  },
+  modalOverlay: {
+    position: 'fixed',
+    inset: 0,
+    background: 'rgba(0,0,0,0.72)',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 1000,
+    padding: '20px'
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: '520px',
+    background: 'linear-gradient(180deg, #1a1028 0%, #0f0a18 100%)',
+    border: '1px solid rgba(245, 158, 11, 0.35)',
+    borderRadius: '14px',
+    boxShadow: '0 0 28px rgba(0,0,0,0.45)',
+    padding: '22px'
+  },
+  modalTitle: {
+    fontSize: '1.25rem',
+    fontWeight: 'bold',
+    marginBottom: '10px'
+  },
+  modalText: {
+    color: '#d9c4a6',
+    lineHeight: '1.6'
   }
 };
 
@@ -148,7 +176,7 @@ const displayIndexToBoardIndex = (displayIndex) => (
   typeof DISPLAY_TO_BOARD[displayIndex] === 'number' ? DISPLAY_TO_BOARD[displayIndex] : displayIndex
 );
 
-export default function StoryTeamSelect({ arc, onConfirm, onBack }) {
+export default function StoryTeamSelect({ arc, showOverwriteWarning = false, onConfirm, onBack }) {
   const bannerHeroes = arc?.bannerHeroes || [];
   const bannerPositions = arc?.bannerPositions || [];
   const maxMercs = 1;
@@ -156,12 +184,14 @@ export default function StoryTeamSelect({ arc, onConfirm, onBack }) {
   const [boardPositions, setBoardPositions] = useState(Array(9).fill(null));
   const [reserveHeroes, setReserveHeroes] = useState([]);
   const [selectedHeroId, setSelectedHeroId] = useState(null);
+  const [confirmOverwriteOpen, setConfirmOverwriteOpen] = useState(false);
 
   useEffect(() => {
     setSelectedIds([...bannerHeroes]);
     setBoardPositions(Array(9).fill(null));
     setReserveHeroes([]);
     setSelectedHeroId(null);
+    setConfirmOverwriteOpen(false);
   }, [arc?.id]);
 
   useEffect(() => {
@@ -274,11 +304,26 @@ export default function StoryTeamSelect({ arc, onConfirm, onBack }) {
 
   const confirmSelection = () => {
     if (!canConfirm) return;
+    if (showOverwriteWarning) {
+      setConfirmOverwriteOpen(true);
+      return;
+    }
+
     const heroSelections = selectedIds.map(heroId => {
       const boardPos = boardPositions.findIndex(id => id === heroId);
       const position = boardPos >= 0 ? boardPos : null;
       return { heroId, position, augments: [] };
     });
+    onConfirm && onConfirm(heroSelections);
+  };
+
+  const finalizeSelection = () => {
+    const heroSelections = selectedIds.map(heroId => {
+      const boardPos = boardPositions.findIndex(id => id === heroId);
+      const position = boardPos >= 0 ? boardPos : null;
+      return { heroId, position, augments: [] };
+    });
+    setConfirmOverwriteOpen(false);
     onConfirm && onConfirm(heroSelections);
   };
 
@@ -407,6 +452,31 @@ export default function StoryTeamSelect({ arc, onConfirm, onBack }) {
           Begin Hunt
         </button>
       </div>
+
+      {confirmOverwriteOpen ? (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalCard}>
+            <div style={styles.modalTitle}>Overwrite Current Relic Hunt?</div>
+            <div style={styles.modalText}>
+              Starting this hunt will erase your current Relic Hunt progress and replace it with this new expedition.
+            </div>
+            <div style={{ ...styles.buttonRow, justifyContent: 'flex-end', marginTop: '20px' }}>
+              <button
+                style={{ ...styles.button, ...styles.secondaryButton }}
+                onClick={() => setConfirmOverwriteOpen(false)}
+              >
+                Go Back
+              </button>
+              <button
+                style={{ ...styles.button, ...styles.primaryButton }}
+                onClick={finalizeSelection}
+              >
+                Continue
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -135,13 +135,12 @@ export const STORY_ENEMIES = {
     aiDifficulty: 'hard',
     main: [
       { heroId: 'palaceGuardID', position: 7 },
+      { heroId: 'stonecasedKingID', position: 6 },
       { heroId: 'specterID', position: 4 },
       { heroId: 'tetheredSpiritID', position: 2 },
       { heroId: 'rogueMageID', position: 1 }
     ],
-    reserve: [
-      { heroId: 'stonecasedKingID' }
-    ]
+    reserve: []
   },
 
   brave_lightning_road: {
@@ -149,13 +148,14 @@ export const STORY_ENEMIES = {
     name: 'The Lightning Road',
     aiDifficulty: 'hard',
     main: [
-      { heroId: 'warriorID', position: 7 },
+      { heroId: 'varricID', position: 7, augments: [{ augmentId: 'healthBoostMedium', rolledValue: 6 }] },
       { heroId: 'werewolfID', position: 6 },
+      { heroId: 'rockGolemID', position: 4 },
       { heroId: 'lightningMageID', position: 2 },
-      { heroId: 'varricID', position: 1 }
+      { heroId: 'outcastAssassinID', position: 1 }
     ],
     reserve: [
-      { heroId: 'outcastAssassinID' }
+      { heroId: 'shieldMaidenID' }
     ]
   }
 };
