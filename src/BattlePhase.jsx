@@ -966,15 +966,40 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
 
   const isStepProcessingRef = useRef(false);
   const isHiddenRef = useRef(typeof document !== 'undefined' ? document.hidden : false);
+  const [visibilityRevision, setVisibilityRevision] = useState(0);
 
   useEffect(() => {
     if (typeof document === 'undefined') return undefined;
     const onVisibilityChange = () => {
       isHiddenRef.current = !!document.hidden;
+      if (document.hidden) return;
+
+      setVisibilityRevision(prev => prev + 1);
+
+      if (
+        firstRoundTimerRef.current
+        && autoPlay
+        && gameState?.phase === 'battle'
+        && !gameState?.lastAction
+      ) {
+        clearTimeout(firstRoundTimerRef.current);
+        firstRoundTimerRef.current = null;
+        if (runRoundRef.current) {
+          runRoundRef.current();
+        }
+      }
+
+      if (
+        aiDifficulty
+        && phase === 'movement'
+        && movementRef.current?.movementPhase
+      ) {
+        aiMoveInProgressRef.current = null;
+      }
     };
     document.addEventListener('visibilitychange', onVisibilityChange);
     return () => document.removeEventListener('visibilitychange', onVisibilityChange);
-  }, []);
+  }, [autoPlay, aiDifficulty, gameState?.lastAction, gameState?.phase, phase]);
 
   const movement = useMovement({
     p1Board, p2Board, p3Board, p1Reserve: p1ReserveBoard, p2Reserve: p2ReserveBoard, p3Reserve: p3ReserveBoard,
@@ -2678,7 +2703,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
         aiMoveInProgressRef.current = null;
       }
     };
-  }, [aiDifficulty, phase, movement?.movementPhase?.index, movement?.movementPhase?.sequence, p2Board, p2ReserveBoard, p1Board, p1ReserveBoard]);
+  }, [aiDifficulty, phase, movement?.movementPhase?.index, movement?.movementPhase?.sequence, p2Board, p2ReserveBoard, p1Board, p1ReserveBoard, visibilityRevision]);
 
   // spell queuing removed (auto-cast handled by engine)
 

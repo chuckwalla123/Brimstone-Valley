@@ -450,6 +450,8 @@ function getCastOrder(casts = [], p1Board = [], p2Board = [], p3Board = [], prio
     if (boardName && String(boardName).startsWith('p2')) return 'player2';
     return 'player3';
   };
+  const playerOrder = ['player1', 'player2', 'player3'];
+  const activePlayers = playerOrder.filter(player => casts.some(c => boardNameToPlayer(c && c.caster && c.caster.boardName) === player));
   const getBookIndex = (caster) => {
     if (!caster || typeof caster.index !== 'number' || !caster.boardName) return 9999;
     const arr = caster.boardName.startsWith('p1') ? bookOrderP1 : (caster.boardName.startsWith('p2') ? bookOrderP2 : bookOrderP3);
@@ -480,7 +482,8 @@ function getCastOrder(casts = [], p1Board = [], p2Board = [], p3Board = [], prio
           if (casterKeys.size === 1) {
             pick = candidates[0];
           } else {
-            const order = ['player1', 'player2', 'player3'];
+            const order = activePlayers.length > 0 ? activePlayers : playerOrder;
+            const nextPriorityPlayer = (player) => order[(Math.max(0, order.indexOf(player)) + 1) % order.length];
             const startIdx = Math.max(0, order.indexOf(priorityPlayer));
             try {
               const infos = candidates.map(c => ({ board: c.caster.boardName, index: c.caster.index, bookIndex: getBookIndex(c.caster), energy: c.payload?.queuedEnergy, castPriority: getCastTier(c) }));
@@ -490,7 +493,7 @@ function getCastOrder(casts = [], p1Board = [], p2Board = [], p3Board = [], prio
             for (let i = 0; i < order.length; i++) {
               const player = order[(startIdx + i) % order.length];
               const cand = candidates.find(c => boardNameToPlayer(c.caster.boardName) === player);
-              if (cand) { chosen = cand; priorityPlayer = player; break; }
+              if (cand) { chosen = cand; priorityPlayer = nextPriorityPlayer(player); break; }
             }
             pick = chosen || candidates[0];
             addLog && addLog(`  > Priority used. New priority: ${priorityPlayer}`);
@@ -1630,6 +1633,112 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
 
     if (deadNow.length > 0 && typeof onStep === 'function') {
       try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'preDeath' } }); } catch (e) {}
+    }
+
+    if (deadNow.length > 0) {
+      const pendingOnDeathVisuals = [];
+      const pendingOnDeathApplies = [];
+      const sideFromBoard = (boardName) => {
+        if ((boardName || '').startsWith('p1')) return 'p1';
+        if ((boardName || '').startsWith('p2')) return 'p2';
+        return 'p3';
+      };
+      const boardForSide = (side) => (side === 'p1' ? cP1 : (side === 'p2' ? cP2 : cP3));
+
+      deadNow.forEach((dead) => {
+        addLog && addLog(`Processing death of ${dead.boardName}[${dead.index}] (round-start)`);
+        allBoardsLocal.forEach((ownerBoard) => {
+          (ownerBoard.arr || []).forEach((ownerTile, ownerIdx) => {
+            if (!ownerTile) return;
+            const passiveList = (ownerTile._passives && Array.isArray(ownerTile._passives))
+              ? ownerTile._passives
+              : (ownerTile.hero && Array.isArray(ownerTile.hero.passives) ? ownerTile.hero.passives : []);
+            const effectList = Array.isArray(ownerTile.effects) ? ownerTile.effects : [];
+            const extraPassives = (passiveList || []).filter(p => !(effectList || []).some(e => e && p && e.name === p.name));
+            const onDeathEffects = (effectList || []).concat(extraPassives || []);
+            (onDeathEffects || []).forEach((effect) => {
+              if (!effect || !effect.onDeath) return;
+              const ownerSide = sideFromBoard(ownerBoard.name);
+              const deadSide = sideFromBoard(dead.boardName);
+              if (ownerSide !== deadSide) return;
+              const od = effect.onDeath;
+              if (od && od.onlySelf) {
+                if (ownerBoard.name !== dead.boardName) return;
+                if (ownerIdx !== dead.index) return;
+              }
+              if (od.type === 'healAlliesExceptSelf') {
+                const healVal = Number(od.value || 0);
+                const targetArr = boardForSide(ownerSide);
+                (targetArr || []).forEach((allyTile, ai) => {
+                  if (!allyTile) return;
+                  if (ai === ownerIdx) return;
+                  pendingOnDeathApplies.push({ type: 'heal', value: healVal, boardName: ownerBoard.name, index: ai, effectName: effect.name });
+                  pendingOnDeathVisuals.push({ type: 'pre', target: { boardName: ownerBoard.name, index: ai }, effectName: effect.name, amount: healVal, ownerBoardName: ownerBoard.name, ownerIndex: ownerIdx });
+                  pendingOnDeathVisuals.push({ type: 'pulse', target: { boardName: ownerBoard.name, index: ai }, effectName: effect.name, action: 'heal', amount: healVal, ownerBoardName: ownerBoard.name, ownerIndex: ownerIdx });
+                });
+              } else if (od.type === 'damageEnemiesWithSpeedAtMost') {
+                const enemySides = isFfa3
+                  ? getAliveSidesMain(cP1, cP2, cP3).filter(s => s !== ownerSide)
+                  : [ownerSide === 'p1' ? 'p2' : 'p1'];
+                pendingOnDeathVisuals.push({ type: 'pre', target: { boardName: ownerBoard.name, index: ownerIdx }, effectName: effect.name, amount: Number(od.value || 0), ownerBoardName: ownerBoard.name, ownerIndex: ownerIdx });
+                enemySides.forEach((side) => {
+                  const targetArr = boardForSide(side);
+                  const targetBoardName = side === 'p1' ? 'p1Board' : (side === 'p2' ? 'p2Board' : 'p3Board');
+                  (targetArr || []).forEach((enemyTile, ei) => {
+                    if (!enemyTile || enemyTile._dead) return;
+                    try { recomputeModifiers(enemyTile); } catch (e) {}
+                    const speedVal = Number(enemyTile.currentSpeed != null ? enemyTile.currentSpeed : (enemyTile.hero && enemyTile.hero.speed) || 0);
+                    if (speedVal <= Number(od.maxSpeed || 0)) {
+                      pendingOnDeathVisuals.push({ type: 'pulse', target: { boardName: targetBoardName, index: ei }, effectName: effect.name, action: 'damage', amount: Number(od.value || 0), ownerBoardName: ownerBoard.name, ownerIndex: ownerIdx });
+                      pendingOnDeathApplies.push({ type: 'damage', value: Number(od.value || 0), ignoreArmor: !!od.ignoreArmor, boardName: targetBoardName, index: ei, source: `${dead.boardName}[${dead.index}]`, effectName: effect.name });
+                    }
+                  });
+                });
+              }
+            });
+          });
+        });
+      });
+
+      if (pendingOnDeathVisuals.length > 0 && typeof onStep === 'function') {
+        pendingOnDeathVisuals.forEach((v) => {
+          if (!v) return;
+          if (v.type === 'pre') {
+            const pre = { type: 'effectPreCast', target: v.target, effectName: v.effectName, amount: v.amount, scale: getEffectPrecastScale(v.amount), ownerBoardName: v.ownerBoardName, ownerIndex: v.ownerIndex };
+            try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: pre }); } catch (e) {}
+          }
+          if (v.type === 'pulse') {
+            const pulse = { type: 'effectPulse', target: v.target, effectName: v.effectName, action: v.action, amount: v.amount, ownerBoardName: v.ownerBoardName, ownerIndex: v.ownerIndex };
+            try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: pulse }); } catch (e) {}
+          }
+        });
+        try { await new Promise(res => setTimeout(res, scaleDelay(500))); } catch (e) {}
+      }
+
+      pendingOnDeathApplies.forEach((ap) => {
+        try {
+          if (ap.type === 'heal') {
+            const arr = (ap.boardName || '').startsWith('p1') ? cP1 : ((ap.boardName || '').startsWith('p2') ? cP2 : cP3);
+            const tile = (arr || [])[ap.index];
+            if (!tile) return;
+            applyHealthDelta(tile, Number(ap.value || 0));
+            addLog && addLog(`  > ${ap.effectName} healed ${ap.value} to ${ap.boardName}[${ap.index}] due to death`);
+          } else if (ap.type === 'damage') {
+            const arr = (ap.boardName || '').startsWith('p1') ? cP1 : ((ap.boardName || '').startsWith('p2') ? cP2 : cP3);
+            const tile = (arr || [])[ap.index];
+            if (!tile) return;
+            applyPayloadToTarget(
+              { action: 'damage', value: Number(ap.value || 0), ignoreArmor: !!ap.ignoreArmor, source: ap.source },
+              { boardName: ap.boardName, index: ap.index, tile },
+              addLog,
+              { p1Board: cP1, p2Board: cP2, p3Board: cP3, p1Reserve: cR1, p2Reserve: cR2, p3Reserve: cR3 },
+              null,
+              true
+            );
+            addLog && addLog(`  > ${ap.effectName} damaged ${ap.boardName}[${ap.index}] for ${ap.value} due to death`);
+          }
+        } catch (e) {}
+      });
     }
 
     deadNow.forEach(({ boardName, index, tile }) => {
@@ -5170,7 +5279,8 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
 
     // Decrement the caster's remaining-casts for the slot at resolution time.
     try {
-      if (src && src.tile && src.tile._castsRemaining) {
+      const isTowerBonusCast = !!(cast && cast.payload && cast.payload._towerBonusCast);
+      if (!isTowerBonusCast && src && src.tile && src.tile._castsRemaining) {
         // Prefer explicit slot annotated on the queued payload (set at enqueue time)
         let resolvedSlot = (cast.payload && cast.payload.slot) || null;
         // Fallback: infer from caster's hero spell slots if spellId present and slot missing
@@ -5241,8 +5351,10 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
       const allBoardsLocal = [
         { arr: cP1, name: 'p1Board' },
         { arr: cP2, name: 'p2Board' },
+        { arr: cP3, name: 'p3Board' },
         { arr: cR1, name: 'p1Reserve' },
-        { arr: cR2, name: 'p2Reserve' }
+        { arr: cR2, name: 'p2Reserve' },
+        { arr: cR3, name: 'p3Reserve' }
       ];
 
       const deadNow = [];
@@ -6032,6 +6144,21 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
           try {
             const { boardName, index, tile } = dead;
             if (!tile) return;
+            if (tile.hero && tile.hero.leavesCorpse === false) {
+              const removedName = tile.hero && tile.hero.name ? tile.hero.name : 'minion';
+              tile.hero = null;
+              tile._dead = false;
+              tile.effects = [];
+              tile.currentHealth = null;
+              tile.currentArmor = null;
+              tile.currentSpeed = null;
+              tile.currentEnergy = null;
+              tile.spellCasts = [];
+              tile._castsRemaining = null;
+              tile._passives = null;
+              addLog && addLog(`  > Removed ${removedName} from ${boardName}[${index}] on death (post-cast)`);
+              return;
+            }
             tile._dead = true;
             tile.effects = [];
             tile.spellCasts = [];

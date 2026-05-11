@@ -190,6 +190,7 @@ export function buildPayloadFromSpec(spec = {}, casterRef = {}, boards = {}, own
   // Pass bypassTriggers option if spell has post.bypassTriggers (e.g., basicAttack)
   const resolveOptions = {
     bypassTriggers: !!(useSpec.post && useSpec.post.bypassTriggers),
+    isEffectDriven: !!ownerRef,
     ...(options && options.forceEnemySide ? { forceEnemySide: options.forceEnemySide } : {}),
     ...(options && options.forceAllySide ? { forceAllySide: options.forceAllySide } : {})
   };

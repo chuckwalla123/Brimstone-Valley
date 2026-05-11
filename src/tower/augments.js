@@ -1249,6 +1249,18 @@ export const AUGMENTS = {
     }
   },
 
+  periodicPulseIII: {
+    id: 'periodicPulseIII',
+    name: 'Sustained Pulse III',
+    description: '+{value} to periodic damage and healing effects',
+    tier: 'legendary',
+    type: 'special',
+    valueRange: [3, 3],
+    apply: (hero, value) => {
+      hero._towerPeriodicPulseBonus = (hero._towerPeriodicPulseBonus || 0) + Number(value || 0);
+    }
+  },
+
   doubleStrike: {
     id: 'doubleStrike',
     name: 'Double Strike',
@@ -1274,7 +1286,7 @@ export const AUGMENTS = {
   spellEcho: {
     id: 'spellEcho',
     name: 'Spell Echo',
-    description: 'Back spell casts twice)',
+    description: 'Back spell casts twice',
     tier: 'legendary',
     type: 'special',
     apply: (hero) => {

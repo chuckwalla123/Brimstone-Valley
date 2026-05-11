@@ -100,13 +100,13 @@
  *   animationSecondary: 'Name_2x2_4frames', // Optional: secondary animation
  *   sound: '/images/sounds/Sound.mp3',      // Optional override; otherwise /images/sounds/<Spell Name>.mp3 is used
  *   soundName: 'Spell Name',                // Optional filename stem override for convention-based lookup
- *   soundVolume: 1,                         // Optional per-spell volume scalar (0-1, default: 1)
+ *   soundVolume: 1,                         // Optional per-spell volume scalar (0-2, default: 1)
  *   soundDelayMs: 150,                      // Optional playback delay in milliseconds
  *   soundStartTime: 0.0,                    // Optional clip start time in seconds
  *   soundEndTime: 0.75                      // Optional clip end time in seconds
  *   secondarySound: '/images/sounds/Other.mp3', // Optional sound used only for animationSecondary playback
  *   secondarySoundName: 'Other',            // Optional secondary filename stem override
- *   secondarySoundVolume: 1,                // Optional secondary volume scalar (0-1, default: 1)
+ *   secondarySoundVolume: 1,                // Optional secondary volume scalar (0-2, default: 1)
  *   secondarySoundDelayMs: 150,             // Optional secondary playback delay in milliseconds
  *   secondarySoundStartTime: 0.0,           // Optional secondary clip start time in seconds
  *   secondarySoundEndTime: 0.75             // Optional secondary clip end time in seconds
@@ -195,7 +195,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Armor Melt_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Melt.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 100,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   acidPool: {
@@ -858,7 +863,11 @@ export const SPELLS = {
       targets: [{ type: 'highestArmor', side: 'enemy', max: 1 }],
       formula: { type: 'attackPower', value: 4 },
       effects: [EFFECTS.ArmorBreak],
-      animationMs: 1200
+      animationMs: 1200,
+      soundVolume: 1.00,
+      soundDelayMs: 0,
+      soundStartTime: 0.00,
+      soundEndTime: 1.20
     },
     animation: 'Armor Break_2x2_4frames',
     animationPlacement: 'travel'
@@ -881,7 +890,12 @@ export const SPELLS = {
     description: 'Targets the caster and applies Armor Bearer (+3 Armor).',
     spec: { targets: [{ type: 'self' }], effects: [EFFECTS.ArmorBearer], animationMs: 1200 },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   battleFormation: {
     id: 'battleFormation', name: 'Battle Formation',
@@ -1077,7 +1091,7 @@ export const SPELLS = {
   },
   throwBoulder: {
     id: 'throwBoulder', name: 'Throw Boulder',
-    description: 'Projectile dealing 5 Attack Power. Also targets the caster and applies Taunt, forcing single-target enemy spells to target this Hero.',
+    description: 'Projectile dealing 5 Attack Power. Also targets the caster and applies Taunt, forcing non-projectile single-target enemy spells to target this Hero.',
     spec: {
       targets: [{ type: 'projectile', side: 'enemy', max: 1 }, { type: 'self' }],
       formula: { type: 'attackPower', value: 5 },
@@ -1116,7 +1130,7 @@ export const SPELLS = {
   },
   throwRock: {
     id: 'throwRock', name: 'Throw Rock',
-    description: 'Projectile dealing 2 Attack Power. Also targets the caster and applies Taunt, forcing single-target enemy spells to target this Hero.',
+    description: 'Projectile dealing 2 Attack Power. Also targets the caster and applies Taunt, forcing non-projectile single-target enemy spells to target this Hero.',
     spec: {
       targets: [{ type: 'projectile', side: 'enemy', max: 1 }, { type: 'self' }],
       formula: { type: 'attackPower', value: 2 },
@@ -1205,10 +1219,12 @@ export const SPELLS = {
     animation: 'Arcane Explosion_2x2_4frames',
     animationSecondary: 'Arcane Explosion Secondary_2x2_4frames',
     animationPlacement: 'travel',
+    sound: '/images/sounds/Arcane Explosion.mp3',
     soundVolume: 1.00,
     soundDelayMs: 300,
     soundStartTime: 0.00,
     soundEndTime: 1.20,
+    secondarySound: '/images/sounds/Arcane Explosion Secondary.mp3',
     secondarySoundVolume: 1.00,
     secondarySoundDelayMs: 250,
     secondarySoundStartTime: 0.00,
@@ -1250,7 +1266,7 @@ export const SPELLS = {
   },
   lifeForALife: {
     id: 'lifeForALife', name: 'Life for a Life',
-    description: '(1) Targets the enemy with the lowest Health and deals 4 Attack Power. (2) If the enemy\'s Health is brought to 0, target the ally with the least Health with a Heal Power of 4.',
+    description: '(1) Targets the enemy with the lowest Health and deals 4 Attack Power. (2) If the enemy is killed, target the ally with the least Health with a Heal Power of 4.',
     spec: {
       targets: [{ type: 'lowestHealth', side: 'enemy', max: 1 }],
       formula: { type: 'attackPower', value: 4 },
@@ -1267,7 +1283,7 @@ export const SPELLS = {
   },
   lightAndDark: {
     id: 'lightAndDark', name: 'Light and Dark',
-    description: 'Targets the ally column for a heal of 3 and targets the enemy column for an Attack Power of 5.',
+    description: 'Targets the enemy column for an Attack Power of 5 and targets the ally column for a heal of 3.',
     spec: {
       targets: [{ type: 'column', side: 'enemy' }, { type: 'column', side: 'ally' }],
       formula: { type: 'attackPower', value: 5 },
@@ -1394,7 +1410,7 @@ export const SPELLS = {
   // Demon: Siphon — damage enemy and heal caster
   siphon: {
     id: 'siphon', name: 'Siphon',
-    description: 'Targets the enemy with the highest Health, dealing 4 Attack Power. Also heals the caster for 4.',
+    description: 'Targets the enemy with the highest Health, dealing 4 Attack Power. Also heals the caster for 3.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4 }, post: { secondaryHeal: { amount: 3, side: 'ally', target: 'self' } }, animationMs: 1200 },
     animation: 'Siphon_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames'
   },
@@ -1513,7 +1529,12 @@ export const SPELLS = {
     description: 'Targets the ally with the least Armor and applies Armor Up (+2 Armor).',
     spec: { targets: [{ type: 'leastArmor', side: 'ally', max: 1 }], effects: [EFFECTS.ArmorUp], animationMs: 1200 },
     animation: 'Iron Forge_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   humble: {
     id: 'humble', name: 'Humble',
@@ -1748,7 +1769,11 @@ export const SPELLS = {
     description: 'Targets the enemy with the lowest Health, dealing 6 Attack Power.',
     spec: { targets: [{ type: 'lowestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6 }, animationMs: 1200 },
     animation: 'Arrest_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Arrest.mp3',
+    soundVolume: 2,
+    soundStartTime: 0.0,
+    soundEndTime: 1.2
   },
 
   sneakAttack: {

@@ -235,10 +235,10 @@ export const BOSS_SPELLS = {
     ...SPELLS.poisonDagger,
     id: 'level5PoisonDagger', 
     name: 'Lethal Dagger',
-    description: 'Targets the enemy with the highest Health dealing 6 Attack Power and applying Deep Poison.',
+    description: 'Targets the enemy with the highest Health, dealing 6 Attack Power and applying Deep Poison.',
     spec: {
       ...SPELLS.poisonDagger.spec,
-      formula: { type: 'attackPower', value: 5 },
+      formula: { type: 'attackPower', value: 6 },
       effects: [BOSS_EFFECTS.DeepPoison]
     }
   },
@@ -511,10 +511,10 @@ export const BOSS_SPELLS = {
     ...SPELLS.avalanche,
     id: 'level40WarMandate',
     name: 'Tremor',
-    description: 'Targets each enemy for a random amount of Attack Power between 5 and 20.',
+    description: 'Targets each enemy for a random amount of Attack Power between 3 and 18.',
     spec: {
       targets: [{ type: 'board', side: 'enemy' }],
-      formula: { type: 'roll', base: 4, die: 16, rollPerTarget: true, suppressRollInfo: true },
+      formula: { type: 'roll', base: 2, die: 16, rollPerTarget: true, suppressRollInfo: true },
       animationMs: 1200
     },
     animation: 'Boss Tremor_2x2_4frames',
@@ -535,7 +535,7 @@ export const BOSS_SPELLS = {
     ...SPELLS.darkBolt,
     id: 'level40Kingslaw',
     name: 'Dark Energy',
-    description: 'Targets the enemy with the most Energy, dealing 6 + target\'s current row casts remaining and ignoring Armor.',
+    description: 'Targets the enemy with the most Energy, dealing 9 + target\'s current row casts remaining and ignoring Armor.',
     spec: {
       targets: [{ type: 'highestEnergy', side: 'enemy', max: 1 }],
       formula: { type: 'attackPower', value: 9, ignoreArmor: true, addTargetCurrentRowCasts: true },
@@ -608,10 +608,10 @@ export const BOSS_SPELLS = {
     ...SPELLS.avalanche,
     id: 'level40NetherKingslaw',
     name: 'Whirlwind',
-    description: 'Targets the enemy board for 4 Attack Power and reduces Energy by 3.',
+    description: 'Targets the enemy board for 2 Attack Power and reduces Energy by 3.',
     spec: {
       targets: [{ type: 'board', side: 'enemy' }],
-      formula: { type: 'attackPower', value: 4 },
+      formula: { type: 'attackPower', value: 2 },
       post: { deltaEnergy: { amount: -3, side: 'enemy', target: 'target' } },
       animationMs: 1300
     },
@@ -882,19 +882,19 @@ export const BOSSES = {
       title: 'Master of Magic',
       description: 'Commands arcane forces beyond mortal comprehension.',
       stats: {
-        health: 62,
+        health: 92,
         armor: 3,
-        speed: 6,
+        speed: 5,
         energy: 0,
-        spellPower: 3
+        spellPower: 2
       },
       spells: {
         front: { id: 'arcaneExplosion', cost: 2, casts: 5 },
         middle: { id: 'arcaneBolt', cost: 2, casts: 6 },
-        back: { id: 'level20ArcaneBlast', cost: 4, casts: 3 }
+        back: { id: 'arcaneBlast', cost: 4, casts: 3 }
       },
       passives: [],
-      augments: ['keenStrikeII', 'doubleStrike', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeII', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_death_knight',
@@ -904,11 +904,11 @@ export const BOSSES = {
       title: 'The Deathless',
       description: 'An undead warrior whose blade drains life.',
       stats: {
-        health: 109,
+        health: 121,
         armor: 5,
         speed: 3,
         energy: 1,
-        spellPower: 3
+        spellPower: 2
       },
       spells: {
         front: { id: 'darkSlash', cost: 1, casts: 10 }, 
@@ -926,9 +926,9 @@ export const BOSSES = {
       description: 'A being of pure elemental destruction.',
       imageOverride: '/images/heroes/Elemental Fury Cropped.png',
       stats: {
-        health: 71,
+        health: 92,
         armor: 2,
-        speed: 6,
+        speed: 5,
         energy: 0,
         spellPower: 3
       },
@@ -954,19 +954,19 @@ export const BOSSES = {
       title: 'The Annihilator',
       description: 'Wields the power of the void itself.',
       stats: {
-        health: 81,
+        health: 151,
         armor: 4,
-        speed: 5,
+        speed: 4,
         energy: 1,
-        spellPower: 2
+        spellPower: 1
       },
       spells: {
         front: { id: 'drain', cost: 2, casts: 4 },
         middle: { id: 'darkBolt', cost: 2, casts: 4 },
-        back: { id: 'gravity', cost: 4, casts: 4 }
+        back: { id: 'gravity', cost: 6, casts: 4 }
       },
       passives: [],
-      augments: ['keenStrikeIII', 'vampiricII', 'curseSpellsAll', 'executionerII', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeIII', 'curseSpellsAll', 'executionerII', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_blood_golem_alpha',
@@ -998,11 +998,11 @@ export const BOSSES = {
       title: 'The Arbiter',
       description: 'Passes divine judgment on all who oppose.',
       stats: {
-        health: 70,
+        health: 132,
         armor: 4,
-        speed: 5,
+        speed: 4,
         energy: 1,
-        spellPower: 4
+        spellPower: 3
       },
       spells: {
         front: { id: 'malign', cost: 2, casts: 8 },
@@ -1026,11 +1026,11 @@ export const BOSSES = {
       title: 'The Unyielding Light',
       description: 'A high cleric whose rites purge corruption and punish augmented champions.',
       stats: {
-        health: 100,
+        health: 153,
         armor: 4,
         speed: 4,
-        energy: 2,
-        spellPower: 2
+        energy: 1,
+        spellPower: 1
       },
       spells: {
         front: { id: 'level30SanctifiedPurify', cost: 2, casts: 7 },
@@ -1048,11 +1048,11 @@ export const BOSSES = {
       title: 'Lord of Bones',
       description: 'A deathlord who commands corpses and drains the living.',
       stats: {
-        health: 95,
+        health: 166,
         armor: 3,
-        speed: 5,
+        speed: 4,
         energy: 1,
-        spellPower: 0
+        spellPower: 3
       },
       spells: {
         front: { id: 'level30GraveCurse', cost: 3, casts: 5 },
@@ -1060,7 +1060,7 @@ export const BOSSES = {
         back: { id: 'soulDrain', cost: 3, casts: 3 }
       },
       passives: [EFFECTS.Regen],
-      augments: ['keenStrikeIII', 'spellPowerBoostMassive', 'poisonSpellsMiddle', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
+      augments: ['keenStrikeIII', 'poisonSpellsMiddle', 'randomAugment', 'randomAugment', 'randomAugment', 'randomAugment']
     },
     {
       id: 'boss_primordial_dragon',
@@ -1070,11 +1070,11 @@ export const BOSSES = {
       title: 'The Worldflame',
       description: 'An ancient dragon whose breath ignites the world itself.',
       stats: {
-        health: 145,
+        health: 180,
         armor: 5,
-        speed: 4,
-        energy: 3,
-        spellPower: 3
+        speed: 3,
+        energy: 1,
+        spellPower: 2
       },
       spells: {
         front: { id: 'level30DragonFangs', cost: 2, casts: 6 },
@@ -1139,7 +1139,7 @@ export const BOSSES = {
         { speaker: 'The Boss', side: 'right', text: 'So tell me, challenger: will our clash awaken whatever humanity I have left… or will it drag the curse to the surface instead?' }
       ],
       stats: {
-        health: 250,
+        health: 280,
         armor: 6,
         speed: 6,
         energy: 2,
@@ -1158,7 +1158,7 @@ export const BOSSES = {
         description: 'His body falls, but his will refuses the grave.',
         imageOverride: '/images/heroes/Boss Ghost Cropped.png',
         stats: {
-          health: 210,
+          health: 240,
           armor: 0,
           speed: 6,
           energy: 0,

@@ -17,6 +17,10 @@ function toNumber(value, fallback) {
   return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function clampPlaybackGain(value, fallback = 1) {
+  return Math.max(0, Math.min(2, toNumber(value, fallback)));
+}
+
 function formatNumber(value, digits = 2) {
   return Number(toNumber(value, 0)).toFixed(digits);
 }
@@ -123,14 +127,14 @@ export default function SpellLab() {
   const currentSnippet = useMemo(() => {
     if (!selectedSpell) return '';
     const lines = [
-      `soundVolume: ${formatNumber(soundVolume, 2)},`,
+      `soundVolume: ${formatNumber(clampPlaybackGain(soundVolume, 1), 2)},`,
       `soundDelayMs: ${Math.round(toNumber(soundDelayMs, 0))},`,
       `soundStartTime: ${formatNumber(soundStartTime, 2)},`,
       `soundEndTime: ${formatNumber(soundEndTime, 2)}`
     ];
     if (hasSecondaryAudioControls) {
       lines.push(
-        `secondarySoundVolume: ${formatNumber(secondarySoundVolume, 2)},`,
+        `secondarySoundVolume: ${formatNumber(clampPlaybackGain(secondarySoundVolume, 1), 2)},`,
         `secondarySoundDelayMs: ${Math.round(toNumber(secondarySoundDelayMs, 0))},`,
         `secondarySoundStartTime: ${formatNumber(secondarySoundStartTime, 2)},`,
         `secondarySoundEndTime: ${formatNumber(secondarySoundEndTime, 2)}`
@@ -191,8 +195,8 @@ export default function SpellLab() {
               <div style={{ fontWeight: 700 }}>Primary Sound</div>
               <div style={{ display: 'grid', gridTemplateColumns: 'repeat(5, minmax(0, 1fr))', gap: 12 }}>
                 <label style={{ display: 'grid', gap: 6 }}>
-                  <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.1, color: '#9aa6b2' }}>Volume</span>
-                  <input type="number" step="0.05" value={soundVolume} onChange={e => setSoundVolume(e.target.value)} style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #2d3945', background: '#10161d', color: '#f3efe4' }} />
+                  <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.1, color: '#9aa6b2' }}>Volume (0-2)</span>
+                  <input type="number" min="0" max="2" step="0.05" value={soundVolume} onChange={e => setSoundVolume(e.target.value)} style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #2d3945', background: '#10161d', color: '#f3efe4' }} />
                 </label>
                 <label style={{ display: 'grid', gap: 6 }}>
                   <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.1, color: '#9aa6b2' }}>Delay ms</span>
@@ -224,8 +228,8 @@ export default function SpellLab() {
                 <div style={{ fontWeight: 700 }}>Secondary Sound</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 12 }}>
                   <label style={{ display: 'grid', gap: 6 }}>
-                    <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.1, color: '#9aa6b2' }}>Volume</span>
-                    <input type="number" step="0.05" value={secondarySoundVolume} onChange={e => setSecondarySoundVolume(e.target.value)} style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #2d3945', background: '#10161d', color: '#f3efe4' }} />
+                    <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.1, color: '#9aa6b2' }}>Volume (0-2)</span>
+                    <input type="number" min="0" max="2" step="0.05" value={secondarySoundVolume} onChange={e => setSecondarySoundVolume(e.target.value)} style={{ padding: '10px 12px', borderRadius: 8, border: '1px solid #2d3945', background: '#10161d', color: '#f3efe4' }} />
                   </label>
                   <label style={{ display: 'grid', gap: 6 }}>
                     <span style={{ fontSize: 12, textTransform: 'uppercase', letterSpacing: 1.1, color: '#9aa6b2' }}>Delay ms</span>

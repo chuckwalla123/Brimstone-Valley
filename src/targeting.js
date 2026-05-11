@@ -194,7 +194,7 @@ function casterHasEffectFlag(casterRef, flagName) {
 }
 
 function getTauntTargets(boardArr = [], boardSide = 'p1') {
-  const map = boardSide === 'p2' ? P2_INDEX_TO_TILE : P1_INDEX_TO_TILE;
+  const map = boardSide === 'p2' ? P2_INDEX_TO_TILE : (boardSide === 'p3' ? P3_INDEX_TO_TILE : P1_INDEX_TO_TILE);
   const out = [];
   for (let i = 0; i < (boardArr || []).length; i++) {
     const slot = (boardArr || [])[i];
@@ -324,10 +324,16 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       || (typeof d.max === 'number' && d.max > 1)
   );
   const hasSingleEnemyTarget = enemyDescriptors.length > 0 && isSingleEnemyTargetSequence;
-  const casterForcesLowestArmor = casterHasEffectFlag(casterRef, 'forceSingleTargetLowestArmor');
-  
   // If bypassTriggers is set (e.g., basicAttack), skip all preventSingleTarget checks
   const bypassTriggers = !!(options && options.bypassTriggers);
+  const singleEnemyDescriptor = (enemyIndependentDescriptors.length === 1) ? enemyIndependentDescriptors[0] : null;
+  const tauntCanRedirectSingleEnemySpell = hasSingleEnemyTarget
+    && !bypassTriggers
+    && !(options && options.isEffectDriven)
+    && !!singleEnemyDescriptor
+    && singleEnemyDescriptor.type !== 'projectile'
+    && singleEnemyDescriptor.type !== 'nearestDeadEnemy';
+  const casterForcesLowestArmor = casterHasEffectFlag(casterRef, 'forceSingleTargetLowestArmor');
 
   const multiTargetRedirect = (() => {
     if (bypassTriggers || !enemyHasMulti) return null;
@@ -378,7 +384,7 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       continue;
     }
 
-    if (!bypassTriggers && side === 'enemy' && hasSingleEnemyTarget && type !== 'self') {
+    if (tauntCanRedirectSingleEnemySpell && side === 'enemy' && type !== 'self') {
       const targetSide = resolveSide('enemy') || casterSide;
       const targetBoardArr = getBoardArr(targetSide) || [];
       const tauntTargets = getTauntTargets(targetBoardArr, targetSide);
@@ -1624,7 +1630,7 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
   }
 
   try {
-    if (!bypassTriggers && hasSingleEnemyTarget) {
+    if (tauntCanRedirectSingleEnemySpell) {
       const enemySide = resolveSide('enemy') || casterSide;
       const enemyBoardArr = getBoardArr(enemySide) || [];
       const tauntTargets = getTauntTargets(enemyBoardArr, enemySide);

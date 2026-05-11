@@ -103,8 +103,8 @@ export const EFFECTS = {
   LieInWait: { name: 'Lie In Wait', image: '/images/effects/Lie in Wait.png', kind: 'buff', duration: 5, modifiers: { spellPower: 2 }, preventSingleTarget: true, description: 'Grants +2 Spell Power and makes the affected hero untargetable by single-target spells for 5 rounds.' },
   LieInWaitLevel5: { name: 'Lie In Wait', image: '/images/effects/Lie in Wait.png', kind: 'buff', duration: 1, modifiers: { spellPower: 2 }, preventSingleTarget: true, description: 'Grants +2 Spell Power and makes the affected hero untargetable by single-target spells for 1 round.' },
   Fade: { name: 'Fade', image: '/images/effects/Fade.png', kind: 'buff', duration: 5, modifiers: { spellPower: 1 }, preventSingleTarget: true, description: 'Grants +1 Spell Power and makes the affected hero untargetable by single-target spells for 5 rounds.' },
-  // Taunt: forces single-target enemy spells to target this hero
-  Taunt: { name: 'Taunt', image: '/images/effects/Taunt.png', kind: 'buff', duration: 'permanent', taunt: true, description: 'Forces single-target enemy spells to target this Hero.' },
+  // Taunt: forces non-projectile single-target enemy spells to target this hero
+  Taunt: { name: 'Taunt', image: '/images/effects/Taunt.png', kind: 'buff', duration: 'permanent', taunt: true, description: 'Forces non-projectile single-target enemy spells to target this Hero.' },
   Loyalty: {
     name: 'Loyalty',
     image: '/images/effects/Loyalty.png',

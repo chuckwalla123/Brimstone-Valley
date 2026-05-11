@@ -1,12 +1,14 @@
 // SfxManager.js - Handles sound effect volume settings
 
 const STORAGE_KEY = 'bsv_sfx_volume';
+const MAX_PLAYBACK_GAIN = 2;
 
 class SfxManager {
   constructor() {
     this.volume = this.loadVolume();
     this.activePlaybacks = new Set();
     this.pendingPlaybacks = new Set();
+    this.audioContext = null;
   }
 
   // Load saved volume preference (default: 0.5)
@@ -42,10 +44,25 @@ class SfxManager {
     this.saveVolume(vol);
   }
 
-  clampVolume(volume, fallback = 1) {
+  clampPlaybackGain(volume, fallback = 1) {
     const parsed = Number(volume);
-    if (!Number.isFinite(parsed)) return Math.max(0, Math.min(1, fallback));
-    return Math.max(0, Math.min(1, parsed));
+    if (!Number.isFinite(parsed)) return Math.max(0, Math.min(MAX_PLAYBACK_GAIN, fallback));
+    return Math.max(0, Math.min(MAX_PLAYBACK_GAIN, parsed));
+  }
+
+  getAudioContext() {
+    if (this.audioContext) return this.audioContext;
+    if (typeof window === 'undefined') return null;
+
+    const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+    if (!AudioContextCtor) return null;
+
+    try {
+      this.audioContext = new AudioContextCtor();
+      return this.audioContext;
+    } catch {
+      return null;
+    }
   }
 
   normalizeWindow(startTime, endTime) {
@@ -62,6 +79,10 @@ class SfxManager {
     if (!src || typeof Audio === 'undefined') return null;
 
     const audio = new Audio(src);
+    const playbackGain = this.clampPlaybackGain(baseVolume, 1) * this.getVolume();
+    const audioContext = this.getAudioContext();
+    let sourceNode = null;
+    let gainNode = null;
     const { startTime: clipStart, endTime: clipEnd } = this.normalizeWindow(startTime, endTime);
     const playbackDelayMs = Number.isFinite(Number(delayMs)) ? Math.max(0, Number(delayMs)) : 0;
     let stopTimer = null;
@@ -75,6 +96,18 @@ class SfxManager {
       if (delayTimer) {
         clearTimeout(delayTimer);
         delayTimer = null;
+      }
+      if (sourceNode) {
+        try {
+          sourceNode.disconnect();
+        } catch {}
+        sourceNode = null;
+      }
+      if (gainNode) {
+        try {
+          gainNode.disconnect();
+        } catch {}
+        gainNode = null;
       }
       this.pendingPlaybacks.delete(audio);
       this.activePlaybacks.delete(audio);
@@ -102,7 +135,26 @@ class SfxManager {
         }
       } catch {}
 
-      audio.volume = this.clampVolume(baseVolume) * this.getVolume();
+      if (audioContext) {
+        try {
+          if (audioContext.state === 'suspended') {
+            audioContext.resume().catch(() => {});
+          }
+          sourceNode = audioContext.createMediaElementSource(audio);
+          gainNode = audioContext.createGain();
+          gainNode.gain.value = playbackGain;
+          sourceNode.connect(gainNode);
+          gainNode.connect(audioContext.destination);
+          audio.volume = 1;
+        } catch {
+          sourceNode = null;
+          gainNode = null;
+          audio.volume = Math.max(0, Math.min(1, playbackGain));
+        }
+      } else {
+        audio.volume = Math.max(0, Math.min(1, playbackGain));
+      }
+
       this.pendingPlaybacks.delete(audio);
       this.activePlaybacks.add(audio);
       scheduleStop();
