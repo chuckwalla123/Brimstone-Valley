@@ -75,8 +75,10 @@ export const STORY_ARCS = {
       'But whispers say the relics are not singular. Whoever claims the first may ignite a war for the rest.'
     ],
     outro: [
+      'The convoy survives the Lightning Road bloodied but intact, buying Queen Aralyn the time she needs to march on the capital with Halbrecht at her side.',
+      'Warrior wins his place back in the line, not forgiveness. Lancer lets him march because the kingdom still needs his blade more than his absolution.',
       'The Heart of Brimstone is no longer just a relic prize. It is the spark that turns the Brave Kingdom\'s civil war into a reckoning.',
-      'Rowan and Varric harden the capital into a fortress while the queen\'s loyalists march under a sky that no longer behaves like weather.'
+      'Rowan and Varric harden the capital into a fortress while stormlight crawls over its walls and the sky above Brimstone Valley stops behaving like weather.'
     ],
     map: {
       start: 'caravan_clash',
@@ -95,11 +97,16 @@ export const STORY_ARCS = {
             musicIntensity: 'medium'
           },
           preBattle: [
+            'The summons came from a palace war room already split between royal banners and hired steel. Queen Aralyn demanded a show of force. Prince Rowan argued Varric should be bargained into service before he became too expensive to buy. The Stonecased King watched in silence, leaving other people to decide what the kingdom still was.',
             'The relic caravan meant for the capital lies broken across the canyon road, its crates split and its escorts disarmed. Lord Varric, once a captain of the Brave Kingdom, has claimed the shipment as payment for what he calls unpaid debts.',
             'Queen Aralyn demands the relics returned immediately. Prince Rowan argues Varric should be negotiated with, not crushed. Lancer sees duty. Warrior sees leverage. Their orders are simple; their loyalties are not.',
             'As dust whips through the ravine, Varric\'s shield line tightens around the remaining crates. Outcast blades and rogue casters hold the flanks while scouts watch the ridges for reinforcements. The first true fracture in the kingdom now has a battlefield.'
           ],
           dialogue: [
+            { speaker: 'Queen Aralyn', side: 'right', text: 'Bring me the relics and proof that the crown still commands obedience. I will not let Varric turn one stolen caravan into policy.' },
+            { speaker: 'Prince Rowan', side: 'right', text: 'Bring me Varric alive if you can. Men like him are not defeated by sermons. They are recruited, priced, and pointed at worse enemies.' },
+            { speaker: 'Warrior', side: 'right', text: 'You hear it, Lancer. Even in the palace no one agrees what victory means.' },
+            { speaker: 'Lancer', side: 'left', text: 'Then we recover the caravan first and leave the court to choke on the argument afterward.' },
             { speaker: 'Lancer', side: 'left', text: 'The queen ordered this caravan home, not sold to the highest bidder. We take the relics back and end this now.' },
             { speaker: 'Warrior', side: 'right', text: 'Or we listen first. Varric commands veterans, not rabble. If the court keeps bleeding men and coin, we may need him later.' },
             { speaker: 'Lancer', side: 'left', text: 'You can bargain after he releases Crown property. Until then, this is theft in armor.' },
@@ -461,12 +468,17 @@ export const STORY_ARCS = {
             musicIntensity: 'high'
           },
           preBattle: [
-            'The road back to the capital is colder than the ash wind. Halbrecht has declared for the crown, but his support comes with a demand Prince Rowan will never accept: the prince must swear an oath of reform in person. When Lancer brings those terms home, the court finally cracks open. Rowan stops pretending he can serve both kingdom and mercenary future. He has already been speaking with Varric, and now even Warrior can no longer hide how close he has drifted to that orbit.',
+            'Halbrecht\'s demand lands in the council chamber like a verdict. Queen Aralyn accepts the oath of reform immediately. Rowan laughs, calls Halbrecht a relic of a dead age, and refuses in front of the court. Warrior does not openly join the prince, but he no longer hides how close he has drifted to Rowan\'s orbit. By the time the meeting breaks, everyone in the room understands that the kingdom has split along lines no speech will mend.',
             'Queen Aralyn moves fast. Fearing Rowan\'s influence inside the capital, she decides to ride for Halbrecht\'s fortress herself and swear the oath in person before the prince can poison the alliance. Lancer escorts her with a thin protective column of guards and shield maidens, hoping speed will matter more than numbers. But the road to Dawnfall Bridge is narrow, exposed, and perfect for treachery.',
             'Rowan cannot allow the queen to reach Halbrecht. He dispatches a covert strike force of rogue mercenaries, compromised palace guards, and a dark mage whose illusions turn fog into a weapon. Warrior is ordered to lead the operation. He accepts before he knows Lancer is riding with the queen. By the time the truth reveals itself through the mist, the bridge is already a kill box and both men are trapped inside the consequences of every choice they refused to name.',
             'As the caravan rolls onto the stone span, false silhouettes bloom in the fog and the ravine below disappears behind conjured shadow. Lancer feels the trap tighten instantly. Then Warrior steps out of the haze, steel in hand, no longer a rumor or a suspicion but the point of Rowan\'s spear. What follows will decide more than whether the queen escapes. It will decide whether anything remains of the bond that once held the Brave Kingdom together.'
           ],
           dialogue: [
+            { speaker: 'Queen Aralyn', side: 'right', text: 'You met with Varric behind my back, refused Halbrecht\'s terms, and still speak as if the crown owes you patience.' },
+            { speaker: 'Prince Rowan', side: 'right', text: 'I spoke with the one man in this kingdom who understands the world as it is. Halbrecht wants a ceremony. Varric offers a future that can survive the month.' },
+            { speaker: 'Lancer', side: 'left', text: 'Varric attacked Halbrecht and marched a blood golem against his walls. That is not reform. It is a purchase order written in bodies.' },
+            { speaker: 'Warrior', side: 'right', text: 'The prince is wrong about Varric. He is not wrong about this court. The kingdom is dying faster than honor can feed it.' },
+            { speaker: 'Queen Aralyn', side: 'right', text: 'Then I will ride to Halbrecht myself and swear the oath you refuse. Let the fortress judge which of us still serves the realm.' },
             { speaker: 'Queen Aralyn', side: 'right', text: 'If Rowan refuses reform, then I will swear the oath myself. Halbrecht must see that the crown can still bind itself to duty.' },
             { speaker: 'Lancer', side: 'left', text: 'Then we move quickly and quietly. Dawnfall Bridge is exposed ground. If Rowan guesses your route, he\'ll try to break this convoy before we clear the ravine.' },
             { speaker: 'Queen Aralyn', side: 'right', text: 'He is still my son. I keep telling myself there is a line he will not cross.' },
@@ -603,12 +615,17 @@ export const STORY_ARCS = {
             musicIntensity: 'high'
           },
           preBattle: [
+            'The queen reaches Halbrecht before Rowan can turn Dawnfall into a victory speech. In the fortress hall she kneels, swears the Oath of Reform, and binds the crown to terms every watching banner can measure. The gesture costs the court its last illusion of unity, but it gives the loyalists something stronger than illusion: a pact spoken aloud and witnessed in steel.',
+            'Rowan answers the oath by moving on the Vault of Echoes beneath Dawnfall\'s oldest pylons. If he burns the tablets and ledgers sealed there, he can call the queen a fugitive and his own coup a lawful succession before the nobles have time to choose between them. In the capital, Warrior hears the order and, for the first time, understands that Rowan is not trying to save the kingdom from rot. He is trying to own the memory of what the kingdom was.',
             'Dawnfall Bridge does not merely span a ravine. Beneath its oldest pylons lies the Vault of Echoes, a sealed archive from before the Contract Age where the Brave Kingdom stored oath tablets, campaign ledgers, and relic-imprinted testimony from its greatest wars. Halbrecht knows the place because he once swore his own commission there. If Rowan seizes it first, he can burn every record tying the crown\'s army to the old code and replace duty with whatever contract keeps him in power.',
             'The queen rides on toward safety while Lancer, Halbrecht, and a handpicked detachment break away under torchlight. The bridge ambush bought Rowan time, and he uses every heartbeat. Palace defectors descend into the vault ahead of them with a rogue mage guiding them through wards built to answer only to royal blood and old command sigils. Those wards have started to fracture under relic pressure, bleeding memories into the stone. Voices answer footsteps. Shapes move where no soldiers stand.',
             'Halbrecht treats the hauntings with contempt. He cares less about ghosts than the political murder underway in the dark. If the oath records survive, Rowan can still be named for what he is: not heir, not reformer, but a prince willing to erase the kingdom\'s own memory to make treason look lawful. Lancer sees another danger in the vault. The relic surge in the masonry feels too familiar, too close to the pulse that shook the fortress walls. Something deeper than Rowan\'s coup is stirring beneath the archive.',
             'By the time the strike team reaches the gate chamber, the enemy has already begun the purge. Braziers burn beside cracked tablets. A palace guard captain hacks seals from bronze doors while spectral echoes pull themselves out of old battle vows and stagger into the corridor like unfinished regrets. The vault is no longer a library. It is a battlefield made of history, and if Halbrecht is right, losing it may damn the Brave Kingdom before the civil war is even decided.'
           ],
           dialogue: [
+            { speaker: 'Queen Aralyn', side: 'right', text: 'Take back the records, Lord Halbrecht. If my son wants to bury the kingdom, he will have to bury me with it.' },
+            { speaker: 'Halbrecht', side: 'right', text: 'No. He will bury himself. We just have to deny him the shovel.' },
+            { speaker: 'Lancer', side: 'left', text: 'Then point me at the dark and keep the fortress standing until I come back with its memory.' },
             { speaker: 'Halbrecht', side: 'right', text: 'Rowan wants the records dead because dead records cannot contradict a living lie. We take this vault back, or tomorrow he rewrites the kingdom in his own hand.' },
             { speaker: 'Lancer', side: 'left', text: 'Then we hold the archive and every oath inside it. If the prince wants legitimacy, let him try stealing it from witnesses who still bleed.' },
             { speaker: 'Halbrecht', side: 'right', text: 'Good. Leave speeches for court. Down here, history survives because someone is willing to kill for it.' },
@@ -711,27 +728,27 @@ export const STORY_ARCS = {
             mode: 'choose_outgoing',
             incomingHeroId: 'warriorID',
             title: 'Warrior Returns',
-            subtitle: 'The vault purge breaks Warrior\'s faith in Rowan. He comes back to the expedition asking for one place to make things right.',
-            helper: 'Choose which current teammate Warrior will replace. Lancer cannot be removed in this scene, and Warrior will inherit the departing hero\'s relics and board slot.',
+            subtitle: 'The vault purge breaks Warrior\'s faith in Rowan. He returns without excuses, asking only for one place in the line to start paying for the bridge.',
+            helper: 'Choose which current teammate Warrior will replace. Lancer cannot be removed in this scene. Warrior inherits the departing hero\'s relics and board slot, but the story treats his return as a hard truce, not a reconciliation.',
             excludedOutgoingHeroIds: ['lancerID']
           },
-          next: ['lightning_road']
+          next: ['fork_of_oaths']
         },
         {
           id: 'fork_of_oaths',
           type: 'choice',
           title: 'Fork of Oaths',
-          description: 'A bannered road and a shadowed path. Both lead deeper into the valley.',
+          description: 'With the vault records saved and Warrior returned under Halbrecht\'s terms, two routes open toward the Heart of Brimstone.',
           choices: [
-            { id: 'warcamp', label: 'Warcamp', next: 'warcamp' },
-            { id: 'watchtower', label: 'Watchtower', next: 'watchtower' }
+            { id: 'warcamp', label: 'Break Varric\'s warcamp', next: 'warcamp' },
+            { id: 'watchtower', label: 'Question the watchtower mage', next: 'watchtower' }
           ]
         },
         {
           id: 'warcamp',
           type: 'battle',
           title: 'Warcamp',
-          description: 'Hired blades test your resolve before granting passage.',
+          description: 'Varric\'s forward warcamp blocks the banner road to the Heart and tests Warrior\'s uneasy return.',
           presentation: {
             backgroundKey: 'brave_warcamp',
             ambientKey: 'amb_brave_warcamp_drums',
@@ -740,12 +757,15 @@ export const STORY_ARCS = {
             musicIntensity: 'mediumHigh'
           },
           preBattle: [
+            'Warrior rejoins the column at dusk with Rowan\'s seal surrendered and no expectation of pardon. Lancer gives him only the truth: march where Halbrecht points, hold the line, and do not ask to be trusted yet. Halbrecht answers the tension with work. The vault records describe two surviving approaches to the Heart, and Varric\'s forward warcamp blocks the banner road.',
             'The warcamp sprawls across a scarred plateau like a predatory beast, its tents clustered around cooking fires that burn with unnatural brightness. War drums echo through the valley, keeping time not for marches but for wagers. Mercenary companies from across the kingdoms have gathered here, their banners a patchwork of stolen colors and forged crests. This is no mere encampment; it\'s a marketplace of violence, where contracts are signed in firelight and reputations are bought with blood.',
             'The camp\'s leader is a battle mage, a sorcerer who abandoned the royal academies when the Crown could no longer afford his experiments. His magic twists the air around the camp, creating illusions that make the tents seem to shift and the shadows whisper secrets. Scouts report that he commands a diverse force—deserters, opportunists, and true believers in the Contract Age—all united by the promise of relic wealth.',
             'Warrior and Lancer approach cautiously, their warband\'s presence causing ripples through the camp. Mercenaries pause their games of chance, sizing up the newcomers with professional eyes. This is not a toll gate or a desperate garrison; this is a test of whether their ideals can survive in the Contract Age\'s heart. The camp represents the system at its most raw—violence commodified, loyalty auctioned, and power flowing to those ruthless enough to seize it.',
             'As they enter the camp\'s perimeter, the battle mage emerges from his command tent, his robes adorned with relic fragments that glow with stolen power. The mercenaries form a loose circle, not a formation but a crowd of predators sensing weakness. This confrontation will determine not just passage, but whether Warrior and Lancer\'s quest remains a noble endeavor or becomes just another mercenary contract.'
           ],
           dialogue: [
+            { speaker: 'Lancer', side: 'right', text: 'You are here because Halbrecht needs another blade, not because the bridge is forgotten.' },
+            { speaker: 'Warrior', side: 'left', text: 'Good. Keep the forgiveness. I asked for a post, not a blessing.' },
             { speaker: 'Lancer', side: 'right', text: 'Every camp has a ledger. Every ledger has a debt. This place reeks of desperation and broken promises.' },
             { speaker: 'Warrior', side: 'left', text: 'These men sold their swords to the highest bidder. Now they guard the path we need. The Contract Age has made warriors into merchants.' },
             { speaker: 'Lancer', side: 'right', text: 'And merchants into warriors. Look at them—gambling away their pay, drinking away their regrets. The merc lords promised wealth, but delivered ruin.' },
@@ -862,7 +882,7 @@ export const STORY_ARCS = {
           id: 'watchtower',
           type: 'battle',
           title: 'Watchtower',
-          description: 'A scorched tower hides a relic fragment and a stubborn defense.',
+          description: 'A scorched tower guards the warded ascent to the Heart and offers one last chance to understand the relics.',
           presentation: {
             backgroundKey: 'brave_watchtower',
             ambientKey: 'amb_brave_watchtower_hum',
@@ -871,12 +891,15 @@ export const STORY_ARCS = {
             musicIntensity: 'medium'
           },
           preBattle: [
+            'Warrior rejoins the expedition under guard and under orders. Halbrecht sends the party to the old watchtower because the vault tablets speak of a warded ascent the prince does not yet control. If the mage inside still remembers the kingdom at all, he may know how to reach the Heart before Rowan or Varric can seize it.',
             'The watchtower leans into the perpetual wind of Brimstone Valley like a wounded sentinel, its stone blackened by siege fires from wars long past. The structure was built in a more prosperous age, when the kingdom could afford to maintain outposts along the valley\'s treacherous approaches. Now it serves as a hermit\'s refuge and a relic guardian, its upper chambers housing an arcane mage who defected from the royal academies during the bankruptcy.',
             'Inside the tower, a shard of relic power glows with a stubborn, otherworldly light, pulsing like a heartbeat in the darkness. The arcane mage has bound himself to this fragment, using its energy to maintain protective wards that make the tower impervious to casual intrusion. Scouts report that he lives as a recluse, his mind warped by years of studying forbidden relic lore, convinced that he alone understands the true nature of the valley\'s treasures.',
             'Warrior and Lancer approach with reverence, recognizing the tower as one of the kingdom\'s last intact fortifications. But the arcane mage sees them as thieves, not saviors. His magic creates illusions that make the path to the tower shift and change, testing the warband\'s resolve. This is not a battle for territory, but for knowledge—the mage possesses ancient texts that could illuminate the relics\' true purpose.',
             'As they draw near, the tower\'s wards flare with defensive energy, and the arcane mage appears at a high window, his eyes glowing with relic-enhanced sight. The confrontation represents a clash of ideologies: the mage\'s solitary pursuit of knowledge versus the warband\'s mission to restore the kingdom. The relic shard within could be the key to understanding why five kingdoms now converge on the same ash-choked valley.'
           ],
           dialogue: [
+            { speaker: 'Lancer', side: 'right', text: 'Halbrecht vouched for your usefulness, Warrior. He did not ask me to vouch for your honor.' },
+            { speaker: 'Warrior', side: 'left', text: 'Useful is enough for now. Let the tower judge the rest in lightning instead of speeches.' },
             { speaker: 'Warrior', side: 'left', text: 'Relics should not be guarded by hermits in ruined towers. That is the point of them—they belong to those who can use them for the greater good.' },
             { speaker: 'Lancer', side: 'right', text: 'The point now is survival. We give the shard a better home, where it can awaken armories and feed the hungry, not fuel one man\'s obsession.' },
             { speaker: 'Warrior', side: 'left', text: 'This tower was kingdom-built, kingdom-funded. The arcane mage swore the same oaths as the scholars who trained him. He\'s a deserter, not a guardian.' },
@@ -1002,12 +1025,15 @@ export const STORY_ARCS = {
             musicIntensity: 'high'
           },
           preBattle: [
+            'Either route ends at the same buried truth. Captured ledgers from the warcamp and warnings pried from the watchtower both point beneath the valley to a regent chamber sealed when the old kingdom first learned what the Heart could do. Whatever Rowan and Varric hoped to weaponize, it was already awake.',
             'The Heart of Brimstone pulses at the valley\'s core like a second sun, its power so immense that it warps the air around it and makes the ground tremble with each beat. Guarding this ultimate relic is the Iron Regent, a Warrior who has fused his body with relic-plate armor, becoming more machine than man. Once a loyal champion of the Crown, he was corrupted by the Heart\'s power, convinced that he alone is worthy to wield its might.',
             'The regent\'s armor drinks the light, absorbing energy from the surrounding ash and converting it into devastating power. His movements are unnaturally precise, his strikes enhanced by relic circuitry that predicts and counters attacks. Scouts who have glimpsed him speak of a being who has transcended humanity, becoming the perfect guardian for the valley\'s greatest treasure.',
             'Warrior and Lancer approach the chamber with a mixture of awe and determination. The Heart represents the culmination of their journey—the key to restoring the kingdom and breaking the mercenary lords\' grip. But the Iron Regent stands as the ultimate test, a fallen hero who embodies what they might become if they claim the relic\'s power. This is not just a battle for possession, but a confrontation with the corrupting influence of absolute power.',
             'As they enter the chamber, the Heart\'s pulse synchronizes with the regent\'s armored form, creating a symphony of power that shakes the very foundations of the valley. The Iron Regent speaks with a voice distorted by relic enhancements, his words a chilling reminder that the Contract Age has claimed even the noblest souls. Victory here will not just secure the relic—it will determine whether Warrior and Lancer remain heroes or become tyrants.'
           ],
           dialogue: [
+            { speaker: 'Lancer', side: 'right', text: 'This is where every shortcut was leading us: one throne, one relic, and one more excuse to call power a kind of order.' },
+            { speaker: 'Warrior', side: 'left', text: 'Then we finish it here, before Rowan finds a way to kneel to this thing and call it statecraft.' },
             { speaker: 'Warrior', side: 'left', text: 'If we take the Heart, the mercenary lords lose their leverage. The kingdom can rebuild its armories, feed its people, restore what\'s been stolen.' },
             { speaker: 'Lancer', side: 'right', text: 'And if we fail, the kingdom becomes a contract forever. The lords will own the land, the laws, and the future. We cannot turn back now.' },
             { speaker: 'Warrior', side: 'left', text: 'Then we do not fail. The Heart belongs to the people who built this kingdom, not the machine that guards it.' },

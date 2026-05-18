@@ -4,7 +4,6 @@ import { HTML5Backend } from 'react-dnd-html5-backend';
 import { HEROES } from './heroes.js';
 import { indexToRow } from './targeting';
 import { getAI } from './ai';
-import { initializeNeuralAI } from './ai/neuralAI.js';
 import getAssetPath from './utils/assetPath';
 import { getSpellById } from './spells.js';
 import { getEffectByName } from './effects.js';
@@ -606,15 +605,16 @@ export default function DraftBoard({ aiDifficulty = null, socket, gameState, loc
       // Double-check we haven't already acted on this step (in case of race condition)
       if (aiActedStepRef.current >= step) return;
       aiActedStepRef.current = step;
-
-      // Ensure neural AI is initialized if using medium difficulty
-      if (aiDifficulty === 'medium') {
-        await initializeNeuralAI();
-      }
       
       if (currentAction.type === 'ban') {
         // AI makes ban decision
-        const decision = await ai.makeBanDecision(availableHeroes);
+        const boardState = {
+          p2Main,
+          p2Reserve,
+          p1Main,
+          p1Reserve,
+        };
+        const decision = await ai.makeBanDecision(availableHeroes, boardState);
         if (decision) {
           handleBanDrop(decision);
         }

@@ -72,9 +72,15 @@ function calculateBaseStats(hero) {
  * @param {Array} allyReserve - Ally reserve board (2 tiles)
  * @returns {number} Estimated total impact of the spell
  */
-const getFormulaBaseValue = (formula = {}, casterSpellPower = 0) => {
+const getFormulaBaseValue = (formula = {}, casterSpellPower = 0, casterHero = null, targetRef = null) => {
   if (!formula) return 0;
   const baseValue = Number(formula.value || 0);
+  const casterCurrentHealth = Number(casterHero?.currentHealth ?? casterHero?.health ?? 0);
+  const casterMaxHealth = Number(casterHero?.health ?? casterHero?.maxHealth ?? casterCurrentHealth);
+  const casterMissingHealth = Math.max(0, casterMaxHealth - casterCurrentHealth);
+  const targetTile = targetRef?.tile;
+  const targetHero = targetRef?.hero ?? targetTile?.hero ?? null;
+  const targetSpeed = Math.max(1, Number(targetTile?.currentSpeed ?? targetHero?.currentSpeed ?? targetHero?.speed ?? 3));
   if (formula.type === 'roll') {
     const die = Number(formula.die || 6);
     const base = Number(formula.base || 0);
@@ -82,12 +88,68 @@ const getFormulaBaseValue = (formula = {}, casterSpellPower = 0) => {
     return (formula.ignoreSpellPower ? (base + avgRoll) : (base + avgRoll + casterSpellPower));
   }
   if (formula.type === 'attackPower') {
-    return formula.ignoreSpellPower ? baseValue : (baseValue + casterSpellPower);
+    let total = formula.ignoreSpellPower ? baseValue : (baseValue + casterSpellPower);
+    if (formula.addCasterMissingHealthHalf) {
+      total += Math.floor(casterMissingHealth / 2);
+    }
+    if (formula.addCasterMissingHealth) {
+      total += casterMissingHealth;
+    }
+    if (formula.divideByTargetSpeed) {
+      const quotient = total / targetSpeed;
+      total = formula.roundUp ? Math.ceil(quotient) : Math.floor(quotient);
+    }
+    return total;
   }
   if (formula.type === 'healPower') {
     return baseValue + casterSpellPower;
   }
   return baseValue;
+};
+
+const getArmorAdjustedDamage = (formula = {}, rawDamage = 0, targetArmor = 0) => {
+  if (formula.ignoreArmor || formula.type === 'damage') return Math.max(0, Number(rawDamage || 0));
+  const armorMultiplier = Math.max(0, Number(formula.armorMultiplier || 1));
+  return Math.max(0, Number(rawDamage || 0) - (Number(targetArmor || 0) * armorMultiplier));
+};
+
+const getTileEffects = (tile) => {
+  if (Array.isArray(tile?.effects)) return tile.effects;
+  if (Array.isArray(tile?.hero?.effects)) return tile.hero.effects;
+  return [];
+};
+
+const createTargetRef = (tile, index, side, reserve = false) => {
+  if (!tile || !tile.hero) return null;
+  return { hero: tile.hero, tile, index, side, reserve };
+};
+
+const createVirtualTargetRef = (hero, index, side) => {
+  if (!hero) return null;
+  return {
+    hero,
+    tile: {
+      hero,
+      effects: Array.isArray(hero.effects) ? hero.effects : []
+    },
+    index,
+    side,
+    reserve: index < 0
+  };
+};
+
+const pushTargetRef = (list, targetRef) => {
+  if (targetRef && targetRef.hero) list.push(targetRef);
+};
+
+const countEffectsByKind = (tile, kind) => getTileEffects(tile).filter(effect => effect && effect.kind === kind).length;
+const countEffectsByName = (tile, effectName) => getTileEffects(tile).filter(effect => effect && effect.name === effectName).length;
+const countMissingHealth = (tile) => {
+  const hero = tile?.hero;
+  if (!hero) return 0;
+  const currentHealth = Number(tile?.currentHealth ?? hero.currentHealth ?? hero.health ?? 0);
+  const maxHealth = Number(hero.health ?? hero.maxHealth ?? currentHealth);
+  return Math.max(0, maxHealth - currentHealth);
 };
 
 const getEffectScore = (effect) => {
@@ -176,11 +238,11 @@ const estimateIncomingDamagePerTurn = (hero, tileIndex, isP2, enemyBoard = [], e
     if (!isTargeted) return;
 
     const formula = spell.spec.formula || {};
-    const baseValue = getFormulaBaseValue(formula, casterSpellPower);
+    const targetRef = createTargetRef(allyBoardSim[tileIndex], tileIndex, targetSide);
+    const baseValue = getFormulaBaseValue(formula, casterSpellPower, enemyHero, targetRef);
 
     if (formula.type === 'attackPower' || formula.type === 'damage' || formula.type === 'roll') {
-      const ignoreArmor = formula.ignoreArmor || formula.type === 'damage';
-      const effectiveDamage = ignoreArmor ? baseValue : Math.max(0, baseValue - heroArmor);
+      const effectiveDamage = getArmorAdjustedDamage(formula, baseValue, heroArmor);
       totalIncoming += effectiveDamage;
     }
 
@@ -271,7 +333,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
   const spec = spell.spec;
   const formula = spec.formula || {};
   // Don't default to 1 - utility spells with no damage formula should have 0 baseDamage
-  const baseValue = getFormulaBaseValue(formula, casterSpellPower);
+  const baseValue = getFormulaBaseValue(formula, casterSpellPower, hero);
   const isHealingSpell = formula.type === 'heal' || formula.type === 'healPower';
   const targets = spec.targets || [];
   
@@ -306,6 +368,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
   const casterPos = getTileInfo(tileIndex);
 
   const isTileAlive = (tile) => (tile && tile.hero && !tile._dead);
+  const casterRef = createVirtualTargetRef(hero, tileIndex, boardSide);
   
   // Helper to get the target column when attacking across boards
   // Per targeting.js column targeting: when attacking enemies, columns are INVERTED
@@ -344,7 +407,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
         for (let i = 0; i < 9; i++) {
           const targetPos = getTileInfoForBoard(i);
           if (rowsToInclude.has(targetPos.row) && isTileAlive(boardToCheck[i])) {
-            affectedTargets.push(boardToCheck[i].hero);
+            pushTargetRef(affectedTargets, createTargetRef(boardToCheck[i], i, side));
           }
         }
         break;
@@ -362,7 +425,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           for (let i = 0; i < 9; i++) {
             const targetPos = getTileInfoForBoard(i);
             if (targetPos.row === bestRow && isTileAlive(boardToCheck[i])) {
-              affectedTargets.push(boardToCheck[i].hero);
+              pushTargetRef(affectedTargets, createTargetRef(boardToCheck[i], i, side));
             }
           }
         }
@@ -388,7 +451,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           for (let i = 0; i < 9; i++) {
             const targetPos = getTileInfoForBoard(i);
             if (targetPos.row === bestRow && isTileAlive(boardToCheck[i])) {
-              affectedTargets.push(boardToCheck[i].hero);
+              pushTargetRef(affectedTargets, createTargetRef(boardToCheck[i], i, side));
             }
           }
         }
@@ -411,10 +474,100 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           for (let i = 0; i < 9; i++) {
             const targetPos = getTileInfoForBoard(i);
             if (targetPos.row === bestRow && isTileAlive(boardToCheck[i])) {
-              affectedTargets.push(boardToCheck[i].hero);
+              pushTargetRef(affectedTargets, createTargetRef(boardToCheck[i], i, side));
             }
           }
         }
+        break;
+      }
+
+      case 'mostDebuffs': {
+        let bestRef = null;
+        let bestCount = -1;
+        [...boardToCheck, ...reserveToCheck].forEach((tile, idx) => {
+          if (!isTileAlive(tile)) return;
+          if (target.excludeSelf && side === 'ally' && tileIndex >= 0 && idx === tileIndex) return;
+          const debuffCount = countEffectsByKind(tile, 'debuff');
+          if (debuffCount > bestCount) {
+            const reserve = idx >= boardToCheck.length;
+            const boardIndex = reserve ? idx - boardToCheck.length : idx;
+            bestCount = debuffCount;
+            bestRef = createTargetRef(tile, boardIndex, side, reserve);
+          }
+        });
+        pushTargetRef(affectedTargets, bestRef);
+        break;
+      }
+
+      case 'mostBuffs': {
+        let bestRef = null;
+        let bestCount = -1;
+        [...boardToCheck, ...reserveToCheck].forEach((tile, idx) => {
+          if (!isTileAlive(tile)) return;
+          if (target.excludeSelf && side === 'ally' && tileIndex >= 0 && idx === tileIndex) return;
+          const buffCount = countEffectsByKind(tile, 'buff');
+          if (buffCount > bestCount) {
+            const reserve = idx >= boardToCheck.length;
+            const boardIndex = reserve ? idx - boardToCheck.length : idx;
+            bestCount = buffCount;
+            bestRef = createTargetRef(tile, boardIndex, side, reserve);
+          }
+        });
+        pushTargetRef(affectedTargets, bestRef);
+        break;
+      }
+
+      case 'highestEnergy': {
+        let bestRef = null;
+        let bestEnergy = -Infinity;
+        [...boardToCheck, ...reserveToCheck].forEach((tile, idx) => {
+          if (!isTileAlive(tile)) return;
+          if (target.excludeSelf && side === 'ally' && tileIndex >= 0 && idx === tileIndex) return;
+          const energy = Number(tile.currentEnergy ?? tile.hero?.currentEnergy ?? tile.hero?.energy ?? 0);
+          if (energy > bestEnergy) {
+            const reserve = idx >= boardToCheck.length;
+            const boardIndex = reserve ? idx - boardToCheck.length : idx;
+            bestEnergy = energy;
+            bestRef = createTargetRef(tile, boardIndex, side, reserve);
+          }
+        });
+        pushTargetRef(affectedTargets, bestRef);
+        break;
+      }
+
+      case 'leastArmor': {
+        let bestRef = null;
+        let bestArmor = Infinity;
+        [...boardToCheck, ...reserveToCheck].forEach((tile, idx) => {
+          if (!isTileAlive(tile)) return;
+          if (target.excludeSelf && side === 'ally' && tileIndex >= 0 && idx === tileIndex) return;
+          const armor = Number(tile.currentArmor ?? tile.hero?.currentArmor ?? tile.hero?.armor ?? 0);
+          if (armor < bestArmor) {
+            const reserve = idx >= boardToCheck.length;
+            const boardIndex = reserve ? idx - boardToCheck.length : idx;
+            bestArmor = armor;
+            bestRef = createTargetRef(tile, boardIndex, side, reserve);
+          }
+        });
+        pushTargetRef(affectedTargets, bestRef);
+        break;
+      }
+
+      case 'mostMissingHealth': {
+        let bestRef = null;
+        let bestMissingHealth = -1;
+        [...boardToCheck, ...reserveToCheck].forEach((tile, idx) => {
+          if (!isTileAlive(tile)) return;
+          if (target.excludeSelf && side === 'ally' && tileIndex >= 0 && idx === tileIndex) return;
+          const missingHealth = countMissingHealth(tile);
+          if (missingHealth > bestMissingHealth) {
+            const reserve = idx >= boardToCheck.length;
+            const boardIndex = reserve ? idx - boardToCheck.length : idx;
+            bestMissingHealth = missingHealth;
+            bestRef = createTargetRef(tile, boardIndex, side, reserve);
+          }
+        });
+        pushTargetRef(affectedTargets, bestRef);
         break;
       }
 
@@ -428,10 +581,12 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           const count = tileEffects.length;
           if (count < bestCount) {
             bestCount = count;
-            best = tile.hero;
+            const reserve = idx >= boardToCheck.length;
+            const boardIndex = reserve ? idx - boardToCheck.length : idx;
+            best = createTargetRef(tile, boardIndex, side, reserve);
           }
         });
-        if (best) affectedTargets.push(best);
+        pushTargetRef(affectedTargets, best);
         break;
       }
 
@@ -445,10 +600,12 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           const count = tileEffects.length;
           if (count > bestCount) {
             bestCount = count;
-            best = tile.hero;
+            const reserve = idx >= boardToCheck.length;
+            const boardIndex = reserve ? idx - boardToCheck.length : idx;
+            best = createTargetRef(tile, boardIndex, side, reserve);
           }
         });
-        if (best) affectedTargets.push(best);
+        pushTargetRef(affectedTargets, best);
         break;
       }
 
@@ -463,10 +620,12 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           const count = effectName ? tileEffects.filter(e => e && e.name === effectName).length : 0;
           if (count > bestCount) {
             bestCount = count;
-            best = tile.hero;
+            const reserve = idx >= boardToCheck.length;
+            const boardIndex = reserve ? idx - boardToCheck.length : idx;
+            best = createTargetRef(tile, boardIndex, side, reserve);
           }
         });
-        if (best) affectedTargets.push(best);
+        pushTargetRef(affectedTargets, best);
         break;
       }
 
@@ -480,11 +639,11 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           const dist = (pos.row < 0 || pos.col < 0 || casterPos.row < 0 || casterPos.col < 0)
             ? Infinity
             : Math.abs(pos.row - casterPos.row) + Math.abs(pos.col - casterPos.col);
-          candidates.push({ hero: tile.hero, dist, row: pos.row });
+          candidates.push({ ref: createTargetRef(tile, i, side), dist, row: pos.row });
         }
         candidates.sort((a, b) => a.dist - b.dist || a.row - b.row);
         const maxTargets = target.max || 1;
-        affectedTargets.push(...candidates.slice(0, maxTargets).map(c => c.hero));
+        candidates.slice(0, maxTargets).forEach(candidate => pushTargetRef(affectedTargets, candidate.ref));
         break;
       }
 
@@ -499,10 +658,10 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
             : Math.abs(pos.row - casterPos.row) + Math.abs(pos.col - casterPos.col);
           if (dist < bestDist) {
             bestDist = dist;
-            best = tile.hero;
+            best = createTargetRef(tile, i, side);
           }
         });
-        if (best) affectedTargets.push(best);
+        pushTargetRef(affectedTargets, best);
         break;
       }
 
@@ -541,7 +700,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           // columnIndicesForBoard returns indices in front→back order, so first alive hero is frontmost
           for (const i of columnIndices) {
             if (i < boardToCheck.length && isTileAlive(boardToCheck[i])) {
-              affectedTargets.push(boardToCheck[i].hero);
+              pushTargetRef(affectedTargets, createTargetRef(boardToCheck[i], i, side));
               lastResolved = { idx: i, boardSide: side === 'enemy' ? enemySide : boardSide };
               if (hero && (hero.name === 'Lancer' || hero.name?.includes('Boss') || hero.name?.includes('Lord') || hero.name?.includes('King') || hero.name?.includes('Queen'))) {
                 aiLog(`  [EasyAI Projectile] Hitting frontmost at idx ${i}`);
@@ -560,32 +719,36 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
       case 'highestHealth': {
         let highest = null;
         let maxHealth = -1;
-        [...boardToCheck, ...reserveToCheck].forEach(tile => {
+        [...boardToCheck, ...reserveToCheck].forEach((tile, idx) => {
           if (isTileAlive(tile)) {
             const hp = tile.hero.currentHealth || tile.hero.health || 0;
             if (hp > maxHealth) {
               maxHealth = hp;
-              highest = tile.hero;
+              const reserve = idx >= boardToCheck.length;
+              const boardIndex = reserve ? idx - boardToCheck.length : idx;
+              highest = createTargetRef(tile, boardIndex, side, reserve);
             }
           }
         });
-        if (highest) affectedTargets.push(highest);
+        pushTargetRef(affectedTargets, highest);
         break;
       }
       
       case 'lowestHealth': {
         let lowest = null;
         let minHealth = Infinity;
-        [...boardToCheck, ...reserveToCheck].forEach(tile => {
+        [...boardToCheck, ...reserveToCheck].forEach((tile, idx) => {
           if (isTileAlive(tile)) {
             const hp = tile.hero.currentHealth || tile.hero.health || 0;
             if (hp < minHealth) {
               minHealth = hp;
-              lowest = tile.hero;
+              const reserve = idx >= boardToCheck.length;
+              const boardIndex = reserve ? idx - boardToCheck.length : idx;
+              lowest = createTargetRef(tile, boardIndex, side, reserve);
             }
           }
         });
-        if (lowest) affectedTargets.push(lowest);
+        pushTargetRef(affectedTargets, lowest);
         break;
       }
       
@@ -606,7 +769,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           // Check only the indices that are actually in the target column
           for (const i of columnIndices) {
             if (i < boardToCheck.length && isTileAlive(boardToCheck[i])) {
-              affectedTargets.push(boardToCheck[i].hero);
+              pushTargetRef(affectedTargets, createTargetRef(boardToCheck[i], i, side));
             }
           }
           
@@ -631,7 +794,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
               // Adjacent means exactly 1 step in row OR col, not both (no diagonals)
               if ((rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1)) {
                 if (isTileAlive(boardArr[i])) {
-                  affectedTargets.push(boardArr[i].hero);
+                  pushTargetRef(affectedTargets, createTargetRef(boardArr[i], i, anchorBoard === enemySide ? 'enemy' : 'ally'));
                 }
               }
             }
@@ -662,7 +825,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
               return (priority[a.idx] || 0) - (priority[b.idx] || 0);
             });
             const chosen = candidates[0].idx;
-            affectedTargets.push(boardArr[chosen].hero);
+            pushTargetRef(affectedTargets, createTargetRef(boardArr[chosen], chosen, anchorBoard === enemySide ? 'enemy' : 'ally'));
             lastResolved = { idx: chosen, boardSide: anchorBoard };
           }
         }
@@ -681,15 +844,15 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
             if (onlyIfHasDebuff) {
               const hasDebuff = tileEffects.some(e => e && e.kind === 'debuff');
               if (!damageTargets) damageTargets = [];
-              if (hasDebuff) damageTargets.push(tile.hero);
-              affectedTargets.push(tile.hero);
+              if (hasDebuff) pushTargetRef(damageTargets, createTargetRef(tile, -1, side));
+              pushTargetRef(affectedTargets, createTargetRef(tile, -1, side));
             } else if (onlyIfHasEffect) {
               const hasRequiredEffect = tileEffects.some(e => e && e.name === onlyIfHasEffect);
               if (!damageTargets) damageTargets = [];
-              if (hasRequiredEffect) damageTargets.push(tile.hero);
-              affectedTargets.push(tile.hero);
+              if (hasRequiredEffect) pushTargetRef(damageTargets, createTargetRef(tile, -1, side));
+              pushTargetRef(affectedTargets, createTargetRef(tile, -1, side));
             } else {
-              affectedTargets.push(tile.hero);
+              pushTargetRef(affectedTargets, createTargetRef(tile, -1, side));
             }
           }
         });
@@ -710,8 +873,8 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
               // Only add target if they have at least one debuff
               const hasDebuff = tileEffects.some(e => e && e.kind === 'debuff');
               if (!damageTargets) damageTargets = [];
-              if (hasDebuff) damageTargets.push(tile.hero);
-              affectedTargets.push(tile.hero);
+              if (hasDebuff) pushTargetRef(damageTargets, createTargetRef(tile, -1, side));
+              pushTargetRef(affectedTargets, createTargetRef(tile, -1, side));
               return; // Skip other checks
             }
             
@@ -721,36 +884,55 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
               // Only add target if they have the required effect
               const hasRequiredEffect = tileEffects.some(e => e && e.name === onlyIfHasEffect);
               if (!damageTargets) damageTargets = [];
-              if (hasRequiredEffect) damageTargets.push(tile.hero);
-              affectedTargets.push(tile.hero);
+              if (hasRequiredEffect) pushTargetRef(damageTargets, createTargetRef(tile, -1, side));
+              pushTargetRef(affectedTargets, createTargetRef(tile, -1, side));
               return; // Skip other checks
             }
             
             // No conditions, add all alive targets
-            affectedTargets.push(tile.hero);
+            pushTargetRef(affectedTargets, createTargetRef(tile, -1, side));
           }
         });
         break;
       }
       
       case 'self': {
-        affectedTargets.push({ health: 1 }); // Placeholder for self
+        pushTargetRef(affectedTargets, casterRef);
         break;
       }
       
       default:
         // Generic single target
-        if (boardToCheck[0]?.hero) affectedTargets.push(boardToCheck[0].hero);
+        if (boardToCheck[0]?.hero) pushTargetRef(affectedTargets, createTargetRef(boardToCheck[0], 0, side));
     }
-    
-    const damageTargetsToUse = damageTargets !== null ? damageTargets : affectedTargets;
+
+    const post = spec.post || {};
+    const effectTargets = (() => {
+      if (post.removeTopDebuff || post.removeDebuffs) {
+        return affectedTargets.filter(targetRef => countEffectsByKind(targetRef.tile, 'debuff') > 0);
+      }
+      if (post.removeTopPositiveEffect) {
+        return affectedTargets.filter(targetRef => countEffectsByKind(targetRef.tile, 'buff') > 0);
+      }
+      if (post.removeTopEffectByName && post.removeTopEffectByName.name) {
+        return affectedTargets.filter(targetRef => countEffectsByName(targetRef.tile, post.removeTopEffectByName.name) > 0);
+      }
+      if (post.removeCorpse) {
+        return affectedTargets.filter(targetRef => targetRef?.tile?._dead);
+      }
+      return affectedTargets;
+    })();
+
+    const damageTargetsToUse = damageTargets !== null ? damageTargets : effectTargets;
 
     // Calculate impact based on targets
-    damageTargetsToUse.forEach(hero => {
+    damageTargetsToUse.forEach(targetRef => {
+      const targetHero = targetRef?.hero;
+      if (!targetHero) return;
       if (isHealingSpell) {
         // For healing spells, value is based on how much health the target is missing
-        const currentHealth = hero.currentHealth ?? hero.health ?? 0;
-        const maxHealth = hero.health || hero.maxHealth || currentHealth;
+        const currentHealth = targetHero.currentHealth ?? targetRef.tile?.currentHealth ?? targetHero.health ?? 0;
+        const maxHealth = targetHero.health || targetHero.maxHealth || currentHealth;
         const missingHealth = maxHealth - currentHealth;
         // Heal value is the minimum of the heal amount and missing health (can't overheal)
         // Add a small base value even at full health so AI doesn't completely ignore heals
@@ -758,21 +940,22 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
         totalImpact += effectiveHeal;
       } else {
         // For damage spells, subtract armor from damage
-        const armor = hero.currentArmor || hero.armor || 0;
-        let damageValue = baseValue;
-        if (formula.addTargetEffectNameCount && hero.effects) {
+        const armor = targetRef.tile?.currentArmor || targetHero.currentArmor || targetHero.armor || 0;
+        let damageValue = getFormulaBaseValue(formula, casterSpellPower, hero, targetRef);
+        const targetEffects = getTileEffects(targetRef.tile);
+        if (formula.addTargetEffectNameCount && targetEffects.length > 0) {
           const effectName = formula.addTargetEffectNameCount;
           const mult = (typeof formula.addTargetEffectCountMultiplier === 'number')
             ? Number(formula.addTargetEffectCountMultiplier)
             : 1;
-          const count = (hero.effects || []).filter(e => e && e.name === effectName).length;
+          const count = targetEffects.filter(e => e && e.name === effectName).length;
           damageValue += count * mult;
         }
-        if (typeof formula.addTargetEffectsMultiplier === 'number' && hero.effects) {
-          const buffs = (hero.effects || []).filter(e => e && e.kind === 'buff').length;
+        if (typeof formula.addTargetEffectsMultiplier === 'number' && targetEffects.length > 0) {
+          const buffs = targetEffects.filter(e => e && e.kind === 'buff').length;
           damageValue += buffs * Number(formula.addTargetEffectsMultiplier || 0);
         }
-        const effectiveDamage = formula.ignoreArmor ? damageValue : Math.max(0, damageValue - armor);
+        const effectiveDamage = getArmorAdjustedDamage(formula, damageValue, armor);
         totalImpact += effectiveDamage;
       }
     });
@@ -786,17 +969,16 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
       return debuffs.map(name => getEffectByName(name)).filter(Boolean);
     })();
     const effects = [...baseEffects, ...augmentEffects];
-    if (effects.length > 0 && affectedTargets.length > 0) {
+    if (effects.length > 0 && effectTargets.length > 0) {
       const effectScore = effects.reduce((sum, effect) => sum + getEffectScore(effect), 0);
-      totalImpact += effectScore * affectedTargets.length;
+      totalImpact += effectScore * effectTargets.length;
     }
     
     // Add value for utility post-effects (like moveAllBack, moveRowBack, etc.)
-    const post = spec.post || {};
-    if (affectedTargets.length > 0) {
+    if (effectTargets.length > 0) {
       // Movement effects are valuable for disruption
       if (post.moveAllBack || post.moveRowBack || post.knockBack) {
-        totalImpact += affectedTargets.length * 1.5; // Disruption value per target
+        totalImpact += effectTargets.length * 1.5; // Disruption value per target
       }
       // Secondary healing effects (like leech's secondaryHeal)
       if (post.secondaryHeal) {
@@ -804,11 +986,35 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
       }
       // Immediate heal effects (like blessingOfLife's immediateHeal)
       if (post.immediateHeal) {
-        totalImpact += (post.immediateHeal.amount || 0) * affectedTargets.length;
+        totalImpact += (post.immediateHeal.amount || 0) * effectTargets.length;
       }
       // Energy manipulation
       if (post.deltaEnergy) {
-        totalImpact += Math.abs(post.deltaEnergy) * affectedTargets.length;
+        const energyAmount = typeof post.deltaEnergy === 'number'
+          ? Math.abs(post.deltaEnergy)
+          : Math.abs(Number(post.deltaEnergy?.amount || 0));
+        totalImpact += energyAmount * effectTargets.length;
+      }
+      if (post.healIfRemoved && typeof post.healIfRemoved.amount === 'number') {
+        totalImpact += Number(post.healIfRemoved.amount || 0) * effectTargets.length;
+      }
+      if (post.healCasterIfRemoved) {
+        totalImpact += Number(post.healCasterIfRemoved || 0);
+      }
+      if (post.removeTopEffectByName && post.removeTopEffectByName.onRemoved) {
+        const onRemoved = post.removeTopEffectByName.onRemoved;
+        if (typeof onRemoved.damageTargetAttackPower === 'number') {
+          totalImpact += Number(onRemoved.damageTargetAttackPower || 0) * effectTargets.length;
+        }
+        if (typeof onRemoved.healCaster === 'number') {
+          totalImpact += Number(onRemoved.healCaster || 0) * effectTargets.length;
+        }
+      }
+      if (post.removeTopDebuff || post.removeDebuffs) {
+        totalImpact += effectTargets.length * 1.5;
+      }
+      if (post.removeTopPositiveEffect || post.removeTopEffectByName || post.removeCorpse) {
+        totalImpact += effectTargets.length;
       }
     }
   });
@@ -940,6 +1146,8 @@ function calculateTileValue(hero, tileIndex, isP2, enemyBoard = [], enemyReserve
   return totalSpellValue + basicAttackValue;
 }
 
+export const evaluateTileValue = calculateTileValue;
+
 /**
  * Calculate total hero points for a hero in a given tile
         const hasCasts = !(castsRemaining == null || Number.isNaN(castsRemaining) || castsRemaining <= 0);
@@ -978,6 +1186,8 @@ function calculateHeroPoints(hero, tileIndex, isP2, enemyBoard = [], enemyReserv
 
   return ecv + tileContribution - incomingPenalty - reservePenalty;
 }
+
+export const evaluateHeroPoints = calculateHeroPoints;
 
 /**
  * Makes a ban decision - ban the hero with highest base stats

@@ -10,23 +10,24 @@ export const STORY_PARTY_MAX = 7;
 export const STORY_MAIN_MAX = 5;
 export const STORY_RESERVE_MAX = 2;
 
-const DEPRECATED_BRAVE_NODE_IDS = new Set(['fork_of_oaths', 'warcamp', 'watchtower', 'iron_regent']);
-
 function migrateLoadedStoryRun(runState) {
   if (!runState || runState.kingdomId !== 'brave') return runState;
 
   let changed = false;
   const completedNodeIds = Array.isArray(runState.completedNodeIds)
-    ? runState.completedNodeIds.filter(nodeId => !DEPRECATED_BRAVE_NODE_IDS.has(nodeId))
+    ? runState.completedNodeIds
     : [];
+  const restoredBranchNodeIds = new Set(['fork_of_oaths', 'warcamp', 'watchtower', 'iron_regent']);
+  const hasRestoredBranchProgress = completedNodeIds.some(nodeId => restoredBranchNodeIds.has(nodeId))
+    || restoredBranchNodeIds.has(runState.currentNodeId);
 
-  if ((runState.completedNodeIds || []).length !== completedNodeIds.length) {
-    runState.completedNodeIds = completedNodeIds;
-    changed = true;
-  }
-
-  if (DEPRECATED_BRAVE_NODE_IDS.has(runState.currentNodeId)) {
-    runState.currentNodeId = 'lightning_road';
+  if (
+    runState.currentNodeId === 'lightning_road'
+    && !completedNodeIds.includes('lightning_road')
+    && completedNodeIds.includes('vault_of_echoes')
+    && !hasRestoredBranchProgress
+  ) {
+    runState.currentNodeId = 'fork_of_oaths';
     changed = true;
   }
 

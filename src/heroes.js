@@ -504,7 +504,7 @@ export const HEROES = [
     id: 'natureGolemID',
     name: 'Nature Golem',
     image: '/images/heroes/Nature Golem Cropped.jpg',
-    health: 10,
+    health: 9,
     armor: 2,
     speed: 2,
     energy: 0,

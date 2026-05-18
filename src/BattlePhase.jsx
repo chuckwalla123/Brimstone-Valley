@@ -568,12 +568,32 @@ function SmallTile({ tile, movement, player, index, isReserve = false, events = 
   );
 }
 
-function BoardGrid({ label, tiles = [], movement, player, isReserve = false, isEliminated = false, eventsMap = {}, effectPrecastMap = {}, onHoverTile = null, onUnhoverTile = null, onEffectHover = null, onEffectOut = null, onTileWheel = null }){
+function BoardGrid({ label, tiles = [], movement, player, isReserve = false, isEliminated = false, isActive = false, eventsMap = {}, effectPrecastMap = {}, onHoverTile = null, onUnhoverTile = null, onEffectHover = null, onEffectOut = null, onTileWheel = null }){
   const playerClass = player === 'p2' ? 'db-player2' : 'db-player1';
   const order = null;
   return (
-    <div className={isEliminated ? 'db-board-eliminated' : ''} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8 }}>
-      <div className={`db-player-label ${playerClass}`}>{label}{isReserve ? ' (Reserve)' : ''}</div>
+    <div
+      className={isEliminated ? 'db-board-eliminated' : ''}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: 8,
+        padding: isActive ? 6 : 0,
+        borderRadius: 12,
+        boxShadow: isActive ? '0 0 0 2px rgba(46, 204, 113, 0.85), 0 0 18px rgba(46, 204, 113, 0.35)' : 'none',
+        transition: 'box-shadow 0.2s ease, padding 0.2s ease'
+      }}
+    >
+      <div
+        className={`db-player-label ${playerClass}`}
+        style={{
+          color: isActive ? '#2ecc71' : undefined,
+          textShadow: isActive ? '0 0 10px rgba(46, 204, 113, 0.45)' : undefined
+        }}
+      >
+        {label}{isReserve ? ' (Reserve)' : ''}
+      </div>
       {isReserve ? (
         <div className="db-reserve-column">
           {(tiles || []).slice(0,2).map((t, i) => {
@@ -2719,16 +2739,34 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
   const p3Eliminated = gameMode === 'ffa3' && !hasAliveOnMain(p3Board);
   const prioritySide = (priorityPlayer === 'player1' || priorityPlayer === 'p1') ? 'p1' : (priorityPlayer === 'player2' || priorityPlayer === 'p2') ? 'p2' : 'p3';
   const movementSide = movement?.movementPhase?.sequence?.[movement?.movementPhase?.index];
+  const activeHighlightSide = phase === 'movement' ? movementSide : null;
   const arrowSide = (phase === 'movement' && movementSide) ? movementSide : prioritySide;
   const canControlRound = !localSide || localSide === prioritySide;
   const hideBattleControls = !!localSide && !aiDifficulty;
+  const displayedRoundNumber = Math.max(1, Number(gameState?.roundNumber ?? gameState?.round ?? 1));
 
   return (
     <div className="battle-phase">
+      <div style={{ position: 'fixed', top: 16, right: 16, zIndex: 1200, pointerEvents: 'none' }}>
+        <div style={{
+          padding: '8px 12px',
+          borderRadius: 10,
+          background: 'rgba(10, 14, 24, 0.88)',
+          border: '1px solid rgba(143, 179, 255, 0.28)',
+          boxShadow: '0 10px 30px rgba(0, 0, 0, 0.28)',
+          color: '#e8eeff',
+          fontSize: 13,
+          fontWeight: 700,
+          letterSpacing: 0.4,
+          textTransform: 'uppercase'
+        }}>
+          Round {displayedRoundNumber}
+        </div>
+      </div>
       <div style={{ display: 'flex', gap: 8, justifyContent: 'center', padding: 16 }}>
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center' }}>
-            <BoardGrid label="P1 Reserve" tiles={p1ReserveBoard} movement={movement} player="p1" isReserve={true} isEliminated={p1Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
+            <BoardGrid label="P1 Reserve" tiles={p1ReserveBoard} movement={movement} player="p1" isReserve={true} isEliminated={p1Eliminated} isActive={activeHighlightSide === 'p1'} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
             {!autoPlay && !hideBattleControls && (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', padding: 8 }}>
                 <button onClick={() => runRound()} disabled={!canControlRound || gameState === 'running'}>Run Round</button>
@@ -2736,7 +2774,7 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
             )}
           </div>
 
-          <BoardGrid label={matchPlayers?.p1 || 'Player 1'} tiles={p1Board} movement={movement} player="p1" isEliminated={p1Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
+          <BoardGrid label={matchPlayers?.p1 || 'Player 1'} tiles={p1Board} movement={movement} player="p1" isEliminated={p1Eliminated} isActive={activeHighlightSide === 'p1'} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
         </div>
 
         <div style={{ width: 48, display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
@@ -2805,8 +2843,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
-          <BoardGrid label={matchPlayers?.p2 || 'Player 2'} tiles={p2Board} movement={movement} player="p2" isEliminated={p2Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
-          <BoardGrid label="P2 Reserve" tiles={p2ReserveBoard} movement={movement} player="p2" isReserve={true} isEliminated={p2Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
+          <BoardGrid label={matchPlayers?.p2 || 'Player 2'} tiles={p2Board} movement={movement} player="p2" isEliminated={p2Eliminated} isActive={activeHighlightSide === 'p2'} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
+          <BoardGrid label="P2 Reserve" tiles={p2ReserveBoard} movement={movement} player="p2" isReserve={true} isEliminated={p2Eliminated} isActive={activeHighlightSide === 'p2'} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
         </div>
       </div>
 
@@ -2972,8 +3010,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
       {gameMode === 'ffa3' && (
         <div style={{ display: 'flex', justifyContent: 'center', padding: 16 }}>
           <div style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'flex-start' }}>
-            <BoardGrid label={matchPlayers?.p3 || 'Player 3'} tiles={p3Board} movement={movement} player="p3" isEliminated={p3Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
-            <BoardGrid label="P3 Reserve" tiles={p3ReserveBoard} movement={movement} player="p3" isReserve={true} isEliminated={p3Eliminated} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
+            <BoardGrid label={matchPlayers?.p3 || 'Player 3'} tiles={p3Board} movement={movement} player="p3" isEliminated={p3Eliminated} isActive={activeHighlightSide === 'p3'} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
+            <BoardGrid label="P3 Reserve" tiles={p3ReserveBoard} movement={movement} player="p3" isReserve={true} isEliminated={p3Eliminated} isActive={activeHighlightSide === 'p3'} eventsMap={eventsMap} effectPrecastMap={effectPrecastMap} onHoverTile={handleHoverTile} onUnhoverTile={handleUnhoverTile} onEffectHover={handleEffectHover} onEffectOut={handleEffectOut} onTileWheel={handleTileWheel} />
           </div>
         </div>
       )}

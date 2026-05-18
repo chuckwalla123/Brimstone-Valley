@@ -25,6 +25,16 @@
  *
  * VISUAL NOTE: The boards face each other, so P1's front (2,5,8) is
  * closest to P2's front (0,3,6).
+ *
+ * 1v1v1 TRIANGLE REFERENCE:
+ *   - P1 remains on the left, facing right.
+ *   - P2 remains on the right, facing left.
+ *   - P3 sits below them, facing upward.
+ *   - P3 row meaning is still derived from tile number order:
+ *       Front = [0,1,2], Middle = [3,4,5], Back = [6,7,8]
+ *   - For nearest/furthest targeting, this file keeps the existing P1<->P2
+ *     strip geometry and remaps P3 into a lower center position so distance
+ *     checks behave like a triangle instead of a third flat board to the right.
  * ================================================================
  */
 
@@ -123,6 +133,17 @@ function indexToVisualGlobalX(index, boardName = 'p1') {
   if (boardName === 'p2') return col + 3;
   if (boardName === 'p3') return col + 6;
   return col;
+}
+
+function indexToDistancePoint(index, boardName = 'p1') {
+  const row = indexToVisualRow(index);
+  const col = indexToVisualColumn(index);
+  if (boardName === 'p3') {
+    // In 1v1v1, p3 sits below p1/p2 with its front row facing upward.
+    // Keep the existing p1<->p2 strip geometry intact and only remap p3.
+    return { x: col + 1, y: row + 3 };
+  }
+  return { x: indexToVisualGlobalX(index, boardName), y: row };
 }
 
 // Return the array indices on a given board that belong to the visual column (0..2)
@@ -669,8 +690,9 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       const boardArr = getBoardArr(targetSide) || [];
       const maxCount = (typeof desc.max === 'number' && desc.max > 0) ? Math.floor(desc.max) : 1;
       // Compute Manhattan distance using direct visual slot coordinates (index grid 0..8).
-      const cRow = (casterRef.index != null) ? indexToVisualRow(casterRef.index) : 0;
-      const cX = (casterRef.index != null) ? indexToVisualGlobalX(casterRef.index, casterBoard) : 0;
+      const casterPoint = (casterRef.index != null)
+        ? indexToDistancePoint(casterRef.index, casterBoard)
+        : { x: 0, y: 0 };
 
       const candidates = [];
       for (let i = 0; i < (boardArr || []).length; i++) {
@@ -680,9 +702,8 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
         if (desc && desc.excludeSelf && casterRef && typeof casterRef.index === 'number') {
           if (targetSide === casterBoard && i === casterRef.index) continue;
         }
-        const tRow = indexToVisualRow(i);
-        const tX = indexToVisualGlobalX(i, targetSide);
-        const dist = Math.abs(tX - cX) + Math.abs(tRow - cRow);
+        const targetPoint = indexToDistancePoint(i, targetSide);
+        const dist = Math.abs(targetPoint.x - casterPoint.x) + Math.abs(targetPoint.y - casterPoint.y);
         candidates.push({ index: i, dist });
       }
       if (candidates.length === 0) continue;
@@ -711,8 +732,9 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       const effectName = String(desc.effectName || desc.effect || '').trim();
       if (!effectName) continue;
 
-      const cRow = (casterRef.index != null) ? indexToVisualRow(casterRef.index) : 0;
-      const cX = (casterRef.index != null) ? indexToVisualGlobalX(casterRef.index, casterBoard) : 0;
+      const casterPoint = (casterRef.index != null)
+        ? indexToDistancePoint(casterRef.index, casterBoard)
+        : { x: 0, y: 0 };
 
       const candidates = [];
       for (let i = 0; i < (boardArr || []).length; i++) {
@@ -729,9 +751,8 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
         const hasNamedEffect = effects.some(e => e && e.name === effectName);
         if (!hasNamedEffect) continue;
 
-        const tRow = indexToVisualRow(i);
-        const tX = indexToVisualGlobalX(i, targetSide);
-        const dist = Math.abs(tX - cX) + Math.abs(tRow - cRow);
+        const targetPoint = indexToDistancePoint(i, targetSide);
+        const dist = Math.abs(targetPoint.x - casterPoint.x) + Math.abs(targetPoint.y - casterPoint.y);
         candidates.push({ index: i, dist });
       }
       if (candidates.length === 0) continue;
@@ -1249,8 +1270,9 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       const maxCount = (typeof desc.max === 'number' && desc.max > 0) ? Math.floor(desc.max) : 1;
 
       // Compute Manhattan distance using direct visual slot coordinates (index grid 0..8).
-      const cRow = (casterRef.index != null) ? indexToVisualRow(casterRef.index) : 0;
-      const cX = (casterRef.index != null) ? indexToVisualGlobalX(casterRef.index, casterBoard) : 0;
+      const casterPoint = (casterRef.index != null)
+        ? indexToDistancePoint(casterRef.index, casterBoard)
+        : { x: 0, y: 0 };
 
       const candidates = [];
       for (let i = 0; i < (boardArr || []).length; i++) {
@@ -1261,9 +1283,8 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
         }
         if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(slot)) continue;
 
-        const tRow = indexToVisualRow(i);
-        const tX = indexToVisualGlobalX(i, targetSide);
-        const dist = Math.abs(tX - cX) + Math.abs(tRow - cRow);
+        const targetPoint = indexToDistancePoint(i, targetSide);
+        const dist = Math.abs(targetPoint.x - casterPoint.x) + Math.abs(targetPoint.y - casterPoint.y);
         candidates.push({ index: i, dist });
       }
       if (candidates.length === 0) continue;
@@ -1442,6 +1463,9 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       for (let i = 0; i < (boardArr || []).length; i++) {
         const t = boardArr[i];
         if (!isOccupiedAndAlive(t)) continue;
+        if (desc && desc.excludeSelf && casterRef && typeof casterRef.index === 'number') {
+          if (targetSide === casterSide && i === Number(casterRef.index)) continue;
+        }
         if (!isPotentiallyMultiTarget && !bypassTriggers && isProtectedFromSingleTarget(t)) continue;
         const cnt = getVisibleEffects(t).length;
         candidates.push({ index: i, count: cnt });
@@ -1526,22 +1550,19 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       // Find the nearest dead ally (corpse) for Blood Golem's Consume Corpse spell
       const casterBoard = casterSide;
       const boardArr = getBoardArr(casterBoard) || [];
-      const casterCol = (casterRef.index != null) ? indexToColumn(casterRef.index, casterBoard) : 0;
-      const casterRow = (casterRef.index != null) ? indexToRow(casterRef.index, casterBoard) : 0;
-      
-      // Adjust caster column to visual (P2 col is mirrored)
-      const casterVisualCol = casterCol + (casterBoard === 'p2' ? 3 : (casterBoard === 'p3' ? 6 : 0));
+      const allowFreshCorpse = !!desc.allowFreshCorpse;
+      const casterPoint = (casterRef.index != null)
+        ? indexToDistancePoint(casterRef.index, casterBoard)
+        : { x: 0, y: 0 };
       
       // Collect all dead allies (corpses)
       const deadCandidates = [];
       for (let i = 0; i < (boardArr || []).length; i++) {
         const t = boardArr[i];
         // A corpse is a tile with a hero that is marked dead
-        if (t && t.hero && t._dead) {
-          const col = indexToColumn(i, casterBoard);
-          const row = indexToRow(i, casterBoard);
-          const visualCol = col + (casterBoard === 'p2' ? 3 : (casterBoard === 'p3' ? 6 : 0));
-          const dist = Math.abs(visualCol - casterVisualCol) + Math.abs(row - casterRow);
+        if (t && t.hero && t._dead && (allowFreshCorpse || !t._freshCorpse)) {
+          const targetPoint = indexToDistancePoint(i, casterBoard);
+          const dist = Math.abs(targetPoint.x - casterPoint.x) + Math.abs(targetPoint.y - casterPoint.y);
           deadCandidates.push({ index: i, dist });
         }
       }
@@ -1566,20 +1587,16 @@ export function resolveTargets(targetDescriptors = [], casterRef = {}, boards = 
       const casterBoard = casterSide;
       const targetSide = resolveSide(side) || casterSide;
       const boardArr = getBoardArr(targetSide) || [];
-      const casterCol = (casterRef.index != null) ? indexToColumn(casterRef.index, casterBoard) : 0;
-      const casterRow = (casterRef.index != null) ? indexToRow(casterRef.index, casterBoard) : 0;
-
-      // Adjust caster column to visual (P2 col is mirrored)
-      const casterVisualCol = casterCol + (casterBoard === 'p2' ? 3 : (casterBoard === 'p3' ? 6 : 0));
+      const casterPoint = (casterRef.index != null)
+        ? indexToDistancePoint(casterRef.index, casterBoard)
+        : { x: 0, y: 0 };
 
       const deadCandidates = [];
       for (let i = 0; i < (boardArr || []).length; i++) {
         const t = boardArr[i];
         if (t && t.hero && t._dead) {
-          const col = indexToColumn(i, targetSide);
-          const row = indexToRow(i, targetSide);
-          const visualCol = col + (targetSide === 'p2' ? 3 : (targetSide === 'p3' ? 6 : 0));
-          const dist = Math.abs(visualCol - casterVisualCol) + Math.abs(row - casterRow);
+          const targetPoint = indexToDistancePoint(i, targetSide);
+          const dist = Math.abs(targetPoint.x - casterPoint.x) + Math.abs(targetPoint.y - casterPoint.y);
           deadCandidates.push({ index: i, dist });
         }
       }

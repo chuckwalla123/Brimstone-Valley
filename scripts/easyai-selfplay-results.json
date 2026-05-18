@@ -1,0 +1,752 @@
+{
+  "generatedAt": "2026-05-18T01:31:50.499Z",
+  "startedAt": "2026-05-18T01:18:04.727Z",
+  "gamesRequested": 1000,
+  "gamesCompleted": 1000,
+  "failedGames": 0,
+  "draws": 3,
+  "maxRoundsPerGame": 60,
+  "averageRoundsPerCompletedGame": 5.44,
+  "heroes": [
+    {
+      "heroId": "stonecasedKingID",
+      "heroName": "Stonecased King",
+      "appearances": 66,
+      "wins": 59,
+      "losses": 6,
+      "draws": 1,
+      "winRate": 0.8939,
+      "nonDrawRate": 0.9077
+    },
+    {
+      "heroId": "rockGolemID",
+      "heroName": "Rock Golem",
+      "appearances": 9,
+      "wins": 8,
+      "losses": 1,
+      "draws": 0,
+      "winRate": 0.8889,
+      "nonDrawRate": 0.8889
+    },
+    {
+      "heroId": "timeMageID",
+      "heroName": "Time Mage",
+      "appearances": 48,
+      "wins": 40,
+      "losses": 8,
+      "draws": 0,
+      "winRate": 0.8333,
+      "nonDrawRate": 0.8333
+    },
+    {
+      "heroId": "shieldMaidenID",
+      "heroName": "Shield Maiden",
+      "appearances": 215,
+      "wins": 177,
+      "losses": 38,
+      "draws": 0,
+      "winRate": 0.8233,
+      "nonDrawRate": 0.8233
+    },
+    {
+      "heroId": "tetheredSpiritID",
+      "heroName": "Tethered Spirit",
+      "appearances": 24,
+      "wins": 19,
+      "losses": 5,
+      "draws": 0,
+      "winRate": 0.7917,
+      "nonDrawRate": 0.7917
+    },
+    {
+      "heroId": "tinkererID",
+      "heroName": "Tinkerer",
+      "appearances": 27,
+      "wins": 21,
+      "losses": 6,
+      "draws": 0,
+      "winRate": 0.7778,
+      "nonDrawRate": 0.7778
+    },
+    {
+      "heroId": "geishaID",
+      "heroName": "Geisha",
+      "appearances": 97,
+      "wins": 74,
+      "losses": 23,
+      "draws": 0,
+      "winRate": 0.7629,
+      "nonDrawRate": 0.7629
+    },
+    {
+      "heroId": "bloodGolemID",
+      "heroName": "Blood Golem",
+      "appearances": 129,
+      "wins": 98,
+      "losses": 29,
+      "draws": 2,
+      "winRate": 0.7597,
+      "nonDrawRate": 0.7717
+    },
+    {
+      "heroId": "paladinID",
+      "heroName": "Paladin",
+      "appearances": 4,
+      "wins": 3,
+      "losses": 1,
+      "draws": 0,
+      "winRate": 0.75,
+      "nonDrawRate": 0.75
+    },
+    {
+      "heroId": "druidID",
+      "heroName": "Druid",
+      "appearances": 315,
+      "wins": 233,
+      "losses": 80,
+      "draws": 2,
+      "winRate": 0.7397,
+      "nonDrawRate": 0.7444
+    },
+    {
+      "heroId": "lancerID",
+      "heroName": "Lancer",
+      "appearances": 360,
+      "wins": 266,
+      "losses": 91,
+      "draws": 3,
+      "winRate": 0.7389,
+      "nonDrawRate": 0.7451
+    },
+    {
+      "heroId": "pyroID",
+      "heroName": "Pyro",
+      "appearances": 231,
+      "wins": 168,
+      "losses": 61,
+      "draws": 2,
+      "winRate": 0.7273,
+      "nonDrawRate": 0.7336
+    },
+    {
+      "heroId": "priestID",
+      "heroName": "Priest",
+      "appearances": 65,
+      "wins": 47,
+      "losses": 18,
+      "draws": 0,
+      "winRate": 0.7231,
+      "nonDrawRate": 0.7231
+    },
+    {
+      "heroId": "executionerID",
+      "heroName": "Executioner",
+      "appearances": 18,
+      "wins": 13,
+      "losses": 5,
+      "draws": 0,
+      "winRate": 0.7222,
+      "nonDrawRate": 0.7222
+    },
+    {
+      "heroId": "titanID",
+      "heroName": "Titan",
+      "appearances": 301,
+      "wins": 212,
+      "losses": 89,
+      "draws": 0,
+      "winRate": 0.7043,
+      "nonDrawRate": 0.7043
+    },
+    {
+      "heroId": "alchemistID",
+      "heroName": "Alchemist",
+      "appearances": 162,
+      "wins": 112,
+      "losses": 50,
+      "draws": 0,
+      "winRate": 0.6914,
+      "nonDrawRate": 0.6914
+    },
+    {
+      "heroId": "rogueID",
+      "heroName": "Rogue",
+      "appearances": 173,
+      "wins": 119,
+      "losses": 53,
+      "draws": 1,
+      "winRate": 0.6879,
+      "nonDrawRate": 0.6919
+    },
+    {
+      "heroId": "vampireID",
+      "heroName": "Vampire",
+      "appearances": 179,
+      "wins": 123,
+      "losses": 56,
+      "draws": 0,
+      "winRate": 0.6872,
+      "nonDrawRate": 0.6872
+    },
+    {
+      "heroId": "clericID",
+      "heroName": "Cleric",
+      "appearances": 151,
+      "wins": 101,
+      "losses": 49,
+      "draws": 1,
+      "winRate": 0.6689,
+      "nonDrawRate": 0.6733
+    },
+    {
+      "heroId": "nephilimID",
+      "heroName": "Nephilim",
+      "appearances": 357,
+      "wins": 237,
+      "losses": 119,
+      "draws": 1,
+      "winRate": 0.6639,
+      "nonDrawRate": 0.6657
+    },
+    {
+      "heroId": "reaperID",
+      "heroName": "Reaper",
+      "appearances": 108,
+      "wins": 70,
+      "losses": 37,
+      "draws": 1,
+      "winRate": 0.6481,
+      "nonDrawRate": 0.6542
+    },
+    {
+      "heroId": "dragonID",
+      "heroName": "Dragon",
+      "appearances": 261,
+      "wins": 168,
+      "losses": 92,
+      "draws": 1,
+      "winRate": 0.6437,
+      "nonDrawRate": 0.6462
+    },
+    {
+      "heroId": "innKeeperID",
+      "heroName": "Inn Keeper",
+      "appearances": 141,
+      "wins": 88,
+      "losses": 53,
+      "draws": 0,
+      "winRate": 0.6241,
+      "nonDrawRate": 0.6241
+    },
+    {
+      "heroId": "fireGolemID",
+      "heroName": "Fire Golem",
+      "appearances": 82,
+      "wins": 51,
+      "losses": 31,
+      "draws": 0,
+      "winRate": 0.622,
+      "nonDrawRate": 0.622
+    },
+    {
+      "heroId": "riderID",
+      "heroName": "Rider",
+      "appearances": 36,
+      "wins": 21,
+      "losses": 15,
+      "draws": 0,
+      "winRate": 0.5833,
+      "nonDrawRate": 0.5833
+    },
+    {
+      "heroId": "arcaneMageID",
+      "heroName": "Arcane Mage",
+      "appearances": 107,
+      "wins": 62,
+      "losses": 45,
+      "draws": 0,
+      "winRate": 0.5794,
+      "nonDrawRate": 0.5794
+    },
+    {
+      "heroId": "lightningMageID",
+      "heroName": "Lightning Mage",
+      "appearances": 7,
+      "wins": 4,
+      "losses": 3,
+      "draws": 0,
+      "winRate": 0.5714,
+      "nonDrawRate": 0.5714
+    },
+    {
+      "heroId": "berserkerID",
+      "heroName": "Berserker",
+      "appearances": 368,
+      "wins": 210,
+      "losses": 157,
+      "draws": 1,
+      "winRate": 0.5707,
+      "nonDrawRate": 0.5722
+    },
+    {
+      "heroId": "warriorID",
+      "heroName": "Warrior",
+      "appearances": 335,
+      "wins": 189,
+      "losses": 146,
+      "draws": 0,
+      "winRate": 0.5642,
+      "nonDrawRate": 0.5642
+    },
+    {
+      "heroId": "sorceressID",
+      "heroName": "Sorceress",
+      "appearances": 109,
+      "wins": 60,
+      "losses": 49,
+      "draws": 0,
+      "winRate": 0.5505,
+      "nonDrawRate": 0.5505
+    },
+    {
+      "heroId": "trollID",
+      "heroName": "Troll",
+      "appearances": 293,
+      "wins": 161,
+      "losses": 131,
+      "draws": 1,
+      "winRate": 0.5495,
+      "nonDrawRate": 0.5514
+    },
+    {
+      "heroId": "queenID",
+      "heroName": "Queen",
+      "appearances": 281,
+      "wins": 152,
+      "losses": 128,
+      "draws": 1,
+      "winRate": 0.5409,
+      "nonDrawRate": 0.5429
+    },
+    {
+      "heroId": "princeID",
+      "heroName": "Prince",
+      "appearances": 376,
+      "wins": 202,
+      "losses": 173,
+      "draws": 1,
+      "winRate": 0.5372,
+      "nonDrawRate": 0.5387
+    },
+    {
+      "heroId": "bileCreatureID",
+      "heroName": "Bile Creature",
+      "appearances": 202,
+      "wins": 108,
+      "losses": 92,
+      "draws": 2,
+      "winRate": 0.5347,
+      "nonDrawRate": 0.54
+    },
+    {
+      "heroId": "jesterID",
+      "heroName": "Jester",
+      "appearances": 312,
+      "wins": 164,
+      "losses": 148,
+      "draws": 0,
+      "winRate": 0.5256,
+      "nonDrawRate": 0.5256
+    },
+    {
+      "heroId": "dragonlingID",
+      "heroName": "Dragonling",
+      "appearances": 342,
+      "wins": 174,
+      "losses": 166,
+      "draws": 2,
+      "winRate": 0.5088,
+      "nonDrawRate": 0.5118
+    },
+    {
+      "heroId": "greenDragonID",
+      "heroName": "Green Dragon",
+      "appearances": 235,
+      "wins": 118,
+      "losses": 116,
+      "draws": 1,
+      "winRate": 0.5021,
+      "nonDrawRate": 0.5043
+    },
+    {
+      "heroId": "bountyHunterID",
+      "heroName": "Bounty Hunter",
+      "appearances": 38,
+      "wins": 19,
+      "losses": 19,
+      "draws": 0,
+      "winRate": 0.5,
+      "nonDrawRate": 0.5
+    },
+    {
+      "heroId": "fallenAngelID",
+      "heroName": "Fallen Angel",
+      "appearances": 225,
+      "wins": 109,
+      "losses": 115,
+      "draws": 1,
+      "winRate": 0.4844,
+      "nonDrawRate": 0.4866
+    },
+    {
+      "heroId": "iceMageID",
+      "heroName": "Ice Mage",
+      "appearances": 184,
+      "wins": 89,
+      "losses": 94,
+      "draws": 1,
+      "winRate": 0.4837,
+      "nonDrawRate": 0.4863
+    },
+    {
+      "heroId": "witchDoctorID",
+      "heroName": "Witch Doctor",
+      "appearances": 216,
+      "wins": 103,
+      "losses": 112,
+      "draws": 1,
+      "winRate": 0.4769,
+      "nonDrawRate": 0.4791
+    },
+    {
+      "heroId": "drunkardID",
+      "heroName": "Drunkard",
+      "appearances": 350,
+      "wins": 166,
+      "losses": 183,
+      "draws": 1,
+      "winRate": 0.4743,
+      "nonDrawRate": 0.4756
+    },
+    {
+      "heroId": "poisonMageID",
+      "heroName": "Poison Mage",
+      "appearances": 19,
+      "wins": 9,
+      "losses": 10,
+      "draws": 0,
+      "winRate": 0.4737,
+      "nonDrawRate": 0.4737
+    },
+    {
+      "heroId": "fireMageID",
+      "heroName": "Fire Mage",
+      "appearances": 276,
+      "wins": 129,
+      "losses": 146,
+      "draws": 1,
+      "winRate": 0.4674,
+      "nonDrawRate": 0.4691
+    },
+    {
+      "heroId": "angelID",
+      "heroName": "Angel",
+      "appearances": 236,
+      "wins": 109,
+      "losses": 125,
+      "draws": 2,
+      "winRate": 0.4619,
+      "nonDrawRate": 0.4658
+    },
+    {
+      "heroId": "blacksmithID",
+      "heroName": "Blacksmith",
+      "appearances": 113,
+      "wins": 49,
+      "losses": 62,
+      "draws": 2,
+      "winRate": 0.4336,
+      "nonDrawRate": 0.4414
+    },
+    {
+      "heroId": "necromancerID",
+      "heroName": "Necromancer",
+      "appearances": 171,
+      "wins": 74,
+      "losses": 97,
+      "draws": 0,
+      "winRate": 0.4327,
+      "nonDrawRate": 0.4327
+    },
+    {
+      "heroId": "axemanID",
+      "heroName": "Axeman",
+      "appearances": 109,
+      "wins": 47,
+      "losses": 62,
+      "draws": 0,
+      "winRate": 0.4312,
+      "nonDrawRate": 0.4312
+    },
+    {
+      "heroId": "bloodmageID",
+      "heroName": "Blood Mage",
+      "appearances": 351,
+      "wins": 151,
+      "losses": 199,
+      "draws": 1,
+      "winRate": 0.4302,
+      "nonDrawRate": 0.4314
+    },
+    {
+      "heroId": "prisonerID",
+      "heroName": "Prisoner",
+      "appearances": 280,
+      "wins": 114,
+      "losses": 165,
+      "draws": 1,
+      "winRate": 0.4071,
+      "nonDrawRate": 0.4086
+    },
+    {
+      "heroId": "huntressID",
+      "heroName": "Huntress",
+      "appearances": 354,
+      "wins": 144,
+      "losses": 210,
+      "draws": 0,
+      "winRate": 0.4068,
+      "nonDrawRate": 0.4068
+    },
+    {
+      "heroId": "ninjaID",
+      "heroName": "Ninja",
+      "appearances": 180,
+      "wins": 73,
+      "losses": 107,
+      "draws": 0,
+      "winRate": 0.4056,
+      "nonDrawRate": 0.4056
+    },
+    {
+      "heroId": "knightID",
+      "heroName": "Knight",
+      "appearances": 35,
+      "wins": 14,
+      "losses": 21,
+      "draws": 0,
+      "winRate": 0.4,
+      "nonDrawRate": 0.4
+    },
+    {
+      "heroId": "samuraiID",
+      "heroName": "Samurai",
+      "appearances": 128,
+      "wins": 51,
+      "losses": 77,
+      "draws": 0,
+      "winRate": 0.3984,
+      "nonDrawRate": 0.3984
+    },
+    {
+      "heroId": "nymphID",
+      "heroName": "Nymph",
+      "appearances": 293,
+      "wins": 116,
+      "losses": 176,
+      "draws": 1,
+      "winRate": 0.3959,
+      "nonDrawRate": 0.3973
+    },
+    {
+      "heroId": "elementalistID",
+      "heroName": "Elementalist",
+      "appearances": 215,
+      "wins": 84,
+      "losses": 129,
+      "draws": 2,
+      "winRate": 0.3907,
+      "nonDrawRate": 0.3944
+    },
+    {
+      "heroId": "assassinID",
+      "heroName": "Assassin",
+      "appearances": 192,
+      "wins": 75,
+      "losses": 116,
+      "draws": 1,
+      "winRate": 0.3906,
+      "nonDrawRate": 0.3927
+    },
+    {
+      "heroId": "monkID",
+      "heroName": "Monk",
+      "appearances": 232,
+      "wins": 90,
+      "losses": 142,
+      "draws": 0,
+      "winRate": 0.3879,
+      "nonDrawRate": 0.3879
+    },
+    {
+      "heroId": "specterID",
+      "heroName": "Specter",
+      "appearances": 336,
+      "wins": 130,
+      "losses": 206,
+      "draws": 0,
+      "winRate": 0.3869,
+      "nonDrawRate": 0.3869
+    },
+    {
+      "heroId": "darkMageID",
+      "heroName": "Dark Mage",
+      "appearances": 276,
+      "wins": 106,
+      "losses": 170,
+      "draws": 0,
+      "winRate": 0.3841,
+      "nonDrawRate": 0.3841
+    },
+    {
+      "heroId": "demonID",
+      "heroName": "Demon",
+      "appearances": 276,
+      "wins": 104,
+      "losses": 172,
+      "draws": 0,
+      "winRate": 0.3768,
+      "nonDrawRate": 0.3768
+    },
+    {
+      "heroId": "enchantressID",
+      "heroName": "Enchantress",
+      "appearances": 313,
+      "wins": 115,
+      "losses": 198,
+      "draws": 0,
+      "winRate": 0.3674,
+      "nonDrawRate": 0.3674
+    },
+    {
+      "heroId": "darkKnightID",
+      "heroName": "Dark Knight",
+      "appearances": 80,
+      "wins": 28,
+      "losses": 52,
+      "draws": 0,
+      "winRate": 0.35,
+      "nonDrawRate": 0.35
+    },
+    {
+      "heroId": "giantID",
+      "heroName": "Giant",
+      "appearances": 401,
+      "wins": 140,
+      "losses": 259,
+      "draws": 2,
+      "winRate": 0.3491,
+      "nonDrawRate": 0.3509
+    },
+    {
+      "heroId": "thiefID",
+      "heroName": "Thief",
+      "appearances": 28,
+      "wins": 9,
+      "losses": 19,
+      "draws": 0,
+      "winRate": 0.3214,
+      "nonDrawRate": 0.3214
+    },
+    {
+      "heroId": "archerID",
+      "heroName": "Archer",
+      "appearances": 190,
+      "wins": 59,
+      "losses": 131,
+      "draws": 0,
+      "winRate": 0.3105,
+      "nonDrawRate": 0.3105
+    },
+    {
+      "heroId": "elderID",
+      "heroName": "Elder",
+      "appearances": 225,
+      "wins": 67,
+      "losses": 158,
+      "draws": 0,
+      "winRate": 0.2978,
+      "nonDrawRate": 0.2978
+    },
+    {
+      "heroId": "summonerID",
+      "heroName": "Summoner",
+      "appearances": 230,
+      "wins": 68,
+      "losses": 162,
+      "draws": 0,
+      "winRate": 0.2957,
+      "nonDrawRate": 0.2957
+    },
+    {
+      "heroId": "apothecaryID",
+      "heroName": "Apothecary",
+      "appearances": 254,
+      "wins": 72,
+      "losses": 182,
+      "draws": 0,
+      "winRate": 0.2835,
+      "nonDrawRate": 0.2835
+    },
+    {
+      "heroId": "waterGolemID",
+      "heroName": "Water Golem",
+      "appearances": 265,
+      "wins": 68,
+      "losses": 197,
+      "draws": 0,
+      "winRate": 0.2566,
+      "nonDrawRate": 0.2566
+    },
+    {
+      "heroId": "battleMageID",
+      "heroName": "Battle Mage",
+      "appearances": 16,
+      "wins": 3,
+      "losses": 13,
+      "draws": 0,
+      "winRate": 0.1875,
+      "nonDrawRate": 0.1875
+    },
+    {
+      "heroId": "werewolfID",
+      "heroName": "Werewolf",
+      "appearances": 385,
+      "wins": 63,
+      "losses": 321,
+      "draws": 1,
+      "winRate": 0.1636,
+      "nonDrawRate": 0.1641
+    },
+    {
+      "heroId": "kingID",
+      "heroName": "King",
+      "appearances": 1,
+      "wins": 0,
+      "losses": 1,
+      "draws": 0,
+      "winRate": 0,
+      "nonDrawRate": 0
+    },
+    {
+      "heroId": "natureGolemID",
+      "heroName": "Nature Golem",
+      "appearances": 1,
+      "wins": 0,
+      "losses": 1,
+      "draws": 0,
+      "winRate": 0,
+      "nonDrawRate": 0
+    }
+  ]
+}

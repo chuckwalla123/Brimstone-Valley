@@ -1,0 +1,79 @@
+heroId,heroName,appearances,wins,losses,draws,winRate,nonDrawRate
+priestID,Priest,11,9,2,0,0.8182,0.8182
+berserkerID,Berserker,18,13,5,0,0.7222,0.7222
+queenID,Queen,16,11,5,0,0.6875,0.6875
+palaceGuardID,Palace Guard,19,13,6,0,0.6842,0.6842
+blacksmithID,Blacksmith,18,12,6,0,0.6667,0.6667
+tetheredSpiritID,Tethered Spirit,23,15,8,0,0.6522,0.6522
+fireGolemID,Fire Golem,20,13,7,0,0.65,0.65
+riderID,Rider,17,11,6,0,0.6471,0.6471
+innKeeperID,Inn Keeper,14,9,5,0,0.6429,0.6429
+mudGolemID,Mud Golem,11,7,4,0,0.6364,0.6364
+angelID,Angel,16,10,6,0,0.625,0.625
+warriorID,Warrior,16,10,6,0,0.625,0.625
+witchDoctorID,Witch Doctor,21,13,8,0,0.619,0.619
+bileCreatureID,Bile Creature,13,8,5,0,0.6154,0.6154
+demonID,Demon,13,8,5,0,0.6154,0.6154
+natureGolemID,Nature Golem,18,11,7,0,0.6111,0.6111
+dragonlingID,Dragonling,20,12,8,0,0.6,0.6
+battleMageID,Battle Mage,15,9,6,0,0.6,0.6
+geishaID,Geisha,15,9,6,0,0.6,0.6
+bloodmageID,Blood Mage,17,10,7,0,0.5882,0.5882
+specterID,Specter,17,10,7,0,0.5882,0.5882
+apothecaryID,Apothecary,19,11,8,0,0.5789,0.5789
+elderID,Elder,21,12,9,0,0.5714,0.5714
+greenDragonID,Green Dragon,21,12,9,0,0.5714,0.5714
+enchantressID,Enchantress,16,9,7,0,0.5625,0.5625
+alchemistID,Alchemist,22,12,10,0,0.5455,0.5455
+princeID,Prince,24,13,11,0,0.5417,0.5417
+assassinID,Assassin,13,7,6,0,0.5385,0.5385
+titanID,Titan,28,15,13,0,0.5357,0.5357
+stonecasedKingID,Stonecased King,15,8,7,0,0.5333,0.5333
+rockGolemID,Rock Golem,19,10,9,0,0.5263,0.5263
+werewolfID,Werewolf,19,10,9,0,0.5263,0.5263
+poisonMageID,Poison Mage,21,11,10,0,0.5238,0.5238
+lightningMageID,Lightning Mage,23,12,11,0,0.5217,0.5217
+elementalistID,Elementalist,22,11,11,0,0.5,0.5
+clericID,Cleric,20,10,10,0,0.5,0.5
+prisonerID,Prisoner,20,10,10,0,0.5,0.5
+lancerID,Lancer,18,9,9,0,0.5,0.5
+timeMageID,Time Mage,14,7,7,0,0.5,0.5
+arcaneMageID,Arcane Mage,12,6,6,0,0.5,0.5
+reaperID,Reaper,27,13,14,0,0.4815,0.4815
+ninjaID,Ninja,19,9,10,0,0.4737,0.4737
+thiefID,Thief,19,9,10,0,0.4737,0.4737
+executionerID,Executioner,17,8,9,0,0.4706,0.4706
+tinkererID,Tinkerer,17,8,9,0,0.4706,0.4706
+darkMageID,Dark Mage,15,7,8,0,0.4667,0.4667
+huntressID,Huntress,15,7,8,0,0.4667,0.4667
+fireMageID,Fire Mage,22,10,12,0,0.4545,0.4545
+knightID,Knight,11,5,6,0,0.4545,0.4545
+axemanID,Axeman,29,13,16,0,0.4483,0.4483
+archerID,Archer,18,8,10,0,0.4444,0.4444
+dragonID,Dragon,18,8,10,0,0.4444,0.4444
+drunkardID,Drunkard,18,8,10,0,0.4444,0.4444
+jesterID,Jester,18,8,10,0,0.4444,0.4444
+pyroID,Pyro,18,8,10,0,0.4444,0.4444
+summonerID,Summoner,18,8,10,0,0.4444,0.4444
+darkKnightID,Dark Knight,23,10,13,0,0.4348,0.4348
+bountyHunterID,Bounty Hunter,14,6,8,0,0.4286,0.4286
+vampireID,Vampire,19,8,11,0,0.4211,0.4211
+iceMageID,Ice Mage,12,5,7,0,0.4167,0.4167
+nymphID,Nymph,17,7,10,0,0.4118,0.4118
+ironGolemID,Iron Golem,20,8,12,0,0.4,0.4
+kingID,King,15,6,9,0,0.4,0.4
+paladinID,Paladin,15,6,9,0,0.4,0.4
+behemothID,Behemoth,18,7,11,0,0.3889,0.3889
+rogueID,Rogue,18,7,11,0,0.3889,0.3889
+waterGolemID,Water Golem,18,7,11,0,0.3889,0.3889
+necromancerID,Necromancer,21,8,13,0,0.381,0.381
+giantID,Giant,16,6,10,0,0.375,0.375
+bloodGolemID,Blood Golem,19,7,12,0,0.3684,0.3684
+shieldMaidenID,Shield Maiden,28,10,18,0,0.3571,0.3571
+sorceressID,Sorceress,14,5,9,0,0.3571,0.3571
+nephilimID,Nephilim,20,7,13,0,0.35,0.35
+samuraiID,Samurai,15,5,10,0,0.3333,0.3333
+druidID,Druid,19,6,13,0,0.3158,0.3158
+fallenAngelID,Fallen Angel,16,5,11,0,0.3125,0.3125
+monkID,Monk,16,5,11,0,0.3125,0.3125
+trollID,Troll,13,4,9,0,0.3077,0.3077

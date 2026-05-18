@@ -1,0 +1,75 @@
+effect_key,name,kind,duration,turn_basis,default_turns_used,pulse_type,per_turn_value,modifier_total_abs,reactive_value,protection_value,spread_or_bonus_value,current_estimated_total,manual_value,notes,description
+Poison,Poison,debuff,permanent,expected_turns_alive,6,damage,2,0,0,0,0,Target_expected_turns_alive*2,,,Deals 2 damage at the beginning of each round.
+Marked,Marked,debuff,permanent,static_or_triggered,6,,,0,0,0,0,1.5,,,A debuff that makes this hero vulnerable to Assassin abilities.
+Burn,Burn,debuff,permanent,expected_turns_alive,6,damage,1,0,0,0,0,Target_expected_turns_alive*1,,,Deals 1 damage at the beginning of each round.
+Wildfire,Wildfire,debuff,permanent,expected_turns_alive,6,damage,1,0,0,0,1.6,Target_expected_turns_alive*2.5,,,"At the beginning of each round, first deals 1 damage to this hero, then applies Wildfire to adjacent heroes."
+HeatingUp,Heating Up,buff,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*2.5,,,Spells cast by this hero apply Burn to all targeted enemies.
+Acid,Acid,debuff,permanent,expected_turns_alive,6,damage,roundNumber,0,0,0,0,Target_expected_turns_alive*3,,,Deals damage equal to the current round number at the beginning of each round.
+ArmorMelt,Armor Melt,debuff,permanent,expected_turns_alive,6,damage,1,1,0,0,0,Total_Target_expected_turns_alive*1.5,,,Reduces Armor by 1 and deals 1 damage at the beginning of each round.
+Slowed,Slowed,debuff,permanent,expected_turns_alive,6,,,1,0,0,0,(Target_Current_ECV - Target_ECV_After_Debuff) + ((Target_Tile_Value_Before - Target_Tile_Value_After_Debuff) * Target_expected_turns_alive * 0.5),,,Reduces Speed by 1.
+TimeWarp,Time Warp,debuff,permanent,expected_turns_alive,6,,,2,0,0,0,(Target_Current_ECV - Target_ECV_After_Debuff) + ((Target_Tile_Value_Before - Target_Tile_Value_After_Debuff) * Target_expected_turns_alive * 0.5),,,Reduces Speed by 2 for 2 rounds.
+DragonScales,Dragon Scales,passive,permanent,static_or_triggered,6,,,0,0,0,0,-2,,,Passive: Dragon's Armor and Speed ignore effect-based modifiers but still scale with augments.
+DragonYear,Dragon Year,buff,permanent,expected_turns_alive,6,,,3,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Permanent: grants +2 Spell Power and +1 Armor.
+Haste,Haste,buff,permanent,expected_turns_alive,6,,,2,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Grants +2 Speed for 2 rounds.
+SpeedUp,Speed up,buff,permanent,expected_turns_alive,6,,,1,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Increases Speed by 1.
+Quickness,Quickness,buff,permanent,expected_turns_alive,6,,,2,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Increases Speed and Spell Power by 1.
+Regen,Regen,buff,7,expected_turns_alive,6,heal,1,0,0,0,0,Target_expected_turns_alive*1,,,Heals 1 at the beginning of each round for up to 7 rounds.
+Spores,Spores,debuff,7,expected_turns_alive,6,damage,1,0,0,0,0.65,Target_expected_turns_alive*2,,,Deals 1 damage at the beginning of each round and heals the applier for 1.
+ProtectiveGrowth,Protective Growth,buff,permanent,static_or_triggered,6,,,0,0,4,0,Target_expected_turns_alive*1,,,Enemy multi-target spells are redirected to this hero.
+Dexterity,Dexterity,buff,permanent,expected_turns_alive,6,,,2,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Permanently grants +1 Armor and +1 Speed.
+DexterityII,Dexterity II,buff,permanent,expected_turns_alive,6,,,4,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Permanently grants +2 Armor and +2 Speed.
+Bleed,Bleed,debuff,permanent,expected_turns_alive,6,damage,1,0,0,0,0,Target_expected_turns_alive*1,,,Deals 1 Damage at the beginning of each round.
+Leech,Leech,debuff,permanent,expected_turns_alive,6,damage,3,0,0,0,0,Target_expected_turns_alive*3,,,Deals 3 damage at the beginning of each round.
+Elixir,Elixir,buff,permanent,expected_turns_alive,6,,,3,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,"Permanently grants +1 Speed, +1 Armor, and +1 Spell Power."
+LieInWait,Lie In Wait,buff,5,expected_turns_alive,5,,,2,0,5,0,Target_expected_turns_alive*3,,,Grants +2 Spell Power and makes the affected hero untargetable by single-target spells for 5 rounds.
+LieInWaitLevel5,Lie In Wait,buff,1,expected_turns_alive,1,,,2,0,5,0,Target_expected_turns_alive*1,,,Grants +2 Spell Power and makes the affected hero untargetable by single-target spells for 1 round.
+Fade,Fade,buff,5,expected_turns_alive,5,,,1,0,5,0,Target_expected_turns_alive*3,,,Grants +1 Spell Power and makes the affected hero untargetable by single-target spells for 5 rounds.
+Taunt,Taunt,buff,permanent,static_or_triggered,6,,,0,0,4,0,Target_expected_turns_alive*1,,,Forces non-projectile single-target enemy spells to target this Hero.
+Loyalty,Loyalty,buff,7,static_or_triggered,6,,,0,0,4,0,Caster_expected_turns_alive*1,,,"If an enemy single-target spell would target this hero, it targets the Shield Maiden who applied Loyalty instead (if able)."
+Defend,Defend,buff,permanent,expected_turns_alive,6,,,1,0,4,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Increases Armor by 1 and nullifies projectile and column attacks that would hit this hero.
+Subjugation,Subjugation,buff,permanent,static_or_triggered,6,,,0,0,2.5,0,Target_expected_turns_alive*1,,,Single-target spells cast by this hero always target the lowest Armor.
+IronForge,Iron Forge,buff,permanent,expected_turns_alive,6,,,2,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Permanently grants +1 Armor and +1 Spell Power.
+IronForgeII,Iron Forge II,buff,permanent,expected_turns_alive,6,,,4,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Permanently grants +2 Armor and +2 Spell Power.
+GiveAQuest,Give A Quest,buff,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*1.5,,,"When this hero gets a killing blow, heal 2 and gain Iron Forge."
+Turret,Turret,buff,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*3,,,"At the start of each round, this effect targets the enemy with the highest Health and deals 5 damage."
+FieldUpgrade,Field Upgrade,buff,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*2.5,,,Spells cast by this hero ignore Armor.
+Minion,Minion,buff,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*2,,,"At the start of each round, this effect targets the enemy with the highest Health and deals 2 damage."
+ArmorUp,Armor Up,buff,permanent,expected_turns_alive,6,,,2,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Increases Armor by 2.
+ArmorDown,Armor Down,debuff,permanent,expected_turns_alive,6,,,1,0,0,0,(Target_Current_ECV - Target_ECV_After_Debuff) + ((Target_Tile_Value_Before - Target_Tile_Value_After_Debuff) * Target_expected_turns_alive * 0.5),,,Reduces Armor by 1.
+ArmorBreak,Armor Break,debuff,permanent,expected_turns_alive,6,,,2,0,0,0,(Target_Current_ECV - Target_ECV_After_Debuff) + ((Target_Tile_Value_Before - Target_Tile_Value_After_Debuff) * Target_expected_turns_alive * 0.5),,,Reduces Armor by 2.
+Armor,Armor,buff,permanent,expected_turns_alive,6,,,1,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Increases Armor by 1.
+ArmorBearer,Armor Bearer,buff,permanent,expected_turns_alive,6,,,3,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Increases Armor by 3.
+Overencumbered,Overencumbered,passive,permanent,static_or_triggered,6,,,0,0,0,0,0,,,Passive: This hero's Armor cannot exceed 4.
+HardFall,Hard Fall,buff,permanent,static_or_triggered,6,,,0,2.25,0,0,6,,,"On death, deal 3 damage (ignores Armor) to all enemies with Speed 2 or less."
+MonsterSlayer,Monster Slayer,passive,permanent,static_or_triggered,6,,,0,0,0,0,0.5,,,Passive: Gains +1 Spell Power when targeting monster heroes.
+Strength,Strength,buff,permanent,expected_turns_alive,6,,,1,0,0,0,Target_expected_turns_alive*1,,,Permanently grants +1 Spell Power.
+Bounty,Bounty,passive,7,static_or_triggered,6,,,0,0,0,0,3,,,Upon dealing a killing blow gain 2 Health and apply Strength (spellPower +1).
+AcceptContract,Accept Contract,passive,permanent,static_or_triggered,6,,,0,0,0,0,0,,,Passive: If an enemy gains more than 4 Energy they gain Mark.
+Smolder,Smolder,passive,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*1.5,,,"Passive: When targeted by an enemy spell, apply Burn to the attacker."
+PayTheToll,Pay The Toll,buff,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*2,,,"Whenever an enemy hero is moved or swapped, they take 2 damage if they end on the main board."
+Ghost,Ghost,passive,permanent,static_or_triggered,6,,,0,0,0,0,Target_exected_turns_alive*0.5,,,"Passive: Specter spells ignore Armor. When targeted by an enemy spell, roll a d6; on 5-6 the spell misses Specter."
+Awaken,Awaken,passive,permanent,static_or_triggered,6,,,0,0,0,0,0,,,"Passive: Each time this hero is targeted by an enemy spell, gain +1 Speed (max 3). Effects cannot alter this hero's Speed."
+Link,Link,passive,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*2,,,"Passive: Each time another ally (not this hero) casts a spell, gain 1 Energy."
+VoidShield,Void Shield,buff,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*1.5,,,Each stack reduces incoming damage by 1 after normal calculations.
+Frenzy,Frenzy,passive,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*1.5,,,"Passive: Each time this hero takes damage, they gain +1 Energy."
+Lifesteal,Lifesteal,passive,7,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*1.5,,,"Passive: Each time this hero damages an enemy with a spell, heal 1 Health per enemy damaged."
+BloodSuck,Blood Suck,passive,7,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*0.8,,,"Passive: Each time this hero casts a spell, heal 2 Health for each enemy targeted that has Bleed."
+UndyingRage,Undying Rage,passive,permanent,static_or_triggered,6,,,0,0,0,0,3,,,Passive: The first instance of damage that would have killed this hero instead reduces them to 1 Health. One-time use.
+Crumble,Crumble,passive,permanent,static_or_triggered,6,,,0,0,0,0,-2,,,"Passive: The first time this hero's Health falls below 7, they permanently lose 1 base Armor."
+MudArmor,Mud Armor,buff,permanent,expected_turns_alive,6,,,3,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Increases Armor by 3.
+Regeloop,Regeloop,passive,7,static_or_triggered,6,,,0,0,0,0,16,,,"Passive: Up to 3 times per game, lethal damage instead restores this hero to 4 Health and removes all buffs and debuffs."
+Rejuvenate,Rejuvenate,buff,7,expected_turns_alive,6,heal,2,0,0,0,0,Target_expected_turns_alive*2,,,Heals host for 2 at the start of each round for up to 7 rounds.
+HealingWater,Healing Water,buff,7,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*2,,,"At the beginning of each round, heals adjacent allies for 1."
+Reap,Reap,buff,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*2,,,"When an enemy is at 2 or less Health, deal 999 damage to that enemy."
+Treachery,Treachery,debuff,permanent,expected_turns_alive,6,damage,targetArmor,0,0,0,0,Target_expected_turns_alive*Target_Armor,,,At the start of each round this debuff deals damage equal to the affected Hero's current Armor.
+Prayer,Prayer,buff,7,static_or_triggered,6,,,0,1.15,0,0,Target_exepcted_turns_alive*2.5,,,"When damaged, heal all allies except self for 1 (expires after 7 rounds)."
+PrayerII,Prayer II,buff,7,static_or_triggered,6,,,0,2.3,0,0,Target_exepcted_turns_alive*5,,,"When damaged, heal all allies except self for 2 (expires after 7 rounds)."
+DeathPact,Death Pact,buff,permanent,static_or_triggered,6,,,0,0,0,0,Targets_Health,,,"When damaged by an enemy spell, deal equal damage back to the attacker."
+Curse,Curse,debuff,permanent,expected_turns_alive,6,,,1,0,0,0,(Target_Current_ECV - Target_ECV_After_Debuff) + ((Target_Tile_Value_Before - Target_Tile_Value_After_Debuff) * Target_expected_turns_alive * 0.5),,,Reduces Spell Power by 1.
+Counter,Counter,buff,permanent,static_or_triggered,6,,,0,2.3,0,0,Target_expected_turns_alive*2,,,"When the effected Hero is targeted by an enemy spell, deal 2 damage to that attacker."
+StaticShock,Static Shock,debuff,permanent,static_or_triggered,6,,,0,0,0,0,Target_expected_turns_alive*2,,,Deals 2 damage to adjacent heroes at the beginning of each round.
+Power,Power,buff,permanent,expected_turns_alive,6,,,2,0,0,0,(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5),,,Increases Spell Power by 2.
+Enraged,Enraged,buff,permanent,expected_turns_alive,6,,,2,0,0,0,((Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5)) - 2,,,Increases Spell Power by 2 and increases incoming damage by 1 after normal calculations.
+SoulLink,Soul Link,buff,permanent,static_or_triggered,6,,,0,0,0,0,3,,,"After damage is calculated on an adjacent ally, split that final damage in half (round up to the Soul Link hero). Soul Link does not stack."
+Shackle,Shackle,debuff,permanent,static_or_triggered,6,,,0,0,2,0,3,,,Prevents the affected Hero from being moved between Rounds or by any spells.
+Retribution,Retribution,buff,permanent,static_or_triggered,6,,,0,3.4499999999999997,0,0,Target_expected_turns_alive*3,,,Deals 3 damage to any enemy who targets the effected Hero with a spell.

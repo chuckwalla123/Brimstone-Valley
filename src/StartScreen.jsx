@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { loginWithEmail, registerWithEmail, getStoredSession, clearSession, getPlayerStatistics } from './playfabClient';
+import { loginWithEmail, registerWithEmail, getStoredSession, clearSession, getPlayerStatisticsFromSocket } from './playfabClient';
 import OptionsModal from './OptionsModal';
 import musicManager from './MusicManager';
 
@@ -15,6 +15,8 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
   const [showLocalMenu, setShowLocalMenu] = useState(false);
   const [showOptions, setShowOptions] = useState(false);
   const [playerStats, setPlayerStats] = useState(null);
+  const [playerStatsStatus, setPlayerStatsStatus] = useState('idle');
+  const [playerStatsError, setPlayerStatsError] = useState('');
   const [pendingMatchRequest, setPendingMatchRequest] = useState(null); // { payload, searchingMessage }
   const [serverInstanceId, setServerInstanceId] = useState('');
 
@@ -24,22 +26,55 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
 
   // Fetch player stats when session changes or online menu is shown
   useEffect(() => {
+    let cancelled = false;
+
     const fetchStats = async () => {
-      
-      if (session && showOnlineMenu) {
-        try {
-          
-          const stats = await getPlayerStatistics();
-          
-          setPlayerStats(stats);
-        } catch (e) {
-          console.error('[PlayFab] Could not fetch stats:', e.message, e);
-          setPlayerStats(null);
-        }
+      if (!session) {
+        setPlayerStats(null);
+        setPlayerStatsStatus('idle');
+        setPlayerStatsError('');
+        return;
+      }
+
+      if (!showOnlineMenu) return;
+
+      if (!socket?.connected) {
+        setPlayerStats(null);
+        setPlayerStatsStatus('loading');
+        setPlayerStatsError('');
+        return;
+      }
+
+      if (sessionPlayFabId && !hasMatchingServerAuth) {
+        setPlayerStats(null);
+        setPlayerStatsStatus('loading');
+        setPlayerStatsError('');
+        return;
+      }
+
+      setPlayerStatsStatus('loading');
+      setPlayerStatsError('');
+
+      try {
+        const stats = await getPlayerStatisticsFromSocket(socket);
+
+        if (cancelled) return;
+        setPlayerStats(stats);
+        setPlayerStatsStatus('loaded');
+      } catch (e) {
+        if (cancelled) return;
+        console.error('[PlayFab] Could not fetch stats:', e.message, e);
+        setPlayerStats(null);
+        setPlayerStatsStatus('error');
+        setPlayerStatsError(e.message || 'Could not load player stats.');
       }
     };
+
     fetchStats();
-  }, [session, showOnlineMenu]);
+    return () => {
+      cancelled = true;
+    };
+  }, [session, showOnlineMenu, socket, hasMatchingServerAuth, sessionPlayFabId]);
 
   useEffect(() => {
     const s = getStoredSession();
@@ -352,6 +387,9 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
               onClick={() => {
                 clearSession();
                 setSession(null);
+                setPlayerStats(null);
+                setPlayerStatsStatus('idle');
+                setPlayerStatsError('');
                 setAuthStatus('Logged out');
               }}
             >
@@ -585,7 +623,7 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
           </div>
         )}
         {/* Show loading/status message if logged in but no stats yet */}
-        {session && !playerStats && (
+        {session && playerStatsStatus === 'loading' && !playerStats && (
           <div style={{ 
             fontSize: 12, 
             marginBottom: 8, 
@@ -593,6 +631,15 @@ export default function StartScreen({ onSelectMode, onLoginSuccess, onMatchFound
             fontStyle: 'italic' 
           }}>
             Loading player stats...
+          </div>
+        )}
+        {session && playerStatsStatus === 'error' && (
+          <div style={{
+            fontSize: 12,
+            marginBottom: 8,
+            color: '#fca5a5'
+          }}>
+            Could not load player stats: {playerStatsError}
           </div>
         )}
         {matchStatus && <div style={{ fontSize: 14, marginBottom: 8, color: '#fff', fontWeight: 600 }}>{matchStatus}</div>}

@@ -66,7 +66,9 @@ export const EFFECTS = {
   // Dragon Scales: passive that allows Armor/Speed to scale with augments.
   DragonScales: {
     name: 'Dragon Scales', kind: 'passive', duration: 'permanent',
-    description: "Passive: Dragon's Armor and Speed can scale with augments."
+    lockArmorFromEffects: true,
+    lockSpeedFromEffects: true,
+    description: "Passive: Dragon's Armor and Speed ignore effect-based modifiers but still scale with augments."
   },
   // Dragon Year: applied to caster on spell cast by Dragonling via spell post hook.
   // Increases Spell Power by 2 and Armor by 1 for a short duration.
@@ -148,7 +150,12 @@ export const EFFECTS = {
       spellId: 'tinkererTurretAttack',
       targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }],
       formula: { type: 'attackPower', value: 5, ignoreSpellPower: true },
-      animationMs: 500
+      animationMs: 500,
+      sound: '/images/sounds/Turret Attack.mp3',
+      soundVolume: 1.00,
+      soundDelayMs: 0,
+      soundStartTime: 0.00,
+      soundEndTime: 0.50
     },
     description: 'At the start of each round, this effect targets the enemy with the highest Health and deals 5 damage.'
   },

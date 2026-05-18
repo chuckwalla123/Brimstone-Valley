@@ -18,6 +18,7 @@ const BETTING_SUMMARY_MS = 15_000;
 const BETTING_SIMULATION_TIMEOUT_MS = 120_000;
 const BETTING_SETTLE_WATCHDOG_MS = 210_000;
 const BETTING_STEP_ACK_TIMEOUT_MS = 8_000;
+const BETTING_LIVE_STATE_STREAM_MIN_MS = 180;
 const BETTING_SERVER_INSTANCE_ID = process.env.FLY_ALLOC_ID || process.env.HOSTNAME || `pid:${process.pid}`;
 
 function getProcessMemorySnapshot() {
@@ -124,7 +125,7 @@ const SIDE_BET_POOL = [
     multiplier: 4,
     maxStake: 5,
     predictionType: 'number',
-    prompt: 'Predict the exact ending round.'
+    prompt: 'Predict the ending round.'
   },
   {
     id: 3,
@@ -133,46 +134,6 @@ const SIDE_BET_POOL = [
     maxStake: 5,
     predictionType: 'number',
     prompt: 'Predict total ending energy on the winning team.'
-  },
-  {
-    id: 4,
-    title: 'Hero With Most Damage',
-    multiplier: 6,
-    maxStake: 5,
-    predictionType: 'hero',
-    prompt: 'Pick the hero with the most total damage dealt.'
-  },
-  {
-    id: 5,
-    title: 'Hero With Least Casts (Alive)',
-    multiplier: 4,
-    maxStake: 5,
-    predictionType: 'hero',
-    prompt: 'Pick the alive hero with the fewest casts.'
-  },
-  {
-    id: 6,
-    title: 'Hero With Most Casts (Alive)',
-    multiplier: 4,
-    maxStake: 5,
-    predictionType: 'hero',
-    prompt: 'Pick the alive hero with the most casts.'
-  },
-  {
-    id: 7,
-    title: 'First Hero To Die',
-    multiplier: 4,
-    maxStake: 5,
-    predictionType: 'hero',
-    prompt: 'Pick the first hero to die.'
-  },
-  {
-    id: 8,
-    title: 'Last Hero To Die On Losing Team',
-    multiplier: 4,
-    maxStake: 5,
-    predictionType: 'hero',
-    prompt: 'Pick the last hero to die on the losing team.'
   },
   {
     id: 9,
@@ -341,10 +302,12 @@ function createBattleSpec(roundNumber) {
 function getTileByToken(snapshot, token) {
   if (!snapshot || !token || typeof token.index !== 'number') return null;
   const boardName = String(token.boardName || '');
-  if (boardName === 'p1Main') return (snapshot.p1Board || [])[token.index] || null;
-  if (boardName === 'p2Main') return (snapshot.p2Board || [])[token.index] || null;
+  if (boardName === 'p1Board' || boardName === 'p1Main') return (snapshot.p1Board || [])[token.index] || null;
+  if (boardName === 'p2Board' || boardName === 'p2Main') return (snapshot.p2Board || [])[token.index] || null;
+  if (boardName === 'p3Board' || boardName === 'p3Main') return (snapshot.p3Board || [])[token.index] || null;
   if (boardName === 'p1Reserve') return (snapshot.p1Reserve || [])[token.index] || null;
   if (boardName === 'p2Reserve') return (snapshot.p2Reserve || [])[token.index] || null;
+  if (boardName === 'p3Reserve') return (snapshot.p3Reserve || [])[token.index] || null;
   return null;
 }
 
@@ -412,94 +375,55 @@ function evaluateSideBetWinners(sideBet, placed, outcome) {
   if (!sideBet || eligible.length === 0) return new Set();
 
   const winners = new Set();
-
-  if (sideBet.id === 1) {
+  const addClosestNumberWinners = (actualValue) => {
     let best = Infinity;
     eligible.forEach((entry) => {
       const guess = Number(entry.sidePrediction);
       if (!Number.isFinite(guess)) return;
-      const dist = Math.abs(guess - Number(outcome.winningTeamHealth || 0));
+      const dist = Math.abs(guess - Number(actualValue || 0));
       best = Math.min(best, dist);
     });
     eligible.forEach((entry) => {
       const guess = Number(entry.sidePrediction);
       if (!Number.isFinite(guess)) return;
-      const dist = Math.abs(guess - Number(outcome.winningTeamHealth || 0));
+      const dist = Math.abs(guess - Number(actualValue || 0));
       if (dist === best) winners.add(entry.playerId);
     });
+  };
+
+  if (sideBet.id === 1) {
+    addClosestNumberWinners(outcome.winningTeamHealth || 0);
     return winners;
   }
 
   if (sideBet.id === 2) {
-    eligible.forEach((entry) => {
-      if (Number(entry.sidePrediction) === Number(outcome.endRound || 0)) {
-        winners.add(entry.playerId);
-      }
-    });
+    addClosestNumberWinners(outcome.endRound || 0);
     return winners;
   }
 
   if (sideBet.id === 3) {
+    addClosestNumberWinners(outcome.winningTeamEnergy || 0);
+    return winners;
+  }
+
+  if (sideBet.id === 9) {
+    const rounds = Array.isArray(outcome.roundsWithMostDeaths) ? outcome.roundsWithMostDeaths : [];
     let best = Infinity;
     eligible.forEach((entry) => {
       const guess = Number(entry.sidePrediction);
       if (!Number.isFinite(guess)) return;
-      const dist = Math.abs(guess - Number(outcome.winningTeamEnergy || 0));
+      const dist = rounds.length > 0
+        ? Math.min(...rounds.map((round) => Math.abs(guess - Number(round || 0))))
+        : Math.abs(guess);
       best = Math.min(best, dist);
     });
     eligible.forEach((entry) => {
       const guess = Number(entry.sidePrediction);
       if (!Number.isFinite(guess)) return;
-      const dist = Math.abs(guess - Number(outcome.winningTeamEnergy || 0));
+      const dist = rounds.length > 0
+        ? Math.min(...rounds.map((round) => Math.abs(guess - Number(round || 0))))
+        : Math.abs(guess);
       if (dist === best) winners.add(entry.playerId);
-    });
-    return winners;
-  }
-
-  if (sideBet.id === 4) {
-    const set = new Set(outcome.mostDamageHeroes || []);
-    eligible.forEach((entry) => {
-      if (set.has(String(entry.sidePrediction || ''))) winners.add(entry.playerId);
-    });
-    return winners;
-  }
-
-  if (sideBet.id === 5) {
-    const set = new Set(outcome.leastCastsAliveHeroes || []);
-    eligible.forEach((entry) => {
-      if (set.has(String(entry.sidePrediction || ''))) winners.add(entry.playerId);
-    });
-    return winners;
-  }
-
-  if (sideBet.id === 6) {
-    const set = new Set(outcome.mostCastsAliveHeroes || []);
-    eligible.forEach((entry) => {
-      if (set.has(String(entry.sidePrediction || ''))) winners.add(entry.playerId);
-    });
-    return winners;
-  }
-
-  if (sideBet.id === 7) {
-    const set = new Set(outcome.firstToDieHeroes || []);
-    eligible.forEach((entry) => {
-      if (set.has(String(entry.sidePrediction || ''))) winners.add(entry.playerId);
-    });
-    return winners;
-  }
-
-  if (sideBet.id === 8) {
-    const set = new Set(outcome.lastDieOnLosingTeamHeroes || []);
-    eligible.forEach((entry) => {
-      if (set.has(String(entry.sidePrediction || ''))) winners.add(entry.playerId);
-    });
-    return winners;
-  }
-
-  if (sideBet.id === 9) {
-    const set = new Set(outcome.roundsWithMostDeaths || []);
-    eligible.forEach((entry) => {
-      if (set.has(Number(entry.sidePrediction))) winners.add(entry.playerId);
     });
   }
 
@@ -1562,6 +1486,7 @@ export function createBettingModeManager(io) {
     clearPlaybackStepTimeout(lobby);
     clearPlaybackStateFeedTimeout(lobby);
     lobby.playbackSession = null;
+    lobby.playbackStateLastEmittedAt = 0;
     if (resolve && typeof session.resolve === 'function') {
       session.resolve();
     }
@@ -1651,6 +1576,18 @@ export function createBettingModeManager(io) {
     const payload = buildBattleStateSnapshotFromStep(step);
     if (!payload) return;
     lobby.liveBattleState = payload;
+    const stepType = String(step?.type || '').toLowerCase();
+    const now = Date.now();
+    const alwaysEmit = stepType === 'movementcomplete'
+      || stepType === 'roundcomplete'
+      || stepType === 'gameend'
+      || stepType === 'castapplied'
+      || stepType === 'deathapplied';
+    const lastEmittedAt = Number(lobby.playbackStateLastEmittedAt || 0);
+    if (!alwaysEmit && lastEmittedAt > 0 && (now - lastEmittedAt) < BETTING_LIVE_STATE_STREAM_MIN_MS) {
+      return;
+    }
+    lobby.playbackStateLastEmittedAt = now;
     io.to(roomForLobby(lobby.code)).emit('bettingBattleState', payload);
   };
 
@@ -1843,6 +1780,7 @@ export function createBettingModeManager(io) {
             id: me.playerId,
             username: me.username,
             coins: Number(me.coins || 0),
+            canUseDesperationBet: Number(me.coins || 0) <= 0,
             hasSubmittedBet: !!(mePlayerId && lobby.bets && lobby.bets[mePlayerId])
           }
         : null,
@@ -2672,6 +2610,8 @@ export function createBettingModeManager(io) {
       const sideAmount = Math.min(Number(lobby.battleSpec?.sideBet?.maxStake || 5), sideAmountRaw);
       const primaryPick = String(payload.primaryPick || '');
       const total = primaryAmount + sideAmount;
+      const availableCoins = Number(player.coins || 0);
+      const canUseDesperationBet = availableCoins <= 0;
 
       if (!['p1', 'p2'].includes(primaryPick)) {
         socket.emit('bettingError', { message: 'Primary bet must pick one of the two bots.' });
@@ -2681,7 +2621,16 @@ export function createBettingModeManager(io) {
         socket.emit('bettingError', { message: 'Primary bet minimum is 1 coin.' });
         return;
       }
-      if (total > Number(player.coins || 0)) {
+      if (canUseDesperationBet) {
+        if (primaryAmount !== 1) {
+          socket.emit('bettingError', { message: 'At 0 coins, desperation bet amount must be exactly 1 coin.' });
+          return;
+        }
+        if (sideAmount > 0) {
+          socket.emit('bettingError', { message: 'At 0 coins, desperation bets cannot include a side bet.' });
+          return;
+        }
+      } else if (total > availableCoins) {
         socket.emit('bettingError', { message: 'Your total stake exceeds your coins.' });
         return;
       }
@@ -2762,11 +2711,21 @@ export function createBettingModeManager(io) {
       const seq = Number(payload?.seq || 0);
       if (!Number.isFinite(seq) || seq <= 0) return;
 
+      const playerId = getPlayerId(socket);
+      if (!playerId) return;
+      if (!(lobby.battleStepAckSeqByPlayer instanceof Map)) {
+        lobby.battleStepAckSeqByPlayer = new Map();
+      }
+      const prevAck = Number(lobby.battleStepAckSeqByPlayer.get(String(playerId)) || 0);
+      if (seq > prevAck) {
+        lobby.battleStepAckSeqByPlayer.set(String(playerId), seq);
+      }
+
       if (lobby.playbackSession && lobby.playbackSession.awaitingAck) {
         const current = Array.isArray(lobby.playbackSession.steps)
           ? lobby.playbackSession.steps[lobby.playbackSession.index]
           : null;
-        if (current && Number(current.seq || 0) === seq) {
+        if (current && Number(current.seq || 0) === seq && hasAllActivePlaybackAcksForCurrentStep(lobby)) {
           advancePlaybackStep(lobby);
           return;
         }

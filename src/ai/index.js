@@ -8,10 +8,6 @@ import * as mediumAI from './mediumAI.js';
 import * as neuralAI from './neuralAI.js';
 import * as hardAI from './hardAI.js';
 
-// Initialize neural AI on module load
-neuralAI.initializeNeuralAI().catch(err => {
-});
-
 /**
  * Get the AI module for a specific difficulty
  * @param {string} difficulty - 'super-easy', 'easy', 'medium', or 'hard'
@@ -24,7 +20,7 @@ export const getAI = (difficulty) => {
     case 'easy':
       return easyAI;
     case 'medium':
-      return neuralAI;
+      return mediumAI;
     case 'hard':
       return hardAI;
     default:

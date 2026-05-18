@@ -1,6 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import musicManager from './MusicManager';
 import sfxManager from './SfxManager';
+import { HEROES } from './heroes';
+import { getSpellById } from './spells';
+import { getEffectByName } from './effects';
+import getAssetPath from './utils/assetPath';
 
 // UI Scale options
 const UI_SCALE_OPTIONS = [
@@ -43,15 +47,402 @@ if (typeof window !== 'undefined') {
   applyScale(initialScale);
 }
 
+function StatChip({ label, value, color }) {
+  return (
+    <div style={{
+      minWidth: '46px',
+      padding: '4px 6px',
+      borderRadius: '8px',
+      background: color,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.08)',
+    }}>
+      <span style={{ fontSize: '0.62rem', fontWeight: 700, color: 'rgba(255,255,255,0.72)', letterSpacing: '0.06em' }}>{label}</span>
+      <span style={{ fontSize: '1rem', fontWeight: 800, color: '#fff' }}>{value ?? 0}</span>
+    </div>
+  );
+}
+
+function HeroCompendiumTile({ hero, isHovered, onHover, onLeave }) {
+  const casts = hero.spells || {};
+
+  return (
+    <button
+      type="button"
+      onMouseEnter={() => onHover(hero)}
+      onFocus={() => onHover(hero)}
+      onMouseLeave={onLeave}
+      style={{
+        border: isHovered ? '2px solid rgba(255, 213, 74, 0.9)' : '1px solid rgba(132, 147, 205, 0.28)',
+        background: isHovered
+          ? 'linear-gradient(180deg, rgba(58, 44, 92, 0.98) 0%, rgba(27, 26, 46, 0.98) 100%)'
+          : 'linear-gradient(180deg, rgba(42, 36, 68, 0.96) 0%, rgba(21, 23, 38, 0.96) 100%)',
+        borderRadius: '14px',
+        padding: '10px',
+        textAlign: 'left',
+        cursor: 'pointer',
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '8px',
+        boxShadow: isHovered ? '0 12px 30px rgba(0, 0, 0, 0.35)' : '0 8px 20px rgba(0, 0, 0, 0.22)',
+        transition: 'transform 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease',
+        minHeight: '236px',
+      }}
+    >
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '6px' }}>
+        <StatChip label="HP" value={hero.health} color="rgba(52, 148, 88, 0.9)" />
+        <StatChip label="ARM" value={hero.armor} color="rgba(98, 120, 157, 0.88)" />
+        <StatChip label="SPD" value={hero.speed} color="rgba(59, 126, 197, 0.88)" />
+        <StatChip label="ENG" value={hero.energy} color="rgba(113, 83, 191, 0.88)" />
+      </div>
+
+      <div style={{
+        position: 'relative',
+        flex: 1,
+        minHeight: '126px',
+        borderRadius: '12px',
+        overflow: 'hidden',
+        border: '1px solid rgba(255,255,255,0.08)',
+        background: 'rgba(7, 10, 20, 0.92)',
+      }}>
+        <img
+          src={getAssetPath(hero.image)}
+          alt={hero.name}
+          style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: 0.92 }}
+        />
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'linear-gradient(180deg, rgba(6,10,19,0.08) 0%, rgba(6,10,19,0.18) 50%, rgba(6,10,19,0.82) 100%)'
+        }} />
+        <div style={{
+          position: 'absolute',
+          left: '8px',
+          top: '8px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '4px',
+        }}>
+          {[
+            { key: 'front', label: 'F', value: casts.front?.casts || 0 },
+            { key: 'middle', label: 'M', value: casts.middle?.casts || 0 },
+            { key: 'back', label: 'B', value: casts.back?.casts || 0 },
+          ].map(row => (
+            <div key={row.key} style={{
+              minWidth: '28px',
+              padding: '4px 5px',
+              borderRadius: '8px',
+              background: 'rgba(13, 18, 31, 0.86)',
+              border: '1px solid rgba(255,255,255,0.09)',
+              color: '#fff',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              lineHeight: 1,
+            }}>
+              <span style={{ fontSize: '0.55rem', fontWeight: 700, color: '#9bb0ff' }}>{row.label}</span>
+              <span style={{ fontSize: '0.8rem', fontWeight: 800 }}>{row.value}</span>
+            </div>
+          ))}
+        </div>
+        <div style={{
+          position: 'absolute',
+          left: '10px',
+          right: '10px',
+          bottom: '10px',
+          fontSize: '0.95rem',
+          fontWeight: 800,
+          color: '#fff',
+          textShadow: '0 2px 10px rgba(0,0,0,0.8)',
+        }}>
+          {hero.name}
+        </div>
+      </div>
+    </button>
+  );
+}
+
+function HeroCompendiumOverlay({ heroes, onClose }) {
+  const [hoveredHero, setHoveredHero] = useState(heroes[0] || null);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [onClose]);
+
+  useEffect(() => {
+    if (!hoveredHero && heroes[0]) {
+      setHoveredHero(heroes[0]);
+      return;
+    }
+    if (hoveredHero && !heroes.some(hero => hero.id === hoveredHero.id)) {
+      setHoveredHero(heroes[0] || null);
+    }
+  }, [heroes, hoveredHero]);
+
+  const renderSpellLine = (hero, rowKey, rowLabel) => {
+    const spellRef = hero?.spells?.[rowKey];
+    const spell = spellRef ? getSpellById(spellRef.id) : null;
+    const description = spell?.description || spell?.spec?.description || '—';
+
+    return (
+      <div key={rowKey} style={{
+        padding: '10px 12px',
+        borderRadius: '10px',
+        background: 'rgba(255,255,255,0.04)',
+        border: '1px solid rgba(255,255,255,0.07)',
+      }}>
+        <div style={{ fontSize: '0.9rem', fontWeight: 700, color: '#f2f4ff', marginBottom: '4px' }}>
+          {rowLabel} - {spell?.name || spellRef?.id || 'Unknown'} [{spellRef?.cost ?? '?'}]
+        </div>
+        <div style={{ fontSize: '0.84rem', color: '#c9cde8', lineHeight: 1.45 }}>{description}</div>
+      </div>
+    );
+  };
+
+  const renderPassive = (hero) => {
+    const passives = hero?.passives || [];
+    const positionalModifiers = hero?.positionalModifiers;
+    if ((!passives || !passives.length) && !positionalModifiers) return null;
+
+    const positionalEntries = [];
+    if (positionalModifiers) {
+      Object.entries(positionalModifiers).forEach(([row, stats]) => {
+        Object.entries(stats || {}).forEach(([stat, value]) => {
+          const label = stat === 'armor'
+            ? 'Armor'
+            : stat === 'speed'
+              ? 'Speed'
+              : stat === 'spellPower'
+                ? 'Spell Power'
+                : stat.charAt(0).toUpperCase() + stat.slice(1);
+          positionalEntries.push(`${row} ${value >= 0 ? `+${value}` : value} ${label}`);
+        });
+      });
+    }
+
+    return (
+      <div style={{
+        marginTop: '14px',
+        padding: '12px',
+        borderRadius: '12px',
+        background: 'rgba(255, 255, 255, 0.04)',
+        border: '1px solid rgba(255,255,255,0.07)',
+      }}>
+        <div style={{ fontSize: '0.78rem', letterSpacing: '0.08em', fontWeight: 800, color: '#ffd179', marginBottom: '8px' }}>PASSIVES</div>
+        {positionalEntries.length > 0 && (
+          <div style={{ fontSize: '0.84rem', color: '#d7dbf6', lineHeight: 1.4, marginBottom: passives.length ? '8px' : 0 }}>
+            <span style={{ fontWeight: 700, color: '#fff' }}>Shapeshift:</span> {positionalEntries.join(', ')}
+          </div>
+        )}
+        {passives.map((passive, index) => {
+          let effect = null;
+          if (typeof passive === 'string') effect = getEffectByName(passive);
+          else if (passive?.name) effect = passive;
+          else if (passive?.effect) effect = getEffectByName(passive.effect);
+          const name = effect?.name || passive?.name || String(passive);
+          const description = effect?.description || passive?.description || '';
+
+          return (
+            <div key={`${hero.id}-passive-${index}`} style={{ fontSize: '0.84rem', color: '#d7dbf6', lineHeight: 1.4 }}>
+              <span style={{ fontWeight: 700, color: '#fff' }}>{name}:</span> {description || '—'}
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
+
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(5, 7, 14, 0.78)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        zIndex: 1100,
+        padding: '24px',
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: 'min(1280px, 100%)',
+          maxHeight: 'min(900px, calc(100vh - 48px))',
+          background: 'linear-gradient(180deg, rgba(29, 26, 48, 0.98) 0%, rgba(14, 17, 29, 0.98) 100%)',
+          borderRadius: '22px',
+          border: '1px solid rgba(137, 151, 223, 0.26)',
+          boxShadow: '0 25px 80px rgba(0, 0, 0, 0.55)',
+          display: 'flex',
+          flexDirection: 'column',
+          overflow: 'hidden',
+        }}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div style={{
+          padding: '22px 24px 18px',
+          borderBottom: '1px solid rgba(255,255,255,0.08)',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: '16px',
+        }}>
+          <div>
+            <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#fff' }}>Hero Compendium</div>
+            <div style={{ fontSize: '0.92rem', color: '#aeb7de', marginTop: '4px' }}>
+              Hover or focus a hero to inspect their starting board stats and spell kit.
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              border: '1px solid rgba(255,255,255,0.14)',
+              background: 'rgba(255,255,255,0.06)',
+              color: '#fff',
+              padding: '10px 14px',
+              borderRadius: '10px',
+              cursor: 'pointer',
+              fontWeight: 700,
+            }}
+          >
+            Close
+          </button>
+        </div>
+
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'minmax(0, 1.45fr) minmax(320px, 420px)',
+          gap: '0',
+          minHeight: 0,
+          flex: 1,
+        }}>
+          <div style={{ padding: '20px 24px 24px', overflowY: 'auto' }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: '14px',
+            }}>
+              {heroes.map(hero => (
+                <HeroCompendiumTile
+                  key={hero.id}
+                  hero={hero}
+                  isHovered={hoveredHero?.id === hero.id}
+                  onHover={setHoveredHero}
+                  onLeave={() => {}}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div style={{
+            borderLeft: '1px solid rgba(255,255,255,0.08)',
+            background: 'linear-gradient(180deg, rgba(10, 13, 24, 0.98) 0%, rgba(14, 19, 33, 0.98) 100%)',
+            padding: '22px',
+            overflowY: 'auto',
+          }}>
+            {hoveredHero ? (
+              <>
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '14px',
+                }}>
+                  <div style={{
+                    position: 'relative',
+                    borderRadius: '16px',
+                    overflow: 'hidden',
+                    border: '1px solid rgba(255,255,255,0.08)',
+                    minHeight: '200px',
+                    background: '#121827',
+                  }}>
+                    <img
+                      src={getAssetPath(hoveredHero.image)}
+                      alt={hoveredHero.name}
+                      style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                    />
+                    <div style={{
+                      position: 'absolute',
+                      inset: 0,
+                      background: 'linear-gradient(180deg, rgba(8,12,22,0.08) 0%, rgba(8,12,22,0.2) 45%, rgba(8,12,22,0.9) 100%)',
+                    }} />
+                    <div style={{
+                      position: 'absolute',
+                      left: '14px',
+                      right: '14px',
+                      bottom: '14px',
+                    }}>
+                      <div style={{ fontSize: '1.4rem', fontWeight: 800, color: '#fff' }}>{hoveredHero.name}</div>
+                      <div style={{ fontSize: '0.85rem', color: '#bac4ef', marginTop: '4px' }}>
+                        Starting stats as shown on the hero board tile.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: '8px' }}>
+                    <StatChip label="HP" value={hoveredHero.health} color="rgba(52, 148, 88, 0.9)" />
+                    <StatChip label="ARM" value={hoveredHero.armor} color="rgba(98, 120, 157, 0.88)" />
+                    <StatChip label="SPD" value={hoveredHero.speed} color="rgba(59, 126, 197, 0.88)" />
+                    <StatChip label="ENG" value={hoveredHero.energy} color="rgba(113, 83, 191, 0.88)" />
+                  </div>
+
+                  <div>
+                    <div style={{ fontSize: '0.78rem', letterSpacing: '0.08em', fontWeight: 800, color: '#8fb3ff', marginBottom: '10px' }}>SPELLS</div>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {renderSpellLine(hoveredHero, 'front', 'Front')}
+                      {renderSpellLine(hoveredHero, 'middle', 'Middle')}
+                      {renderSpellLine(hoveredHero, 'back', 'Back')}
+                    </div>
+                  </div>
+
+                  {renderPassive(hoveredHero)}
+
+                  {hoveredHero.description && (
+                    <div style={{
+                      padding: '12px',
+                      borderRadius: '12px',
+                      background: 'rgba(255,255,255,0.04)',
+                      border: '1px solid rgba(255,255,255,0.07)',
+                      fontSize: '0.84rem',
+                      color: '#d7dbf6',
+                      lineHeight: 1.45,
+                    }}>
+                      {hoveredHero.description}
+                    </div>
+                  )}
+                </div>
+              </>
+            ) : (
+              <div style={{ color: '#9aa5d4' }}>Hover over a hero to inspect their spells.</div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function OptionsModal({ onClose }) {
   const [musicType, setMusicType] = useState(musicManager.getMusicType());
   const [volume, setVolume] = useState(musicManager.getVolume());
   const [sfxVolume, setSfxVolume] = useState(sfxManager.getVolume());
   const [uiScale, setUiScale] = useState(getInitialScale());
+  const [showHeroCompendium, setShowHeroCompendium] = useState(false);
   const [showCombatLog, setShowCombatLog] = useState(() => {
     const saved = localStorage.getItem('showBattleCombatLog');
     return saved == null ? true : saved === 'true';
   });
+  const allHeroes = useMemo(() => [...HEROES].sort((left, right) => left.name.localeCompare(right.name)), []);
 
   // Update music manager when settings change
   const handleMusicTypeChange = (type) => {
@@ -193,6 +584,18 @@ export default function OptionsModal({ onClose }) {
     fontSize: '1.2rem',
   };
 
+  const utilityButtonStyle = {
+    width: '100%',
+    padding: '14px',
+    fontSize: '1rem',
+    fontWeight: '700',
+    borderRadius: '10px',
+    cursor: 'pointer',
+    border: '1px solid rgba(255,255,255,0.15)',
+    background: 'rgba(255,255,255,0.08)',
+    color: '#fff',
+  };
+
   return (
     <div style={modalOverlayStyle} onClick={onClose}>
       <div style={modalStyle} onClick={(e) => e.stopPropagation()}>
@@ -273,6 +676,13 @@ export default function OptionsModal({ onClose }) {
           </div>
         </div>
 
+        <div style={sectionStyle}>
+          <label style={labelStyle}>📖 Compendium</label>
+          <button type="button" style={utilityButtonStyle} onClick={() => setShowHeroCompendium(true)}>
+            View Hero Compendium
+          </button>
+        </div>
+
         {/* UI Scale */}
         <div style={sectionStyle}>
           <label style={labelStyle}>🖥️ UI Scale</label>
@@ -346,6 +756,8 @@ export default function OptionsModal({ onClose }) {
           Close
         </button>
       </div>
+
+      {showHeroCompendium && <HeroCompendiumOverlay heroes={allHeroes} onClose={() => setShowHeroCompendium(false)} />}
 
       {/* Custom styles for range input thumb */}
       <style>{`

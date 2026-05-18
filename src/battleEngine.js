@@ -722,6 +722,15 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
     (cR3 || []).forEach((t, i) => { if (t) { t.boardName = 'p3Reserve'; t.index = i; try { initTileRuntime(t); } catch (e) {} } });
   } catch (e) {}
 
+  // Corpse-targeting should only see bodies from previous rounds, not fresh deaths
+  // created during the current round.
+  [cP1, cP2, cP3, cR1, cR2, cR3].forEach((arr) => {
+    (arr || []).forEach((tile) => {
+      if (!tile) return;
+      delete tile._freshCorpse;
+    });
+  });
+
   const applyRowPlacementAugments = (tile) => {
     if (!tile || !tile.hero) return;
     const boardName = String(tile.boardName || '').toLowerCase();
@@ -1117,92 +1126,7 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
       try { if (typeof onStep === 'function') onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'reactionsApplied' } }); } catch (e) {}
     }
 
-    // Mark newly-dead tiles after pulses and reactions so reaction emotes render first
-    try {
-      const allBoardsLocal = [
-        { arr: cP1, name: 'p1Board' },
-        { arr: cP2, name: 'p2Board' },
-        { arr: cP3, name: 'p3Board' },
-        { arr: cR1, name: 'p1Reserve' },
-        { arr: cR2, name: 'p2Reserve' },
-        { arr: cR3, name: 'p3Reserve' }
-      ];
-      const deadNow = [];
-      allBoardsLocal.forEach(b => {
-        (b.arr || []).forEach((t, i) => {
-          if (!t || !t.hero) return;
-          const hp = (t.currentHealth != null ? t.currentHealth : (t.hero && t.hero.health) || 0);
-          if (hp <= 0) {
-            // Check for Undying Rage passive before marking as dead
-            let shouldDie = true;
-            try {
-              if (!t._passives && t.hero && t.hero.passives) {
-                t._passives = t.hero.passives.map(e => ({ ...e }));
-              }
-              if (t._passives && Array.isArray(t._passives)) {
-                const ur = t._passives.find(p => p && (p.name === 'Undying Rage' || p.name === 'UndyingRage') && !p._used);
-                if (ur) {
-                  ur._used = true;
-                  t.currentHealth = 1;
-                  shouldDie = false;
-                  addLog && addLog(`  > ${b.name}[${i}] Undying Rage triggered! Survived with 1 HP.`);
-                }
-                const rg = t._passives.find(p => p && (p.name === 'Regeloop' || p.name === 'RegelOOP' || p.name === 'REGLOOP'));
-                if (rg && (rg._uses == null || rg._uses < 3)) {
-                  rg._uses = Number(rg._uses || 0) + 1;
-                  t.currentHealth = 4;
-                  t.effects = (t.effects || []).filter(e => !(e && (e.kind === 'buff' || e.kind === 'debuff')));
-                  try { recomputeModifiers(t); } catch (e) {}
-                  shouldDie = false;
-                  addLog && addLog(`  > ${b.name}[${i}] Regeloop triggered (${rg._uses}/3)! Restored to 4 HP and cleansed buffs/debuffs.`);
-                }
-              }
-            } catch (e) {}
-            if (shouldDie && tryBossPhaseRevive(t, b.name, i)) {
-              shouldDie = false;
-            }
-            if (shouldDie && tryPhoenixRebirth(t, b.name, i)) {
-              shouldDie = false;
-            }
-            if (shouldDie) {
-              deadNow.push({ boardName: b.name, index: i, tile: t });
-            }
-          }
-        });
-      });
-      if (deadNow.length > 0 && typeof onStep === 'function') {
-        try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'preDeath' } }); } catch (e) {}
-      }
-      deadNow.forEach(dead => {
-        try {
-          const { boardName, index, tile } = dead;
-          if (!tile) return;
-          if (tile.hero && tile.hero.leavesCorpse === false) {
-            const removedName = tile.hero && tile.hero.name ? tile.hero.name : 'minion';
-            tile.hero = null;
-            tile._dead = false;
-            tile.effects = [];
-            tile.currentHealth = null;
-            tile.currentArmor = null;
-            tile.currentSpeed = null;
-            tile.currentEnergy = null;
-            tile.spellCasts = [];
-            tile._castsRemaining = null;
-            tile._passives = null;
-            addLog && addLog(`  > Removed ${removedName} from ${boardName}[${index}] on death`);
-            return;
-          }
-          tile._dead = true;
-          // Keep effects/spell queue until after onRoundStart processing so
-          // onRoundStart triggers can still resolve before final death cleanup.
-          tile.currentEnergy = 0;
-          addLog && addLog(`  > Marked ${boardName}[${index}] as dead (start-of-round, cleanup deferred)`);
-        } catch (e) {}
-      });
-      if (deadNow.length > 0 && typeof onStep === 'function') {
-        try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'deathApplied' } }); } catch (e) {}
-      }
-    } catch (e) {}
+    // Round-start deaths are finalized once all pulse and onRoundStart work finishes.
   };
 
   // Helper: process onRoundStart triggers that have spellSpec and resolve them immediately
@@ -1748,6 +1672,7 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
           const removedName = tile.hero && tile.hero.name ? tile.hero.name : 'minion';
           tile.hero = null;
           tile._dead = false;
+          delete tile._freshCorpse;
           tile.effects = [];
           tile.currentHealth = null;
           tile.currentArmor = null;
@@ -1760,6 +1685,7 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
           return;
         }
         tile._dead = true;
+        tile._freshCorpse = true;
         tile.effects = [];
         tile.spellCasts = [];
         tile.currentEnergy = 0;
@@ -2435,9 +2361,21 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
 
           if (enemyDescs.length > 0) {
             const mappedExtras = mapPerTargetExtras(enemyDescs);
+            const postForEnemySpec = (() => {
+              const basePost = specForFfa.post || null;
+              const hasExplicitNonEnemyTarget = nonEnemyDescs.length > 0;
+              const secondaryHeal = basePost && basePost.secondaryHeal ? basePost.secondaryHeal : null;
+              const secondaryTargetsSelf = secondaryHeal && String(secondaryHeal.target || '').toLowerCase() === 'self';
+              if (!hasExplicitNonEnemyTarget || !secondaryTargetsSelf) return basePost;
+              return {
+                ...basePost,
+                secondaryHeal: null
+              };
+            })();
             const enemySpec = {
               ...specForFfa,
               targets: enemyDescs.map(d => d.desc),
+              post: postForEnemySpec,
               perTargetExtras: mappedExtras || [],
               perTargetPayloadExtras: mappedExtras || []
             };
@@ -2607,11 +2545,13 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         try {
           if (!rem || !rem.target || !rem.target.tile) return;
           const tile = rem.target.tile;
+          let removedEffect = false;
           tile.effects = Array.isArray(tile.effects) ? tile.effects : [];
           if (rem.type === 'removeDebuffs') {
             const removedDebuff = tile.effects.some(e => e && e.kind === 'debuff' && !e._hidden);
             tile.effects = tile.effects.filter(e => !(e && e.kind === 'debuff' && !e._hidden));
             if (removedDebuff) {
+              removedEffect = true;
               triggerSeveranceOnRemoval(rem.target, rem.effectName || 'debuff', 'debuff');
             }
           } else if (rem.type === 'removeTopDebuff') {
@@ -2625,6 +2565,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             if (idx !== -1) {
               const removed = tile.effects[idx];
               tile.effects.splice(idx, 1);
+              removedEffect = true;
               triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'debuff', removed && removed.kind || 'debuff');
             }
           } else if (rem.type === 'removeTopEffectByName') {
@@ -2638,6 +2579,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             if (idx !== -1) {
               const removed = tile.effects[idx];
               tile.effects.splice(idx, 1);
+              removedEffect = true;
               triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'effect', removed && removed.kind || '');
             }
           } else if (rem.type === 'removeTopPositiveEffect') {
@@ -2651,8 +2593,12 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             if (idx !== -1) {
               const removed = tile.effects[idx];
               tile.effects.splice(idx, 1);
+              removedEffect = true;
               triggerSeveranceOnRemoval(rem.target, removed && removed.name || rem.effectName || 'buff', removed && removed.kind || 'buff');
             }
+          }
+          if (removedEffect) {
+            try { recomputeModifiers(tile); } catch (e) {}
           }
         } catch (e) {}
       });
@@ -3247,6 +3193,8 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               back: tile.hero.spells && tile.hero.spells.back ? (tile.hero.spells.back.casts || 0) : 0,
             };
           }
+          tile.spellCasts = [];
+          tile._lastAutoCastEnergy = Number.NEGATIVE_INFINITY;
           try { recomputeModifiers(tile); } catch (e) {}
           const casterSpellPower = (src && src.tile && typeof src.tile.currentSpellPower === 'number') ? Number(src.tile.currentSpellPower) : 0;
           const baseHeal = Number(reviveCfg.heal ?? reviveCfg.amount ?? reviveCfg.value ?? 0);
@@ -3272,6 +3220,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             const summoned = JSON.parse(JSON.stringify(template));
             tile.hero = summoned;
             tile._dead = false;
+            delete tile._freshCorpse;
             tile.effects = [];
             tile._passives = Array.isArray(summoned.passives) ? summoned.passives.map(e => ({ ...e })) : [];
             tile.currentHealth = Number(summoned.health || 0);
@@ -3285,6 +3234,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               middle: summoned.spells && summoned.spells.middle ? (summoned.spells.middle.casts || 0) : 0,
               back: summoned.spells && summoned.spells.back ? (summoned.spells.back.casts || 0) : 0,
             };
+            tile._lastAutoCastEnergy = Number.NEGATIVE_INFINITY;
             try { ensureHeroInstanceId(tile); } catch (e) {}
             try { recomputeModifiers(tile); } catch (e) {}
             pendingCastChanges.push({ boardName: tref.boardName, index: tref.index, deltaHealth: 0, deltaEnergy: 0, phase: phaseTag, _skipApply: true });
@@ -4131,100 +4081,9 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             const toPos = pos + 1;
             if (toPos < indices.length) { // there is a row behind
               const toIdx = indices[toPos];
-              
-              // Check if destination is occupied by another hero that also needs to move
-              // If so, recursively move that hero first
               const toSlot = boardArr[toIdx];
               if (toSlot && toSlot.hero && !toSlot._dead) {
-                // Recursively move the blocking hero first
-                // Use indexToColumn to get the correct visual column (accounts for P1/P2 board orientation)
-                const blockingCol = indexToColumn(toIdx, boardName);
-                const blockingIndices = columnIndicesForBoard(blockingCol, boardName);
-                const blockingPos = blockingIndices.indexOf(toIdx);
-                if (blockingPos !== -1) {
-                  const blockingToPos = blockingPos + 1;
-                  if (blockingToPos < blockingIndices.length) {
-                    const blockingToIdx = blockingIndices[blockingToPos];
-                    const blockingToSlot = boardArr[blockingToIdx];
-                    if (!blockingToSlot || !blockingToSlot.hero || blockingToSlot._dead) {
-                      addLog && addLog(`  > Recursively moving blocking hero from ${boardName}[${toIdx}] to ${boardName}[${blockingToIdx}] first`);
-                      // Move the blocking hero (code duplicated for simplicity)
-                      blockingToSlot.hero = toSlot.hero;
-                      blockingToSlot._dead = false;
-                      blockingToSlot.effects = toSlot.effects || [];
-                      blockingToSlot._castsRemaining = toSlot._castsRemaining ? { ...toSlot._castsRemaining } : undefined;
-                      // Reset _lastAutoCastEnergy so auto-cast will re-evaluate the moved hero
-                      // at their new position (new row = new spell slot with potentially different cost)
-                      blockingToSlot._lastAutoCastEnergy = Number.NEGATIVE_INFINITY;
-                      blockingToSlot.currentEnergy = toSlot.currentEnergy;
-                      blockingToSlot.currentHealth = toSlot.currentHealth;
-                      blockingToSlot.currentArmor = toSlot.currentArmor;
-                      blockingToSlot.currentSpeed = toSlot.currentSpeed;
-                      blockingToSlot.currentSpellPower = toSlot.currentSpellPower;
-                      try {
-                        const movedCasts = (Array.isArray(toSlot.spellCasts) ? toSlot.spellCasts.map(c => ({ ...c })) : []);
-                        const newSlot = slotForIndex(boardKey, blockingToIdx);
-                        for (const mc of movedCasts) {
-                          if (!mc || !mc.slot || mc.slot === 'basic') continue;
-                          mc.slot = newSlot;
-                          try { if (blockingToSlot && blockingToSlot.hero && blockingToSlot.hero.spells && blockingToSlot.hero.spells[newSlot] && blockingToSlot.hero.spells[newSlot].id) mc.spellId = blockingToSlot.hero.spells[newSlot].id; } catch (e) {}
-                        }
-                        blockingToSlot.spellCasts = (Array.isArray(blockingToSlot.spellCasts) ? blockingToSlot.spellCasts : []).concat(movedCasts);
-                        if (movedCasts.length > 0) addLog && addLog(`  > Moved ${movedCasts.length} queued cast(s) from ${boardName}[${toIdx}] to ${boardName}[${blockingToIdx}]`);
-                        pruneInvalidQueuedCasts(blockingToSlot, boardKey, blockingToIdx);
-                        if (typeof pendingCasts !== 'undefined' && Array.isArray(pendingCasts)) {
-                          const expectedBoard = boardKey;
-                          for (const pc of pendingCasts) {
-                            if (!pc || !pc.caster || typeof pc.caster.index !== 'number' || pc.caster.boardName !== expectedBoard || Number(pc.caster.index) !== toIdx) continue;
-                            pc.caster.index = blockingToIdx;
-                            pc.caster.tile = blockingToSlot;
-                            try { const match = movedCasts.find(mc => mc && mc.queuedId === (pc.payload && pc.payload.queuedId)); if (match && match.slot && match.slot !== 'basic') { pc.payload.slot = match.slot; pc.payload.spellId = match.spellId; } } catch (e) {}
-                          }
-                        }
-                        if (typeof pendingCastChanges !== 'undefined' && Array.isArray(pendingCastChanges)) {
-                          const expectedBoardName = boardKey;
-                          for (const ch of pendingCastChanges) {
-                            if (!ch || ch.boardName !== expectedBoardName || Number(ch.index) !== toIdx) continue;
-                            ch.index = blockingToIdx;
-                            addLog && addLog(`  > Updated pendingCastChange index from ${expectedBoardName}[${toIdx}] to ${expectedBoardName}[${blockingToIdx}]`);
-                          }
-                        }
-                      } catch (e) {}
-                      toSlot.hero = null;
-                      toSlot._dead = false;
-                      toSlot.effects = [];
-                      toSlot._castsRemaining = undefined;
-                      toSlot._lastAutoCastEnergy = undefined;
-                      toSlot.currentEnergy = undefined;
-                      toSlot.currentHealth = undefined;
-                      toSlot.currentArmor = undefined;
-                      toSlot.currentSpeed = undefined;
-                      toSlot.currentSpellPower = undefined;
-                      try { toSlot.spellCasts = []; } catch (e) {}
-                      try { recomputeModifiers(blockingToSlot); recomputeModifiers(toSlot); } catch (e) {}
-                      postImpactOccurred = true;
-                      // Update targetTokens for all remaining unprocessed targets that reference the moved blocking hero
-                      try {
-                        const expectedBoardShort = boardName;
-                        for (let i = tidx + 1; i < targetTokens.length; i++) {
-                          const tok = targetTokens[i];
-                          if (!tok) continue;
-                          if (typeof tok === 'string' && tok.includes(':')) {
-                            const [b, idx] = tok.split(':');
-                            const tokIdx = parseInt(idx, 10);
-                            if (b === expectedBoardShort && tokIdx === toIdx) {
-                              targetTokens[i] = `${b}:${blockingToIdx}`;
-                              addLog && addLog(`  > Updated targetToken ${i} from ${tok} to ${targetTokens[i]} due to recursive moveRowBack`);
-                            }
-                          } else if (typeof tok === 'object' && tok.board === expectedBoardShort && tok.index === toIdx) {
-                            tok.index = blockingToIdx;
-                            addLog && addLog(`  > Updated targetToken ${i} index from ${toIdx} to ${blockingToIdx} due to recursive moveRowBack`);
-                          }
-                        }
-                      } catch (e) {}
-                    }
-                  }
-                }
+                addLog && addLog(`  > post.moveRowBack blocked: ${boardName}[${fromIdx}] cannot move because ${boardName}[${toIdx}] is occupied`);
               }
               
               // Now move the original hero
@@ -5142,6 +5001,8 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             if (!slot._castsRemaining) slot._castsRemaining = { front: 0, middle: 0, back: 0 };
             const before = Number(slot._castsRemaining[slotKey] || 0);
             slot._castsRemaining[slotKey] = before + increaseBy;
+            slot.spellCasts = [];
+            slot._lastAutoCastEnergy = Number.NEGATIVE_INFINITY;
             addLog && addLog(`  > Increased ${boardName}[${idx}]._castsRemaining.${slotKey} ${before} -> ${slot._castsRemaining[slotKey]}`);
             try { if (typeof onStep === 'function') onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'increaseRowCasts', board: boardName, index: idx, slot: slotKey, before, after: slot._castsRemaining[slotKey] } }); } catch (e) {}
           }
@@ -5158,6 +5019,8 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
           if (!tref.tile._castsRemaining) tref.tile._castsRemaining = { front: 0, middle: 0, back: 0 };
           const before = Number(tref.tile._castsRemaining[slotKey] || 0);
           tref.tile._castsRemaining[slotKey] = before + increaseBySingle;
+          tref.tile.spellCasts = [];
+          tref.tile._lastAutoCastEnergy = Number.NEGATIVE_INFINITY;
           addLog && addLog(`  > post.increaseCastsBy ${increaseBySingle} on ${tref.boardName}[${tref.index}] slot ${slotKey}: ${before} -> ${tref.tile._castsRemaining[slotKey]}`);
           try { if (typeof onStep === 'function') onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: { type: 'increaseCasts', board: boardName, index: tref.index, slot: slotKey, before, after: tref.tile._castsRemaining[slotKey] } }); } catch (e) {}
         }
@@ -5504,6 +5367,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             const removedName = tile.hero && tile.hero.name ? tile.hero.name : 'minion';
             tile.hero = null;
             tile._dead = false;
+            delete tile._freshCorpse;
             tile.effects = [];
             tile.currentHealth = null;
             tile.currentArmor = null;
@@ -5516,6 +5380,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
             return;
           }
           tile._dead = true;
+          tile._freshCorpse = true;
           tile.effects = [];
           tile.spellCasts = [];
           tile.currentEnergy = 0;
@@ -6148,6 +6013,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               const removedName = tile.hero && tile.hero.name ? tile.hero.name : 'minion';
               tile.hero = null;
               tile._dead = false;
+              delete tile._freshCorpse;
               tile.effects = [];
               tile.currentHealth = null;
               tile.currentArmor = null;
@@ -6160,6 +6026,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               return;
             }
             tile._dead = true;
+            tile._freshCorpse = true;
             tile.effects = [];
             tile.spellCasts = [];
             tile.currentEnergy = 0;
@@ -6509,6 +6376,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         if (tile.hero && tile.hero.leavesCorpse === false) {
           tile.hero = null;
           tile._dead = false;
+          delete tile._freshCorpse;
           tile.effects = [];
           tile.currentHealth = null;
           tile.currentArmor = null;
@@ -6522,6 +6390,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
         }
 
         tile._dead = true;
+        tile._freshCorpse = true;
         tile.effects = [];
         tile.spellCasts = [];
         tile.currentEnergy = 0;

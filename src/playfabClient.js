@@ -1,5 +1,28 @@
 const PLAYFAB_TITLE_ID = import.meta.env.VITE_PLAYFAB_TITLE_ID;
 
+const DEFAULT_PLAYER_STATS = { Wins: 0, Losses: 0, Draws: 0 };
+
+const normalizePlayerStatistics = (rawStats) => {
+  const stats = { ...DEFAULT_PLAYER_STATS };
+  if (!rawStats) return stats;
+
+  if (Array.isArray(rawStats)) {
+    for (const stat of rawStats) {
+      if (stat?.StatisticName && typeof stat.Value === 'number') {
+        stats[stat.StatisticName] = stat.Value;
+      }
+    }
+    return stats;
+  }
+
+  for (const key of Object.keys(DEFAULT_PLAYER_STATS)) {
+    if (typeof rawStats[key] === 'number') {
+      stats[key] = rawStats[key];
+    }
+  }
+  return stats;
+};
+
 const apiRequest = async (path, body, sessionTicket = null) => {
   if (!PLAYFAB_TITLE_ID) {
     throw new Error('Missing VITE_PLAYFAB_TITLE_ID');
@@ -92,23 +115,22 @@ export const updateSessionUsername = (username) => {
   } catch (e) {}
 };
 
-// Fetch player statistics (wins, losses, draws)
-export const getPlayerStatistics = async () => {
-  const session = getStoredSession();
-  if (!session || !session.sessionTicket) {
-    throw new Error('Not logged in');
+export const getPlayerStatisticsFromSocket = (socket) => new Promise((resolve, reject) => {
+  if (!socket || !socket.connected) {
+    reject(new Error('Socket unavailable'));
+    return;
   }
-  const data = await apiRequest('GetPlayerStatistics', {
-    StatisticNames: ['Wins', 'Losses', 'Draws']
-  }, session.sessionTicket);
-  // Convert array to object for easier use
-  const stats = { Wins: 0, Losses: 0, Draws: 0 };
-  if (data && data.Statistics) {
-    for (const stat of data.Statistics) {
-      if (stat.StatisticName && typeof stat.Value === 'number') {
-        stats[stat.StatisticName] = stat.Value;
-      }
+
+  const timeout = setTimeout(() => {
+    reject(new Error('Timed out loading player stats'));
+  }, 10000);
+
+  socket.emit('getPlayerStats', (response) => {
+    clearTimeout(timeout);
+    if (!response?.ok) {
+      reject(new Error(response?.error || 'Could not load player stats'));
+      return;
     }
-  }
-  return stats;
-};
+    resolve(normalizePlayerStatistics(response.stats));
+  });
+});

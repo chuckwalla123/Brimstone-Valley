@@ -2536,6 +2536,36 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('getPlayerStats', async (callback) => {
+    if (typeof callback !== 'function') return;
+
+    try {
+      const playFabId = socket.data?.playfab?.playFabId;
+      if (!playFabId) {
+        callback({ ok: false, error: 'Not authenticated' });
+        return;
+      }
+
+      const stats = await getPlayerStatistics(playFabId, ['Wins', 'Losses', 'Draws']);
+      if (stats == null) {
+        callback({ ok: false, error: 'Could not fetch player stats' });
+        return;
+      }
+
+      callback({
+        ok: true,
+        stats: {
+          Wins: Number(stats.Wins || 0),
+          Losses: Number(stats.Losses || 0),
+          Draws: Number(stats.Draws || 0)
+        }
+      });
+    } catch (e) {
+      console.error('[PlayFab] Socket stats fetch failed:', e);
+      callback({ ok: false, error: 'Could not fetch player stats' });
+    }
+  });
+
   socket.on('movementComplete', (payload) => {
     try {
       if (payload && payload.leaguePairKey) {

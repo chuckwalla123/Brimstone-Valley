@@ -97,11 +97,12 @@ export function recomputeModifiers(tile) {
   let modSpellPower = 0;
   // Consider both transient effects and hidden passives when computing modifiers
   const sourceEffects = [ ...(tile._passives || []), ...(tile.effects || []) ];
+  const lockArmorFromEffects = sourceEffects.some(e => e && e.lockArmorFromEffects === true);
   const lockSpeedFromEffects = sourceEffects.some(e => e && (e.lockSpeedFromEffects === true || e.name === 'Awaken'));
   sourceEffects.forEach(e => {
     if (!e || !e.modifiers) return;
     const m = e.modifiers || {};
-    if (typeof m.armor === 'number') modArmor += Number(m.armor);
+    if (!lockArmorFromEffects && typeof m.armor === 'number') modArmor += Number(m.armor);
     if (!lockSpeedFromEffects && typeof m.speed === 'number') modSpeed += Number(m.speed);
     if (typeof m.spellPower === 'number') modSpellPower += Number(m.spellPower);
   });
@@ -109,6 +110,9 @@ export function recomputeModifiers(tile) {
   tile.currentArmor = baseArmor + modArmor;
   tile.currentSpeed = baseSpeed + modSpeed;
   tile.currentSpellPower = baseSpellPower + modSpellPower;
+  if (lockArmorFromEffects) {
+    tile.currentArmor = baseArmor;
+  }
   if (lockSpeedFromEffects) {
     tile.currentSpeed = baseSpeed;
   }
@@ -164,7 +168,7 @@ export function recomputeModifiers(tile) {
     const forces = sourceEffects.map(e => e && e.force).filter(Boolean);
     if (forces && forces.length > 0) {
       const last = forces[forces.length - 1];
-      if (typeof last.armor === 'number') tile.currentArmor = Number(last.armor);
+      if (!lockArmorFromEffects && typeof last.armor === 'number') tile.currentArmor = Number(last.armor);
       if (!lockSpeedFromEffects && typeof last.speed === 'number') tile.currentSpeed = Number(last.speed);
       if (typeof last.spellPower === 'number') tile.currentSpellPower = Number(last.spellPower);
     }
@@ -726,6 +730,7 @@ export async function processMove(gameState, action, io = null, options = {}) {
     case 'startRound':
       // Execute a battle round
       newState.phase = 'battle';
+      const roundStartPriorityPlayer = action.priorityPlayer || newState.priorityPlayer || 'player1';
       // Initialize roundNumber if it doesn't exist (for backward compatibility)
       if (typeof newState.roundNumber !== 'number') newState.roundNumber = 0;
       // Increment round number at the start of each round
@@ -743,7 +748,7 @@ export async function processMove(gameState, action, io = null, options = {}) {
             p2Reserve: newState.p2Reserve,
             p3Reserve: newState.p3Reserve,
             addLog: null,
-            priorityPlayer: action.priorityPlayer || 'player1',
+            priorityPlayer: roundStartPriorityPlayer,
             roundNumber: newState.roundNumber || 1,
             lastCastActionBySide: newState.lastCastActionBySide || null,
             gameMode: newState.gameMode || null
@@ -751,13 +756,16 @@ export async function processMove(gameState, action, io = null, options = {}) {
           {
             castDelayMs: 0, // No delay on server
             onStep: ({ p1Board: nb1, p2Board: nb2, p3Board: nb3, p1Reserve: nr1, p2Reserve: nr2, p3Reserve: nr3, priorityPlayer: np, lastAction }) => {
+              const resolvedActionType = lastAction && lastAction.type ? String(lastAction.type) : '';
+              const shouldExposePriorityUpdate = resolvedActionType === 'roundComplete' || resolvedActionType === 'gameEnd';
+              const snapshotPriorityPlayer = shouldExposePriorityUpdate ? (np || roundStartPriorityPlayer) : roundStartPriorityPlayer;
               newState.p1Main = nb1;
               newState.p2Main = nb2;
               if (nb3) newState.p3Main = nb3;
               newState.p1Reserve = nr1;
               newState.p2Reserve = nr2;
               if (nr3) newState.p3Reserve = nr3;
-              newState.priorityPlayer = np;
+              newState.priorityPlayer = snapshotPriorityPlayer;
               if (lastAction && typeof lastAction === 'object') {
                 actionSeq += 1;
                 lastAction.seq = actionSeq;
@@ -768,7 +776,7 @@ export async function processMove(gameState, action, io = null, options = {}) {
                   p1Reserve: nr1,
                   p2Reserve: nr2,
                   ...(nr3 ? { p3Reserve: nr3 } : {}),
-                  priorityPlayer: np,
+                  priorityPlayer: snapshotPriorityPlayer,
                   phase: newState.phase || 'battle'
                 };
               }
@@ -785,6 +793,9 @@ export async function processMove(gameState, action, io = null, options = {}) {
         );
         if (result && result.lastCastActionBySide) {
           newState.lastCastActionBySide = result.lastCastActionBySide;
+        }
+        if (result && result.priorityPlayer) {
+          newState.priorityPlayer = result.priorityPlayer;
         }
       } catch (error) {
         console.error('executeRound error:', error);

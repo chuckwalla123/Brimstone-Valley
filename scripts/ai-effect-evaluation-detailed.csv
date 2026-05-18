@@ -1,0 +1,87 @@
+effect_key,name,kind,duration,estimated_value,manual_override,pulse_type,pulse_value,pulse_derived_from,modifier_total_abs,modifiers_json,onTargeted_type,onTargeted_value,onDamaged_type,onDamaged_value,onDeath_type,onDeath_value,healApplierOnPulse,spreadEffectToAdjacentOnPulse,preventSingleTarget,taunt,blocksProjectileAndColumn,redirectSingleTargetToEffectApplier,forceMultiTargetToSelf,forceSingleTargetLowestArmor,preventMovement,trigger,spellSpec_targets,spellSpec_formula,notes,description
+Poison,Poison,debuff,permanent,12,,damage,2,,0,,,,,,,,,,,,,,,,,,,,,Deals 2 damage at the beginning of each round.
+CloudedPoison,Clouded Poison,debuff,2,4,,damage,2,,0,,,,,,,,,,,,,,,,,,,,,Deals 2 damage at the beginning of each round for 2 rounds.
+Marked,Marked,debuff,permanent,1.5,,,,,0,,,,,,,,,,,,,,,,,,,,,A debuff that makes this hero vulnerable to Assassin abilities.
+WildfireTurret,Wildfire Turret,neutral,3,0,,,,,0,,,,,,,,,,,,,,,,,onRoundStart,"[{""type"":""projectile"",""side"":""enemy""}]","{""type"":""attackPower"",""value"":3}",,"At the start of each round, fires a projectile for 3 damage at a random enemy for 3 rounds."
+Burn,Burn,debuff,permanent,6,,damage,1,,0,,,,,,,,,,,,,,,,,,,,,Deals 1 damage at the beginning of each round.
+Wildfire,Wildfire,debuff,permanent,15.600000000000001,,damage,1,,0,,,,,,,,,Wildfire,,,,,,,,,,,,"At the beginning of each round, first deals 1 damage to this hero, then applies Wildfire to adjacent heroes."
+HeatingUp,Heating Up,buff,permanent,1,,,,,0,,,,,,,,,,,,,,,,,,,,,Spells cast by this hero apply Burn to all targeted enemies.
+Acid,Acid,debuff,permanent,21,,damage,1,roundNumber,0,,,,,,,,,,,,,,,,,,,,,Deals damage equal to the current round number at the beginning of each round.
+ArmorMelt,Armor Melt,debuff,permanent,12.899999999999999,,damage,1,,1,"{""armor"":-1}",,,,,,,,,,,,,,,,,,,,Reduces Armor by 1 and deals 1 damage at the beginning of each round.
+Slowed,Slowed,debuff,permanent,6.8999999999999995,,,,,1,"{""speed"":-1}",,,,,,,,,,,,,,,,,,,,Reduces Speed by 1.
+Shielded,Shielded,buff,2,4.800000000000001,,,,,3,"{""armor"":3}",,,,,,,,,,,,,,,,,,,,Grants +3 Armor for 2 rounds.
+TimeWarp,Time Warp,debuff,permanent,13.799999999999999,,,,,2,"{""speed"":-2}",,,,,,,,,,,,,,,,,,,,Reduces Speed by 2 for 2 rounds.
+DragonScales,Dragon Scales,passive,permanent,0,,,,,0,,,,,,,,,,,,,,,,,,,,,Passive: Dragon's Armor and Speed ignore effect-based modifiers but still scale with augments.
+DragonYear,Dragon Year,buff,permanent,14.4,,,,,3,"{""spellPower"":2,""armor"":1}",,,,,,,,,,,,,,,,,,,,Permanent: grants +2 Spell Power and +1 Armor.
+BulwarkAura,Bulwark Aura,buff,permanent,9.600000000000001,,,,,2,"{""armor"":1,""speed"":1}",,,,,,,,,,,,,,,,,,,,Grants +1 Armor and +1 Speed for 2 rounds.
+Haste,Haste,buff,permanent,9.600000000000001,,,,,2,"{""speed"":2}",,,,,,,,,,,,,,,,,,,,Grants +2 Speed for 2 rounds.
+SpeedUp,Speed up,buff,permanent,4.800000000000001,,,,,1,"{""speed"":1}",,,,,,,,,,,,,,,,,,,,Increases Speed by 1.
+Quickness,Quickness,buff,permanent,9.600000000000001,,,,,2,"{""speed"":1,""spellPower"":1}",,,,,,,,,,,,,,,,,,,,Increases Speed and Spell Power by 1.
+BlessedRegen,Blessed Regen,buff,7,5.1,,heal,1,,0,,,,,,,,,,,,,,,,,,,,,Heals 1 at the beginning of each round for up to 7 rounds.
+Regen,Regen,buff,7,5.1,,heal,1,,0,,,,,,,,,,,,,,,,,,,,,Heals 1 at the beginning of each round for up to 7 rounds.
+Spores,Spores,debuff,7,9.9,,damage,1,,0,,,,,,,,1,,,,,,,,,,,,,Deals 1 damage at the beginning of each round and heals the applier for 1.
+ProtectiveGrowth,Protective Growth,buff,permanent,4,,,,,0,,,,,,,,,,,,,,true,,,,,,,Enemy multi-target spells are redirected to this hero.
+Dexterity,Dexterity,buff,permanent,9.600000000000001,,,,,2,"{""armor"":1,""speed"":1}",,,,,,,,,,,,,,,,,,,,Permanently grants +1 Armor and +1 Speed.
+DexterityII,Dexterity II,buff,permanent,19.200000000000003,,,,,4,"{""armor"":2,""speed"":2}",,,,,,,,,,,,,,,,,,,,Permanently grants +2 Armor and +2 Speed.
+WatcherPrayer,Watcher Prayer,buff,7,2.25,,,,,0,,,,,,healAlliesExceptSelf,3,,,,,,,,,,,,,,"On death, heals all allies except self for 3 (expires after 7 rounds)."
+VengefulWards,Vengeful Wards,neutral,3,2.3,,,,,0,,damage,2,,,,,,,,,,,,,,,,,,"When targeted, deal 2 damage back for 3 rounds."
+Bleed,Bleed,debuff,permanent,6,,damage,1,,0,,,,,,,,,,,,,,,,,,,,,Deals 1 Damage at the beginning of each round.
+Leech,Leech,debuff,permanent,18,,damage,3,,0,,,,,,,,,,,,,,,,,,,,,Deals 3 damage at the beginning of each round.
+Elixir,Elixir,buff,permanent,14.4,,,,,3,"{""speed"":1,""armor"":1,""spellPower"":1}",,,,,,,,,,,,,,,,,,,,"Permanently grants +1 Speed, +1 Armor, and +1 Spell Power."
+LieInWait,Lie In Wait,buff,5,13,,,,,2,"{""spellPower"":2}",,,,,,,,,true,,,,,,,,,,,Grants +2 Spell Power and makes the affected hero untargetable by single-target spells for 5 rounds.
+LieInWaitLevel5,Lie In Wait,buff,1,6.6,,,,,2,"{""spellPower"":2}",,,,,,,,,true,,,,,,,,,,,Grants +2 Spell Power and makes the affected hero untargetable by single-target spells for 1 round.
+Fade,Fade,buff,5,9,,,,,1,"{""spellPower"":1}",,,,,,,,,true,,,,,,,,,,,Grants +1 Spell Power and makes the affected hero untargetable by single-target spells for 5 rounds.
+Taunt,Taunt,buff,permanent,4,,,,,0,,,,,,,,,,,true,,,,,,,,,,Forces non-projectile single-target enemy spells to target this Hero.
+Loyalty,Loyalty,buff,7,4,,,,,0,,,,,,,,,,,,,true,,,,,,,,"If an enemy single-target spell would target this hero, it targets the Shield Maiden who applied Loyalty instead (if able)."
+Defend,Defend,buff,permanent,8.8,,,,,1,"{""armor"":1}",,,,,,,,,,,true,,,,,,,,,Increases Armor by 1 and nullifies projectile and column attacks that would hit this hero.
+Subjugation,Subjugation,buff,permanent,2.5,,,,,0,,,,,,,,,,,,,,,true,,,,,,Single-target spells cast by this hero always target the lowest Armor.
+IronForge,Iron Forge,buff,permanent,9.600000000000001,,,,,2,"{""armor"":1,""spellPower"":1}",,,,,,,,,,,,,,,,,,,,Permanently grants +1 Armor and +1 Spell Power.
+IronForgeII,Iron Forge II,buff,permanent,19.200000000000003,,,,,4,"{""armor"":2,""spellPower"":2}",,,,,,,,,,,,,,,,,,,,Permanently grants +2 Armor and +2 Spell Power.
+GiveAQuest,Give A Quest,buff,permanent,1,,,,,0,,,,,,,,,,,,,,,,,,,,,"When this hero gets a killing blow, heal 2 and gain Iron Forge."
+SentryPyre,Sentry Pyre,neutral,4,0,,,,,0,,,,,,,,,,,,,,,,,onRoundStart,"[{""type"":""projectile"",""side"":""enemy""}]","{""type"":""attackPower"",""value"":2}",,"At the start of each round, fires a projectile for 2 damage at a random enemy for 4 rounds."
+ScavengedInsight,Scavenged Insight,buff,2,1.6,,,,,1,"{""spellPower"":1}",,,,,,,,,,,,,,,,,,,,Grants +1 Spell Power for 2 rounds.
+ExplosiveTrap,Explosive Trap,neutral,3,0,,,,,0,,,,,,,,,,,,,,,,,onRoundStart,"[{""type"":""projectile"",""side"":""enemy""}]","{""type"":""attackPower"",""value"":3}",,"At the start of each round, fires a projectile for 3 damage at a random enemy for 3 rounds."
+Turret,Turret,buff,permanent,1,,,,,0,,,,,,,,,,,,,,,,,onRoundStart,"[{""type"":""highestHealth"",""side"":""enemy"",""max"":1}]","{""type"":""attackPower"",""value"":5,""ignoreSpellPower"":true}",,"At the start of each round, this effect targets the enemy with the highest Health and deals 5 damage."
+FieldUpgrade,Field Upgrade,buff,permanent,1,,,,,0,,,,,,,,,,,,,,,,,,,,,Spells cast by this hero ignore Armor.
+Minion,Minion,buff,permanent,1,,,,,0,,,,,,,,,,,,,,,,,onRoundStart,"[{""type"":""highestHealth"",""side"":""enemy"",""max"":1}]","{""type"":""damage"",""value"":2,""ignoreSpellPower"":true}",,"At the start of each round, this effect targets the enemy with the highest Health and deals 2 damage."
+LesserWard,Lesser Ward,buff,1,1.6,,,,,2,"{""armor"":2}",,,,,,,,,,,,,,,,,,,,Grants +2 Armor for 1 round.
+ArmorUp,Armor Up,buff,permanent,9.600000000000001,,,,,2,"{""armor"":2}",,,,,,,,,,,,,,,,,,,,Increases Armor by 2.
+ArmorDown,Armor Down,debuff,permanent,6.8999999999999995,,,,,1,"{""armor"":-1}",,,,,,,,,,,,,,,,,,,,Reduces Armor by 1.
+ArmorBreak,Armor Break,debuff,permanent,13.799999999999999,,,,,2,"{""armor"":-2}",,,,,,,,,,,,,,,,,,,,Reduces Armor by 2.
+Armor,Armor,buff,permanent,4.800000000000001,,,,,1,"{""armor"":1}",,,,,,,,,,,,,,,,,,,,Increases Armor by 1.
+ArmorBearer,Armor Bearer,buff,permanent,14.4,,,,,3,"{""armor"":3}",,,,,,,,,,,,,,,,,,,,Increases Armor by 3.
+Overencumbered,Overencumbered,passive,permanent,0,,,,,0,,,,,,,,,,,,,,,,,,,,,Passive: This hero's Armor cannot exceed 4.
+HardFall,Hard Fall,buff,permanent,2.25,,,,,0,,,,,,damageEnemiesWithSpeedAtMost,3,,,,,,,,,,,,,,"On death, deal 3 damage (ignores Armor) to all enemies with Speed 2 or less."
+MonsterSlayer,Monster Slayer,passive,permanent,0,,,,,0,,,,,,,,,,,,,,,,,,,,,Passive: Gains +1 Spell Power when targeting monster heroes.
+Strength,Strength,buff,permanent,4.800000000000001,,,,,1,"{""spellPower"":1}",,,,,,,,,,,,,,,,,,,,Permanently grants +1 Spell Power.
+Bounty,Bounty,passive,7,0,,,,,0,,,,,,,,,,,,,,,,,,,,,Upon dealing a killing blow gain 2 Health and apply Strength (spellPower +1).
+AcceptContract,Accept Contract,passive,permanent,0,,,,,0,,,,,,,,,,,,,,,,,,,,,Passive: If an enemy gains more than 4 Energy they gain Mark.
+Smolder,Smolder,passive,permanent,0,,,,,0,,applyEffectToAttacker,,,,,,,,,,,,,,,,,,,"Passive: When targeted by an enemy spell, apply Burn to the attacker."
+PayTheToll,Pay The Toll,buff,permanent,1,,,,,0,,,,,,,,,,,,,,,,,,,,,"Whenever an enemy hero is moved or swapped, they take 2 damage if they end on the main board."
+Ghost,Ghost,passive,permanent,0,,,,,0,,,,,,,,,,,,,,,,,,,,,"Passive: Specter spells ignore Armor. When targeted by an enemy spell, roll a d6; on 5-6 the spell misses Specter."
+Awaken,Awaken,passive,permanent,0,,,,,0,,,,,,,,,,,,,,,,,,,,,"Passive: Each time this hero is targeted by an enemy spell, gain +1 Speed (max 3). Effects cannot alter this hero's Speed."
+Link,Link,passive,permanent,0,,,,,0,,,,,,,,,,,,,,,,,,,,,"Passive: Each time another ally (not this hero) casts a spell, gain 1 Energy."
+VoidShield,Void Shield,buff,permanent,1,,,,,0,,,,,,,,,,,,,,,,,,,,,Each stack reduces incoming damage by 1 after normal calculations.
+Frenzy,Frenzy,passive,permanent,0,,,,,0,,,,,,,,,,,,,,,,,,,,,"Passive: Each time this hero takes damage, they gain +1 Energy."
+Lifesteal,Lifesteal,passive,7,0,,,,,0,,,,,,,,,,,,,,,,,,,,,"Passive: Each time this hero damages an enemy with a spell, heal 1 Health per enemy damaged."
+BloodSuck,Blood Suck,passive,7,0,,,,,0,,,,,,,,,,,,,,,,,,,,,"Passive: Each time this hero casts a spell, heal 2 Health for each enemy targeted that has Bleed."
+UndyingRage,Undying Rage,passive,permanent,0,,,,,0,,,,,,,,,,,,,,,,,,,,,Passive: The first instance of damage that would have killed this hero instead reduces them to 1 Health. One-time use.
+Crumble,Crumble,passive,permanent,0,,,,,0,,,,,,,,,,,,,,,,,,,,,"Passive: The first time this hero's Health falls below 7, they permanently lose 1 base Armor."
+MudArmor,Mud Armor,buff,permanent,14.4,,,,,3,"{""armor"":3}",,,,,,,,,,,,,,,,,,,,Increases Armor by 3.
+Regeloop,Regeloop,passive,7,0,,,,,0,,,,,,,,,,,,,,,,,,,,,"Passive: Up to 3 times per game, lethal damage instead restores this hero to 4 Health and removes all buffs and debuffs."
+Rejuvenate,Rejuvenate,buff,7,10.2,,heal,2,,0,,,,,,,,,,,,,,,,,,,,,Heals host for 2 at the start of each round for up to 7 rounds.
+HealingWater,Healing Water,buff,7,1,,,,,0,,,,,,,,,,,,,,,,,onRoundStart,"[{""type"":""adjacentToSelf"",""side"":""ally""}]","{""type"":""heal"",""value"":1}",,"At the beginning of each round, heals adjacent allies for 1."
+Reap,Reap,buff,permanent,1,,,,,0,,,,,,,,,,,,,,,,,,,,,"When an enemy is at 2 or less Health, deal 999 damage to that enemy."
+Treachery,Treachery,debuff,permanent,24,,damage,0,armor,0,,,,,,,,,,,,,,,,,,,,,At the start of each round this debuff deals damage equal to the affected Hero's current Armor.
+Prayer,Prayer,buff,7,1.15,,,,,0,,,,healAlliesExceptSelf,1,,,,,,,,,,,,,,,,"When damaged, heal all allies except self for 1 (expires after 7 rounds)."
+PrayerII,Prayer II,buff,7,2.3,,,,,0,,,,healAlliesExceptSelf,2,,,,,,,,,,,,,,,,"When damaged, heal all allies except self for 2 (expires after 7 rounds)."
+DeathPact,Death Pact,buff,permanent,1,,,,,0,,,,damage,equal,,,,,,,,,,,,,,,,"When damaged by an enemy spell, deal equal damage back to the attacker."
+Curse,Curse,debuff,permanent,6.8999999999999995,,,,,1,"{""spellPower"":-1}",,,,,,,,,,,,,,,,,,,,Reduces Spell Power by 1.
+Counter,Counter,buff,permanent,2.3,,,,,0,,damage,2,,,,,,,,,,,,,,,,,,"When the effected Hero is targeted by an enemy spell, deal 2 damage to that attacker."
+AdjacentBlast,Adjacent Blast,debuff,permanent,1.5,,,,,0,,,,,,,,,,,,,,,,,onRoundStart,"[{""type"":""adjacent"",""side"":""enemy""}]","{""type"":""attackPower"",""value"":2}",,"At the start of each round, this effect damages adjacent enemies for 2."
+StaticShock,Static Shock,debuff,permanent,1.5,,,,,0,,,,,,,,,,,,,,,,,onRoundStart,"[{""type"":""adjacentToSelf"",""side"":""enemy""}]","{""type"":""damage"",""value"":2}",,Deals 2 damage to adjacent heroes at the beginning of each round.
+Power,Power,buff,permanent,9.600000000000001,,,,,2,"{""spellPower"":2}",,,,,,,,,,,,,,,,,,,,Increases Spell Power by 2.
+Enraged,Enraged,buff,permanent,9.600000000000001,,,,,2,"{""spellPower"":2}",,,,,,,,,,,,,,,,,,,,Increases Spell Power by 2 and increases incoming damage by 1 after normal calculations.
+SoulLink,Soul Link,buff,permanent,1,,,,,0,,,,,,,,,,,,,,,,,,,,,"After damage is calculated on an adjacent ally, split that final damage in half (round up to the Soul Link hero). Soul Link does not stack."
+Shackle,Shackle,debuff,permanent,1.5,,,,,0,,,,,,,,,,,,,,,,true,,,,,Prevents the affected Hero from being moved between Rounds or by any spells.
+Retribution,Retribution,buff,permanent,3.4499999999999997,,,,,0,,damage,3,,,,,,,,,,,,,,,,,,Deals 3 damage to any enemy who targets the effected Hero with a spell.

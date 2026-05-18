@@ -1,8 +1,11 @@
 {
   "name": "brimstone-valley-root",
   "private": true,
+  "type": "module",
   "scripts": {
     "test": "node ./scripts/smoke-test.mjs",
+    "simulate:easyai": "node ./scripts/easyai-selfplay-stats.mjs",
+    "simulate:easyai:random": "node ./scripts/easyai-random-teams-stats.mjs",
     "test:thief": "node ./test-thief-pilfer.js",
     "backup": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-to-github.ps1",
     "backup:msg": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-to-github.ps1 -Message"

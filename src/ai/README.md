@@ -9,7 +9,7 @@ src/ai/
   ├── index.js           # Main export - getAI(difficulty) function
   ├── superEasyAI.js     # ✅ Implemented - Random decisions
   ├── easyAI.js          # 🚧 TODO - Basic strategic decisions
-  ├── mediumAI.js        # 🚧 TODO - Tactical decisions with synergy
+  ├── mediumAI.js        # Tactical EasyAI wrapper with simulation + synergy
   └── hardAI.js          # 🚧 TODO - Advanced predictive analysis
 ```
 
@@ -66,10 +66,10 @@ Returns the delay in milliseconds before the AI makes a decision.
 - **Thinking Delay**: 800ms
 - **Target Audience**: Players familiar with basic mechanics
 
-### Medium (🚧 TODO)
+### Medium
 - **Strategy**: Tactical with team composition awareness
 - **Draft**: Counter-pick against opponent, balance team composition
-- **Movement**: Position for optimal spell range and synergy
+- **Movement**: Use EasyAI candidate scoring, then re-rank top moves with one-round simulation and setup/denial heuristics
 - **Thinking Delay**: 600ms
 - **Target Audience**: Intermediate players
 

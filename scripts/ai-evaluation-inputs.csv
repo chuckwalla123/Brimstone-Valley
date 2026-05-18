@@ -1,0 +1,32 @@
+scope,field,description,formula_or_source,example_or_values
+hero,currentHealth,"Runtime current health for healing, missing health, ECV, and hero-point calculations.",tile.currentHealth ?? hero.currentHealth ?? hero.health,number
+hero,health,Base or max health used as fallback and for missing-health math.,hero.health ?? hero.maxHealth,number
+hero,currentArmor,Runtime armor used for incoming damage and ECV.,tile.currentArmor ?? hero.currentArmor ?? hero.armor,number
+hero,armor,Base armor fallback and part of ECV/base-stat scoring.,hero.armor,number
+hero,currentSpeed,Runtime speed used by some formula/targeting logic.,tile.currentSpeed ?? hero.currentSpeed ?? hero.speed,number
+hero,speed,Base speed and spell cadence term in tile value.,hero.speed,number
+hero,currentEnergy,Runtime energy used to estimate casts available this turn.,tile.currentEnergy ?? hero.currentEnergy ?? hero.energy,number
+hero,energy,Base energy fallback.,hero.energy,number
+hero,currentSpellPower,Runtime spell power used in formula evaluation.,tile.currentSpellPower ?? hero.currentSpellPower ?? hero.spellPower,number
+hero,spellPower,Base spell power fallback.,hero.spellPower,number
+hero,effects,Active tile or hero effects used for buff/debuff counts and named-effect checks.,tile.effects || hero.effects,array
+target,buff_count,Count of effects where kind === buff.,"countEffectsByKind(tile, buff)",integer
+target,debuff_count,Count of effects where kind === debuff.,"countEffectsByKind(tile, debuff)",integer
+target,named_effect_count,Count of effects matching a specific name.,"countEffectsByName(tile, effectName)",integer
+target,missing_health,Missing health for heal valuation and some spell formulas.,"max(0, maxHealth - currentHealth)",integer
+target,target_speed,Used by divideByTargetSpeed formulas; unknown target defaults to 3.,"max(1, currentSpeed || speed || 3)",default 3
+board,row,Visual row index used to determine active spell and row-targeting.,"indexToRow(index, side)","0 front, 1 middle, 2 back"
+board,column,Visual column index used by column/projectile targeting.,"indexToColumn(index, side)","0 left, 1 center, 2 right"
+calc,ECV,Effective combat value used as the survival/base body term.,sqrt(HP * (HP + Armor * 6)),easyAI calculateEffectiveCombatValue
+calc,expected_turns_alive,Survival horizon used in hero points.,ECV / 4,easyAI calculateHeroPoints
+calc,tile_value,Per-position spell throughput estimate.,"sum(spellImpact * min(speed/cost, castsThisTurn)) + basicAttackFallback",easyAI calculateTileValue
+calc,incoming_damage_per_turn,Projected enemy spell damage and effect threat on this tile.,estimateIncomingDamagePerTurn(...),easyAI
+calc,incoming_ally_energy_per_turn,Projected ally energy support hitting this tile.,estimateIncomingAllyEnergyPerTurn(...),easyAI
+calc,hero_points,Main draft placement score in EasyAI.,ECV + tileValue * expectedTurnsAlive - incomingDamage * expectedTurnsAlive - reservePenalty,easyAI calculateHeroPoints
+calc,effect_estimated_value,Current Medium effect heuristic before any manual override.,pulse + modifiers + trigger utility + protection utility,mediumAI estimateEffectValue
+calc,target_coverage,Medium draft heuristic for how many units a spell/effect can influence.,derived from target type and max,target types: adjacent | adjacentToSelf | backRow | backmostRowWithHero | board | column | cornerTiles | firstEmptyInOpposingColumn | frontRow | frontTwoRows | frontmostRowWithHero | furthest | highestArmor | highestEnergy | highestHealth | highestSpeed | highestSpeedLeastEffects | lastResolvedTarget | leastArmor | leastEffects | leastSpeedAndArmor | leastVoidShields | lowestEnergy | lowestHealth | lowestSpeed | middleRow | mostBuffs | mostDebuffs | mostEffectName | mostMissingHealth | mostPoisonEffects | nearest | nearestDeadAlly | nearestDeadEnemy | nearestToLastTarget | nearestWithEffect | projectile | projectilePlus1 | reverseBook | rowContainingHighestArmor | rowContainingLowestArmor | rowWithHighestSumArmor | rowWithMostHeroes | self
+draft,effect_pressure,Sum of debuff-producing effect value across a hero kit.,sum(effect_estimated_value * target_coverage for debuffs),mediumAI hero profile
+draft,buff_value,Sum of buff-producing effect value across a hero kit.,sum(effect_estimated_value * target_coverage for buffs),mediumAI hero profile
+draft,cleanse_coverage,How much enemy debuff value a hero can answer.,removeTopDebuff/removeDebuffs target coverage + healIfRemoved bonus,mediumAI hero profile
+draft,buff_strip_coverage,How much enemy buff value a hero can answer.,removeTopPositiveEffect target coverage,mediumAI hero profile
+draft,ban_context,Medium bans can now receive the current board state for draft-aware denial.,"makeBanDecision(availableHeroes, {p2Main,p2Reserve,p1Main,p1Reserve})",DraftBoard passes this during AI bans
