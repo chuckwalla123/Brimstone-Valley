@@ -16,6 +16,9 @@ import {
   advanceLevel,
   completeLevel,
   saveTowerRun,
+  clearTowerRun,
+  loseTowerLife,
+  TOWER_MAX_LIVES,
   isBossLevel,
   registerBossSpells
 } from './towerState.js';
@@ -25,6 +28,7 @@ import TowerAugmentChoice from './TowerAugmentChoice.jsx';
 import TowerRecruitChoice from './TowerRecruitChoice.jsx';
 
 const keyedDialogueSpriteCache = new Map();
+const TOWER_AI_DIFFICULTY = 'easy-plus';
 
 function ChromaKeyImage({ src, alt, className, style, enabled = false, tolerance = BG_TRANSPARENCY_TOLERANCE }) {
   const rawSrc = getAssetPath(encodeURI(src || ''));
@@ -456,7 +460,7 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
         ? bossData.bossConfig.preFightDialogue
         : [];
       setBattleData({
-        aiDifficulty: bossData.difficulty,
+        aiDifficulty: TOWER_AI_DIFFICULTY,
         level: level,
         isBoss: true,
         bossId: bossData?.bossConfig?.id || null,
@@ -516,7 +520,7 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
         difficulty: teamData.difficulty
       };
       setBattleData({
-        aiDifficulty: teamData.difficulty,
+        aiDifficulty: TOWER_AI_DIFFICULTY,
         level: level,
         isBoss: false,
         bossId: null,
@@ -639,6 +643,14 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
       setPhase(PHASE.AUGMENT_CHOICE);
     } else {
       // Player lost or draw (treat draw as loss for tower)
+      const nextRun = loseTowerLife(runState);
+      setRunState({ ...nextRun });
+      if (nextRun.lives <= 0) {
+        clearTowerRun();
+        if (onRunStateChange) onRunStateChange(null);
+      } else {
+        if (onRunStateChange) onRunStateChange(nextRun);
+      }
       setPhase(PHASE.DEFEAT);
     }
   };
@@ -708,6 +720,7 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
         <div style={styles.levelBanner}>
           <div style={styles.levelInfo}>
             <div style={styles.levelNumber}>Level {battleData.level}</div>
+            <div style={styles.bossIndicator}>Lives: {runState.lives ?? TOWER_MAX_LIVES}/{TOWER_MAX_LIVES}</div>
             {battleData.isBoss && (
               <div style={styles.bossIndicator}>⚔️ BOSS</div>
             )}
@@ -913,7 +926,11 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
     return (
       <div style={styles.defeatScreen}>
         <h1 style={styles.defeatTitle}>💀 Defeat</h1>
-        <p style={styles.defeatSubtitle}>Your champions have fallen at Level {runState.currentLevel}</p>
+        <p style={styles.defeatSubtitle}>
+          {runState.lives > 0
+            ? `Your champions have fallen at Level ${runState.currentLevel}. ${runState.lives} ${runState.lives === 1 ? 'life remains' : 'lives remain'}.`
+            : `Your champions have fallen at Level ${runState.currentLevel}. Your run is over.`}
+        </p>
         
         <div style={styles.defeatStats}>
           <div style={styles.defeatStat}>
@@ -927,6 +944,10 @@ export default function TowerBattle({ runState: initialRunState, onExit, onRunSt
           <div style={styles.defeatStat}>
             <div style={styles.defeatStatValue}>{Math.floor((runState.currentLevel - 1) / 5)}</div>
             <div style={styles.defeatStatLabel}>Bosses Defeated</div>
+          </div>
+          <div style={styles.defeatStat}>
+            <div style={styles.defeatStatValue}>{runState.lives ?? 0}</div>
+            <div style={styles.defeatStatLabel}>Lives Remaining</div>
           </div>
         </div>
 

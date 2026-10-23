@@ -241,6 +241,11 @@ export const EFFECTS = {
     movementEndEnemyDamage: 2,
     triggerAnimationSpellId: 'payTheTollTrigger',
     triggerAnimationMs: 1200,
+    triggerSound: '/images/sounds/Pay The Toll.mp3',
+    triggerSoundVolume: 1.0,
+    triggerSoundDelayMs: 0,
+    triggerSoundStartTime: 0.0,
+    triggerSoundEndTime: 1.2,
     description: 'Whenever an enemy hero is moved or swapped, they take 2 damage if they end on the main board.'
   },
   Ghost: {
@@ -351,6 +356,13 @@ EFFECTS.Curse = { name: 'Curse', image: '/images/effects/Curse.png', kind: 'debu
 // Counter: retaliate when targeted by an enemy spell. Deals fixed damage to the attacker.
 EFFECTS.Counter = {
   name: 'Counter', image: '/images/effects/Counter.png', kind: 'buff', duration: 'permanent',
+  triggerAnimationSpellId: 'counter',
+  triggerAnimationMs: 700,
+  triggerSound: '/images/sounds/Slash.mp3',
+  triggerSoundVolume: 1.0,
+  triggerSoundDelayMs: 0,
+  triggerSoundStartTime: 0.0,
+  triggerSoundEndTime: 1.2,
   onTargeted: { type: 'damage', value: 2 },
   description: 'When the effected Hero is targeted by an enemy spell, deal 2 damage to that attacker.'
 };

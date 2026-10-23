@@ -1078,11 +1078,33 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
               const atk = (aBoard || [])[rx.attackerIndex];
               if (atk) {
                 if (typeof onStep === 'function') {
-                  const vsResult = applyVoidShieldReduction(atk, Number(rx.value || 0));
-                  // effectPreCast should flash the OWNER's effect icon (hero with the effect), not the attacker
+                  const reactionEffect = rx.effectName ? (EFFECTS[rx.effectName] || null) : null;
                   const ownerTarget = (rx.ownerBoardName && typeof rx.ownerIndex === 'number')
                     ? { boardName: rx.ownerBoardName, index: rx.ownerIndex }
                     : { boardName: rx.attackerBoard, index: rx.attackerIndex };
+                  if (reactionEffect && reactionEffect.triggerAnimationSpellId) {
+                    const castAction = {
+                      type: 'cast',
+                      caster: ownerTarget,
+                      spellId: reactionEffect.triggerAnimationSpellId,
+                      animationMs: Number(reactionEffect.triggerAnimationMs || 500),
+                      results: [{
+                        target: { boardName: rx.attackerBoard, index: rx.attackerIndex },
+                        applied: null,
+                        effectsApplied: [],
+                        phase: 'primary',
+                        descriptorIndex: null
+                      }]
+                    };
+                    if (reactionEffect.triggerSound) castAction.sound = reactionEffect.triggerSound;
+                    if (typeof reactionEffect.triggerSoundVolume === 'number') castAction.soundVolume = Number(reactionEffect.triggerSoundVolume);
+                    if (typeof reactionEffect.triggerSoundDelayMs === 'number') castAction.soundDelayMs = Number(reactionEffect.triggerSoundDelayMs);
+                    if (typeof reactionEffect.triggerSoundStartTime === 'number') castAction.soundStartTime = Number(reactionEffect.triggerSoundStartTime);
+                    if (typeof reactionEffect.triggerSoundEndTime === 'number') castAction.soundEndTime = Number(reactionEffect.triggerSoundEndTime);
+                    try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: castAction }); } catch (e) {}
+                  }
+                  const vsResult = applyVoidShieldReduction(atk, Number(rx.value || 0));
+                  // effectPreCast should flash the OWNER's effect icon (hero with the effect), not the attacker
                   const pre = { type: 'effectPreCast', target: ownerTarget, effectName: rx.effectName, amount: vsResult.damage, scale: getEffectPrecastScale(vsResult.damage), reactionIndex: rxIdx, ownerBoardName: rx.ownerBoardName, ownerIndex: rx.ownerIndex, effectIndex: rx.effectIndex };
                   try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: pre }); } catch (e) {}
                   // effectPulse shows damage on the ATTACKER
@@ -5752,10 +5774,32 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
               const atk = (aBoard || [])[rx.attackerIndex];
               if (atk) {
                 if (typeof onStep === 'function') {
-                  const vsResult = applyVoidShieldReduction(atk, Number(rx.value || 0));
+                  const reactionEffect = rx.effectName ? (EFFECTS[rx.effectName] || null) : null;
                   const ownerTarget = (rx.ownerBoardName && typeof rx.ownerIndex === 'number')
                     ? { boardName: rx.ownerBoardName, index: rx.ownerIndex }
                     : { boardName: rx.attackerBoard, index: rx.attackerIndex };
+                  if (reactionEffect && reactionEffect.triggerAnimationSpellId) {
+                    const castAction = {
+                      type: 'cast',
+                      caster: ownerTarget,
+                      spellId: reactionEffect.triggerAnimationSpellId,
+                      animationMs: Number(reactionEffect.triggerAnimationMs || 500),
+                      results: [{
+                        target: { boardName: rx.attackerBoard, index: rx.attackerIndex },
+                        applied: null,
+                        effectsApplied: [],
+                        phase: 'primary',
+                        descriptorIndex: null
+                      }]
+                    };
+                    if (reactionEffect.triggerSound) castAction.sound = reactionEffect.triggerSound;
+                    if (typeof reactionEffect.triggerSoundVolume === 'number') castAction.soundVolume = Number(reactionEffect.triggerSoundVolume);
+                    if (typeof reactionEffect.triggerSoundDelayMs === 'number') castAction.soundDelayMs = Number(reactionEffect.triggerSoundDelayMs);
+                    if (typeof reactionEffect.triggerSoundStartTime === 'number') castAction.soundStartTime = Number(reactionEffect.triggerSoundStartTime);
+                    if (typeof reactionEffect.triggerSoundEndTime === 'number') castAction.soundEndTime = Number(reactionEffect.triggerSoundEndTime);
+                    try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: castAction }); } catch (e) {}
+                  }
+                  const vsResult = applyVoidShieldReduction(atk, Number(rx.value || 0));
                   const pre = { type: 'effectPreCast', target: ownerTarget, effectName: rx.effectName, amount: vsResult.damage, scale: getEffectPrecastScale(vsResult.damage), reactionIndex: rxIdx, ownerBoardName: rx.ownerBoardName, ownerIndex: rx.ownerIndex, effectIndex: rx.effectIndex };
                   try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: pre }); } catch (e) {}
                   const lastAction = { type: 'effectPulse', target: { boardName: rx.attackerBoard, index: rx.attackerIndex }, effectName: rx.effectName, action: 'damage', amount: vsResult.damage };

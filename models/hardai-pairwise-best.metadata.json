@@ -1,0 +1,632 @@
+{
+  "trainedAt": "2026-10-17T23:22:09.869Z",
+  "options": {
+    "randomCount": 50,
+    "fixtureCount": 5,
+    "maxResponses": 4,
+    "epochs": 20,
+    "batchSize": 32,
+    "objective": "pairwise",
+    "seed": 20261022,
+    "evaluationRandomCount": 20,
+    "diagnosticRandomCount": 20,
+    "oracleScenarioCount": 5,
+    "disagreementLimit": 20,
+    "maxRounds": 20,
+    "output": "models\\hardai-pairwise.json",
+    "best": "models\\hardai-pairwise-best.json",
+    "champion": "models/hardai-movement-champion.json",
+    "resume": false,
+    "promote": false
+  },
+  "scenarioCount": 55,
+  "labelCount": 2491,
+  "trainingObjective": "pairwise",
+  "finalLoss": 0.2326246361248195,
+  "evaluation": {
+    "againstEasy": {
+      "games": 50,
+      "completedGames": 48,
+      "wins": 18,
+      "draws": 1,
+      "losses": 29,
+      "unfinished": 2,
+      "winRate": 0.36,
+      "scoreRate": 0.37,
+      "fallbackCount": 0,
+      "bySide": {
+        "p1": {
+          "games": 25,
+          "wins": 6,
+          "draws": 1,
+          "losses": 17,
+          "unfinished": 1,
+          "fallbackCount": 0,
+          "forcedSkipCount": 32
+        },
+        "p2": {
+          "games": 25,
+          "wins": 12,
+          "draws": 0,
+          "losses": 12,
+          "unfinished": 1,
+          "fallbackCount": 0,
+          "forcedSkipCount": 32
+        }
+      },
+      "fallbackByController": {},
+      "fallbackByReason": {},
+      "forcedSkipCount": 64,
+      "forcedSkipsByController": {
+        "easy": 32,
+        "candidate": 32
+      }
+    },
+    "againstChampion": null
+  },
+  "promotion": {
+    "passed": false,
+    "checks": {
+      "enoughEasyGames": true,
+      "easyWinRate": false,
+      "easyConfidence": false,
+      "noUnfinishedGames": false,
+      "championWinRate": true
+    },
+    "easyWilsonLowerBound": 0.24138562967182875,
+    "config": {
+      "minGames": 40,
+      "minEasyWinRate": 0.55,
+      "minEasyWilsonLowerBound": 0.5,
+      "minChampionWinRate": 0.5,
+      "maxRounds": 20,
+      "maxUnfinishedGames": 0
+    }
+  },
+  "heldOutRanking": {
+    "scenarios": 25,
+    "top1Agreement": 0.08,
+    "topKAgreement": 0.2,
+    "meanSpearmanCorrelation": 0.2236186471462068,
+    "disagreements": [
+      {
+        "scenarioId": "injured-berserker-buffed-enemy",
+        "perspectiveSide": "p2",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:4",
+            "destinationId": "p2:0"
+          },
+          "score": -100000,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p1:0",
+            "destinationId": "p1:0"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:4",
+            "destinationId": "p2:5"
+          },
+          "modelScore": 479.57155634540334,
+          "labelScore": -100000
+        }
+      },
+      {
+        "scenarioId": "cleanse-and-purify-counterplay",
+        "perspectiveSide": "p2",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:0",
+            "destinationId": "p2:0"
+          },
+          "score": 36.16479394838265,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p1:4",
+            "destinationId": "p1:0"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:4",
+            "destinationId": "p2:0"
+          },
+          "modelScore": 636.6778356714887,
+          "labelScore": 31.372893191930483
+        }
+      },
+      {
+        "scenarioId": "shackled-frontline",
+        "perspectiveSide": "p2",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:4",
+            "destinationId": "p2:1"
+          },
+          "score": 26.868541735506508,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p1:4",
+            "destinationId": "p1:0"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:4",
+            "destinationId": "p2:4"
+          },
+          "modelScore": 651.910894863917,
+          "labelScore": 26.868541735506508
+        }
+      },
+      {
+        "scenarioId": "random-20261032-1",
+        "perspectiveSide": "p1",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:4",
+            "destinationId": "p1:2"
+          },
+          "score": 109.6923621059847,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p2:0",
+            "destinationId": "p2:0"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:4",
+            "destinationId": "p1:1"
+          },
+          "modelScore": 724.7732831651404,
+          "labelScore": -73.45031306762887
+        }
+      },
+      {
+        "scenarioId": "random-20261032-2",
+        "perspectiveSide": "p2",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:2",
+            "destinationId": "p2Reserve:1"
+          },
+          "score": 100000,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p1Reserve:0",
+            "destinationId": "p1:1"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2Reserve:1",
+            "destinationId": "p2:0"
+          },
+          "modelScore": -47.45337251827606,
+          "labelScore": 17.71657297022348
+        }
+      },
+      {
+        "scenarioId": "random-20261032-3",
+        "perspectiveSide": "p1",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:2",
+            "destinationId": "p1:3"
+          },
+          "score": 67.52830280022218,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p2:4",
+            "destinationId": "p2:5"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:3",
+            "destinationId": "p1:0"
+          },
+          "modelScore": -71.92985625851178,
+          "labelScore": -148.88079391383175
+        }
+      },
+      {
+        "scenarioId": "random-20261032-4",
+        "perspectiveSide": "p1",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:0",
+            "destinationId": "p1:6"
+          },
+          "score": 8.439726951328154,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p2:2",
+            "destinationId": "p2:3"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:1",
+            "destinationId": "p1:5"
+          },
+          "modelScore": -17.13175652358938,
+          "labelScore": -99.71500272051523
+        }
+      },
+      {
+        "scenarioId": "random-20261032-5",
+        "perspectiveSide": "p2",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:7",
+            "destinationId": "p2:2"
+          },
+          "score": 33.11194966134401,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p1:4",
+            "destinationId": "p1:6"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:3",
+            "destinationId": "p2:0"
+          },
+          "modelScore": 446.3157751639324,
+          "labelScore": 3.816688856120365
+        }
+      },
+      {
+        "scenarioId": "random-20261032-6",
+        "perspectiveSide": "p2",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:1",
+            "destinationId": "p2:8"
+          },
+          "score": 100000,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p1Reserve:0",
+            "destinationId": "p1:0"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2Reserve:1",
+            "destinationId": "p2:6"
+          },
+          "modelScore": 267.15918037130274,
+          "labelScore": 14.569534994458607
+        }
+      },
+      {
+        "scenarioId": "random-20261032-7",
+        "perspectiveSide": "p2",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:0",
+            "destinationId": "p2Reserve:0"
+          },
+          "score": -89.27502033272317,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p1Reserve:1",
+            "destinationId": "p1:4"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:0",
+            "destinationId": "p2:8"
+          },
+          "modelScore": -402.20122496017837,
+          "labelScore": -134.77653235574854
+        }
+      },
+      {
+        "scenarioId": "random-20261032-8",
+        "perspectiveSide": "p1",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:5",
+            "destinationId": "p1:8"
+          },
+          "score": 47.86977345473544,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p2:2",
+            "destinationId": "p2:3"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:8",
+            "destinationId": "p1:5"
+          },
+          "modelScore": 374.8388961899515,
+          "labelScore": 47.86977345473544
+        }
+      },
+      {
+        "scenarioId": "random-20261032-9",
+        "perspectiveSide": "p1",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:1",
+            "destinationId": "p1:2"
+          },
+          "score": 28.808926685673622,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p2:5",
+            "destinationId": "p2:1"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:0",
+            "destinationId": "p1:0"
+          },
+          "modelScore": -725.4328619247669,
+          "labelScore": 23.072307163612408
+        }
+      },
+      {
+        "scenarioId": "random-20261032-10",
+        "perspectiveSide": "p1",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:0",
+            "destinationId": "p1:1"
+          },
+          "score": 100000,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p2:2",
+            "destinationId": "p2:1"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1Reserve:0",
+            "destinationId": "p1:2"
+          },
+          "modelScore": 380.04462055940905,
+          "labelScore": 46.665723867185875
+        }
+      },
+      {
+        "scenarioId": "random-20261032-11",
+        "perspectiveSide": "p1",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:3",
+            "destinationId": "p1:8"
+          },
+          "score": 5.780077368878629,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p2Reserve:0",
+            "destinationId": "p2:2"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:8",
+            "destinationId": "p1:0"
+          },
+          "modelScore": 210.7954298510955,
+          "labelScore": -40.61710779505054
+        }
+      },
+      {
+        "scenarioId": "random-20261032-12",
+        "perspectiveSide": "p1",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1Reserve:1",
+            "destinationId": "p1:4"
+          },
+          "score": -155.64373281408243,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p2:4",
+            "destinationId": "p2:2"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1Reserve:1",
+            "destinationId": "p1:0"
+          },
+          "modelScore": 367.44656711904037,
+          "labelScore": -231.63658849861832
+        }
+      },
+      {
+        "scenarioId": "random-20261032-13",
+        "perspectiveSide": "p1",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:4",
+            "destinationId": "p1:5"
+          },
+          "score": -29.518879207292287,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p2Reserve:0",
+            "destinationId": "p2:1"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:4",
+            "destinationId": "p1:8"
+          },
+          "modelScore": 355.55680813618767,
+          "labelScore": -36.84735535455631
+        }
+      },
+      {
+        "scenarioId": "random-20261032-14",
+        "perspectiveSide": "p2",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:5",
+            "destinationId": "p2Reserve:0"
+          },
+          "score": -113.24300931684817,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p1:1",
+            "destinationId": "p1:8"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:7",
+            "destinationId": "p2Reserve:0"
+          },
+          "modelScore": 6.507964340805353,
+          "labelScore": -192.99511796603062
+        }
+      },
+      {
+        "scenarioId": "random-20261032-15",
+        "perspectiveSide": "p2",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:4",
+            "destinationId": "p2:6"
+          },
+          "score": -65.28756997743123,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p1:5",
+            "destinationId": "p1:4"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p2:5",
+            "destinationId": "p2:1"
+          },
+          "modelScore": 441.36329025744806,
+          "labelScore": -108.55250176551809
+        }
+      },
+      {
+        "scenarioId": "random-20261032-16",
+        "perspectiveSide": "p1",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:1",
+            "destinationId": "p1:3"
+          },
+          "score": 100000,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p2Reserve:0",
+            "destinationId": "p2:0"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:2",
+            "destinationId": "p1:4"
+          },
+          "modelScore": 396.2028291862938,
+          "labelScore": -19.37550322107142
+        }
+      },
+      {
+        "scenarioId": "random-20261032-17",
+        "perspectiveSide": "p1",
+        "expected": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:5",
+            "destinationId": "p1:8"
+          },
+          "score": -22.319239263247276,
+          "responseAction": {
+            "type": "move",
+            "sourceId": "p2:3",
+            "destinationId": "p2:6"
+          }
+        },
+        "predicted": {
+          "action": {
+            "type": "move",
+            "sourceId": "p1:8",
+            "destinationId": "p1:6"
+          },
+          "modelScore": 268.771301206916,
+          "labelScore": -81.80147164530226
+        }
+      }
+    ]
+  },
+  "oracle": {
+    "games": 10,
+    "wins": 6,
+    "draws": 0,
+    "losses": 0,
+    "unfinished": 4,
+    "winRate": 0.6,
+    "scoreRate": 0.6,
+    "fallbackCount": 0
+  },
+  "quality": {
+    "easyScoreRate": 0.37,
+    "heldOutTop1Agreement": 0.08,
+    "heldOutSpearman": 0.2236186471462068
+  },
+  "isBest": true,
+  "featureVersion": 2,
+  "featureSize": 8120
+}

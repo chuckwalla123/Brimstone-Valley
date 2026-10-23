@@ -1,7 +1,7 @@
 import { makeEmptyMain, makeReserve, deepClone, processMove } from '../shared/gameLogic.js';
 import { HEROES } from '../src/heroes.js';
 import { executeRound } from '../src/battleEngine.js';
-import { makeMovementDecision } from '../src/ai/easyAI.js';
+import { makeMovementDecision } from '../src/ai/easyAIPlusAI.js';
 
 const BETTING_MAX_PLAYERS = 12;
 const BETTING_MIN_PLAYERS = 2;
@@ -9,7 +9,7 @@ const BETTING_STARTING_COINS = 10;
 const BETTING_TOTAL_ROUNDS = 8;
 const BETTING_BET_MS = 60_000;
 const BETTING_BATTLE_SPEED_MULTIPLIER = 4;
-const BETTING_BATTLE_VISUAL_TIMEOUT_MS = 90_000;
+const BETTING_BATTLE_VISUAL_TIMEOUT_MS = 15_000;
 const BETTING_PREPARE_BATTLE_MAX_MS = 20_000;
 const BETTING_ROUND_EXECUTION_TIMEOUT_MS = 25_000;
 const BETTING_ROUND_VISUAL_ACK_TIMEOUT_MS = 20_000;
@@ -1485,6 +1485,9 @@ export function createBettingModeManager(io) {
     const session = lobby.playbackSession;
     clearPlaybackStepTimeout(lobby);
     clearPlaybackStateFeedTimeout(lobby);
+    if (Array.isArray(session.steps)) {
+      session.steps.length = 0;
+    }
     lobby.playbackSession = null;
     lobby.playbackStateLastEmittedAt = 0;
     if (resolve && typeof session.resolve === 'function') {
@@ -1623,6 +1626,7 @@ export function createBettingModeManager(io) {
     if (!session.awaitingAck) return;
     session.awaitingAck = false;
     clearPlaybackStepTimeout(lobby);
+    session.steps[session.index] = null;
     session.index += 1;
     sendNextPlaybackStep(lobby);
   };
@@ -1643,18 +1647,21 @@ export function createBettingModeManager(io) {
     if (!lobby || !Array.isArray(steps) || steps.length === 0) return Promise.resolve();
     clearPlaybackSession(lobby, false);
 
-    const normalizedSteps = steps
-      .filter((step) => step && typeof step === 'object')
-      .map((step, idx) => ({
-        ...step,
-        seq: Number(step.seq || (idx + 1))
-      }));
+    for (let index = 0; index < steps.length; index += 1) {
+      const step = steps[index];
+      if (!step || typeof step !== 'object') {
+        steps.splice(index, 1);
+        index -= 1;
+        continue;
+      }
+      step.seq = Number(step.seq || (index + 1));
+    }
 
-    if (normalizedSteps.length === 0) return Promise.resolve();
+    if (steps.length === 0) return Promise.resolve();
 
     return new Promise((resolve) => {
       lobby.playbackSession = {
-        steps: normalizedSteps,
+        steps,
         index: 0,
         awaitingAck: false,
         timeout: null,
@@ -1742,9 +1749,23 @@ export function createBettingModeManager(io) {
     const active = activeOnlinePlayerIds(lobby);
     if (active.length === 0) return false;
     const ackSet = lobby.battleVisualAcks instanceof Set ? lobby.battleVisualAcks : new Set();
-    const allActiveAcked = active.every((playerId) => ackSet.has(String(playerId)));
-    if (!allActiveAcked) return false;
+    const pendingAcks = active.filter((playerId) => !ackSet.has(String(playerId)));
+    if (pendingAcks.length) {
+      console.info('[Betting] Waiting for battle visual completion', {
+        lobbyCode: lobby.code,
+        round: lobby.currentRound,
+        acknowledgedPlayers: ackSet.size,
+        activePlayers: active.length,
+        pendingPlayers: pendingAcks.length
+      });
+      return false;
+    }
     clearLobbyTimer(lobby);
+    console.info('[Betting] All active players completed battle visuals', {
+      lobbyCode: lobby.code,
+      round: lobby.currentRound,
+      players: active.length
+    });
     beginSummaryPhase(lobby);
     return true;
   };
@@ -1840,6 +1861,13 @@ export function createBettingModeManager(io) {
     const payload = { lobbies: serializeLobbyBrowser() };
     io.emit('bettingLobbyBrowser', payload);
   };
+
+  const staleLobbySweepTimer = setInterval(() => {
+    if (pruneStaleLobbies(Date.now())) {
+      emitLobbyBrowser();
+    }
+  }, BETTING_LOBBY_RECONNECT_GRACE_MS);
+  staleLobbySweepTimer.unref?.();
 
   const emitLobbyState = (lobby) => {
     lobby.playerOrder.forEach((playerId) => {
@@ -2108,6 +2136,11 @@ export function createBettingModeManager(io) {
             .filter(Boolean)
         : [];
 
+      // The playback queue owns socket-safe copies; release the simulator's rich snapshots.
+      if (Array.isArray(result?.steps)) {
+        result.steps.length = 0;
+      }
+
       normalizedSteps.forEach((safeStep) => {
         const safeRound = Number(safeStep?.state?.roundNumber || safeStep?.roundNumber || round || 0) || round;
         observeLiveBattleSnapshot(tracking, {
@@ -2169,6 +2202,9 @@ export function createBettingModeManager(io) {
         memory: getProcessMemorySnapshot()
       });
 
+      const winningStep = normalizedSteps.find((step) => step && (step.type === 'gameEnd' || (step.type === 'roundComplete' && step.winner)));
+      normalizedSteps.length = 0;
+
       await playBattleStepsWithAck(lobby, steps);
 
       if (!lobbiesByCode.has(lobby.code)) return;
@@ -2184,7 +2220,6 @@ export function createBettingModeManager(io) {
         seq: tracking.seq
       });
 
-      const winningStep = normalizedSteps.find((step) => step && (step.type === 'gameEnd' || (step.type === 'roundComplete' && step.winner)));
       if (winningStep?.winner) {
         tracking.winnerToken = winningStep.winner;
         const battleOutcome = finalizeLiveBattleOutcome(lobby.battleSpec, tracking);
@@ -2292,6 +2327,13 @@ export function createBettingModeManager(io) {
     lobby.timer = setTimeout(() => {
       if (!lobbiesByCode.has(lobby.code)) return;
       if (lobby.phase !== 'battle') return;
+      console.warn('[Betting] Battle visual completion timed out; advancing to summary', {
+        lobbyCode: lobby.code,
+        round: lobby.currentRound,
+        timeoutMs: BETTING_BATTLE_VISUAL_TIMEOUT_MS,
+        acknowledgedPlayers: lobby.battleVisualAcks instanceof Set ? lobby.battleVisualAcks.size : 0,
+        activePlayers: activeOnlinePlayerIds(lobby).length
+      });
       beginSummaryPhase(lobby);
     }, BETTING_BATTLE_VISUAL_TIMEOUT_MS);
   };
@@ -2701,6 +2743,13 @@ export function createBettingModeManager(io) {
         lobby.battleVisualAcks = new Set();
       }
       lobby.battleVisualAcks.add(String(playerId));
+      console.info('[Betting] Battle visual completion acknowledged', {
+        lobbyCode: lobby.code,
+        round: lobby.currentRound,
+        playerId,
+        acknowledgedPlayers: lobby.battleVisualAcks.size,
+        activePlayers: activeOnlinePlayerIds(lobby).length
+      });
       tryAdvanceBattleToSummary(lobby);
     });
 

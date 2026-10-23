@@ -13,6 +13,7 @@ import {
   saveTowerRun, 
   createNewRun, 
   clearTowerRun,
+  loseTowerLife,
   hasActiveRun,
   isBossLevel
 } from './towerState.js';
@@ -40,8 +41,35 @@ export default function TowerMode({ onExit }) {
   useEffect(() => {
     const existingRun = loadTowerRun();
     if (existingRun) {
+      if (existingRun.sessionActive) {
+        loseTowerLife(existingRun);
+        if (existingRun.lives <= 0) {
+          clearTowerRun();
+          setRunState(null);
+          return;
+        }
+      }
+      existingRun.sessionActive = true;
+      saveTowerRun(existingRun);
       setRunState(existingRun);
     }
+
+    let unloading = false;
+    const markUnloading = () => {
+      unloading = true;
+    };
+    window.addEventListener('beforeunload', markUnloading);
+
+    return () => {
+      window.removeEventListener('beforeunload', markUnloading);
+      if (!unloading) {
+        const activeRun = loadTowerRun();
+        if (activeRun) {
+          activeRun.sessionActive = false;
+          saveTowerRun(activeRun);
+        }
+      }
+    };
   }, []);
 
   // Tower-specific music control
@@ -71,6 +99,7 @@ export default function TowerMode({ onExit }) {
 
   const handleNewRun = () => {
     const newRun = createNewRun();
+    newRun.sessionActive = true;
     saveTowerRun(newRun);
     setRunState(newRun);
     setScreen(SCREEN.DRAFT);

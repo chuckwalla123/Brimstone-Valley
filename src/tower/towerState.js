@@ -18,6 +18,7 @@ import { getFixedBattleForLevel } from './fixedBattles.js';
 export { isBossLevel } from './towerLevels.js';
 
 const TOWER_STORAGE_KEY = 'brimstone_tower_run';
+export const TOWER_MAX_LIVES = 5;
 const BASE_AUGMENT_CAP = 2;
 const AUGMENT_ID_MIGRATIONS = {
   counter: 'thornsStrong',
@@ -349,6 +350,8 @@ function migrateRunAugments(runState) {
  *   towerIntroSeen: boolean,
  *   completedLevels: number[],
  *   bossesDefeated: string[],
+ *   lives: number (0-5),
+ *   sessionActive: boolean,
  *   startedAt: timestamp,
  *   lastPlayedAt: timestamp
  * }
@@ -375,6 +378,8 @@ export function createNewRun() {
     towerIntroSeen: false,
     completedLevels: [],
     bossesDefeated: [],
+    lives: TOWER_MAX_LIVES,
+    sessionActive: false,
     startedAt: Date.now(),
     lastPlayedAt: Date.now()
   };
@@ -413,6 +418,15 @@ export function loadTowerRun() {
       if (run && typeof run.towerIntroSeen !== 'boolean') {
         run.towerIntroSeen = Number(run.currentLevel || 1) > 1;
       }
+      if (run && !Number.isInteger(run.lives)) {
+        run.lives = TOWER_MAX_LIVES;
+      }
+      if (run) {
+        run.lives = Math.max(0, Math.min(TOWER_MAX_LIVES, run.lives));
+      }
+      if (run && typeof run.sessionActive !== 'boolean') {
+        run.sessionActive = false;
+      }
       return migrateRunAugments(run);
     }
   } catch (e) {
@@ -439,6 +453,18 @@ export function clearTowerRun() {
  */
 export function hasActiveRun() {
   return loadTowerRun() !== null;
+}
+
+/**
+ * Consume one life after a lost battle or an interrupted tower session.
+ */
+export function loseTowerLife(runState) {
+  if (!runState) return runState;
+  const currentLives = Number.isInteger(runState.lives) ? runState.lives : TOWER_MAX_LIVES;
+  runState.lives = Math.max(0, Math.min(TOWER_MAX_LIVES, currentLives) - 1);
+  runState.lastPlayedAt = Date.now();
+  saveTowerRun(runState);
+  return runState;
 }
 
 /**
@@ -652,6 +678,7 @@ export function completeLevel(runState, bossId = null) {
   
   if (bossId) {
     runState.bossesDefeated.push(bossId);
+    runState.lives = TOWER_MAX_LIVES;
   }
   
   runState.currentLevel += 1;
@@ -1016,6 +1043,7 @@ export function getRunSummary(runState) {
     currentLevel: runState.currentLevel,
     levelsCompleted: runState.completedLevels.length,
     bossesDefeated: runState.bossesDefeated.length,
+    lives: Number.isInteger(runState.lives) ? runState.lives : TOWER_MAX_LIVES,
     totalAugments,
     heroCount: runState.selectedHeroes.length,
     hasTeam: runState.selectedHeroes.length >= 1,
@@ -1041,6 +1069,7 @@ export default {
   loadTowerRun,
   clearTowerRun,
   hasActiveRun,
+  loseTowerLife,
   setSelectedHeroes,
   addHeroToRun,
   getRecruitChoices,
@@ -1059,4 +1088,3 @@ export default {
   getAugmentCap,
   updateHeroPositions
 };
-

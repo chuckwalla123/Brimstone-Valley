@@ -28,16 +28,30 @@
 import express from 'express';
 import http from 'http';
 import { Server as SocketIOServer } from 'socket.io';
+import { createAdapter } from '@socket.io/redis-adapter';
+import { createClient } from 'redis';
 import cors from 'cors';
+import dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
 import { makeEmptyMain, makeReserve, processMove, isValidMove, deepClone } from '../shared/gameLogic.js';
 import { HEROES } from '../src/heroes.js';
 import { executeRound } from '../src/battleEngine.js';
 import { getRandomAugments, applyAugmentsToHero } from '../src/tower/augments.js';
 import { createBettingModeManager } from './bettingMode.js';
 
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Load server-side environment from local files when present.
+dotenv.config({ path: path.join(__dirname, '.env') });
+dotenv.config({ path: path.join(__dirname, '../.env') });
+
 const PLAYFAB_TITLE_ID = process.env.PLAYFAB_TITLE_ID || '';
 const PLAYFAB_SECRET_KEY = process.env.PLAYFAB_SECRET_KEY || '';
 const SERVER_INSTANCE_ID = process.env.FLY_ALLOC_ID || process.env.HOSTNAME || `pid:${process.pid}`;
+const REDIS_URL = process.env.REDIS_URL || '';
+const MATCH_OWNERSHIP_MODEL = 'single-process-owner';
 
 const verifyPlayFabSession = async (sessionTicket) => {
   if (!PLAYFAB_TITLE_ID || !PLAYFAB_SECRET_KEY) return null;
@@ -229,7 +243,7 @@ const getClassicMatchDepartureResult = (match, departingSocketId) => {
 const app = express();
 
 const allowedOrigins = (process.env.CORS_ORIGINS
-  || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,https://brimstonevalley.fly.dev')
+  || 'http://localhost:5173,http://127.0.0.1:5173,http://localhost:5174,http://127.0.0.1:5174,http://localhost:4173,http://127.0.0.1:4173,https://brimstonevalley.fly.dev,file://')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
@@ -262,8 +276,45 @@ const io = new SocketIOServer(server, {
     methods: ['GET', 'POST']
   },
   pingInterval: 25000,
-  pingTimeout: 60000
+  pingTimeout: 60000,
+  transports: ['websocket']
 }); // WebSockets for real-time
+
+let redisAdapterReady = false;
+
+const configureRedisAdapter = async () => {
+  if (!REDIS_URL) {
+    console.warn('[Redis] REDIS_URL is not configured; Socket.IO is limited to one server process.');
+    return;
+  }
+
+  const pubClient = createClient({ url: REDIS_URL });
+  const subClient = pubClient.duplicate();
+  const logRedisError = (error) => console.error('[Redis] Client error:', error);
+  pubClient.on('error', logRedisError);
+  subClient.on('error', logRedisError);
+
+  await Promise.all([pubClient.connect(), subClient.connect()]);
+  io.adapter(createAdapter(pubClient, subClient));
+  redisAdapterReady = true;
+  console.log('[Redis] Socket.IO adapter connected.');
+};
+
+app.get('/health', (request, response) => {
+  response.json({
+    ok: true,
+    instanceId: SERVER_INSTANCE_ID,
+    redisAdapterReady,
+    matchOwnership: MATCH_OWNERSHIP_MODEL
+  });
+});
+
+try {
+  await configureRedisAdapter();
+} catch (error) {
+  console.error('[Redis] Could not initialize the Socket.IO adapter:', error);
+  process.exit(1);
+}
 
 const bettingModeManager = createBettingModeManager(io);
 
@@ -3296,6 +3347,7 @@ io.on('connection', (socket) => {
 });
 
 const PORT = process.env.PORT || 3002;
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
+const HOST = process.env.HOST || '0.0.0.0';
+server.listen(PORT, HOST, () => {
+  console.log(`Server running on ${HOST}:${PORT}`);
 });

@@ -10,7 +10,9 @@
 
 import { getSpellById } from '../spells.js';
 import { getEffectByName } from '../effects.js';
+import { HEROES } from '../heroes.js';
 import { indexToRow, indexToColumn, resolveTargets, columnIndicesForBoard } from '../targeting.js';
+import { EFFECT_EVALUATION_OVERRIDES } from './effectEvaluationOverrides.js';
 
 const EASY_AI_DEBUG = (() => {
   try {
@@ -175,6 +177,37 @@ const getEffectScore = (effect) => {
   return score > 0 ? score : 1;
 };
 
+const getRemovedEffectValue = (effect) => {
+  const resolved = typeof effect === 'string' ? getEffectByName(effect) : effect;
+  const override = EFFECT_EVALUATION_OVERRIDES[resolved?.name];
+  return Math.max(getEffectScore(resolved), Number.isFinite(override) ? override : 0);
+};
+
+const getConditionalDamageBranch = (post, casterTile, targetRef) => {
+  const casterHealth = getRuntimeHealth(casterTile);
+  const targetHealth = getRuntimeHealth(targetRef?.tile);
+  if (post.conditionalOnCasterVsTargetHealth) {
+    return casterHealth < targetHealth
+      ? post.conditionalOnCasterVsTargetHealth.lessThan
+      : post.conditionalOnCasterVsTargetHealth.greaterOrEqual;
+  }
+  if (post.conditionalOnTargetVsCasterHealth) {
+    return targetHealth < casterHealth
+      ? post.conditionalOnTargetVsCasterHealth.targetLessThanCaster
+      : post.conditionalOnTargetVsCasterHealth.otherwise;
+  }
+  return null;
+};
+
+const estimatePositionalPostValue = (post, targetRef) => {
+  if (!targetRef) return 0;
+  if (post.moveAllToCasterRightmostAvailableAndDamageByDistance) return 1.5;
+  if (post.moveAllBack || post.moveRowBack) return 1.25;
+  if (post.moveToFurthestFromCaster || post.moveToFrontmostAvailable) return 1.5;
+  if (post.moveToFirstOpenReverseBook || post.swapWithReserve) return 1;
+  return 0;
+};
+
 const getEffectThreatScore = (effect) => {
   const resolved = typeof effect === 'string' ? getEffectByName(effect) : effect;
   if (!resolved) return 0;
@@ -327,7 +360,261 @@ const estimateIncomingAllyEnergyPerTurn = (
   return totalEnergySupport;
 };
 
-function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserve = [], allyBoard = [], allyReserve = [], casterSpellPower = 0, hero = null, slotKey = null) {
+const getRuntimeHealth = (tile) => Number(tile?.currentHealth ?? tile?.hero?.currentHealth ?? tile?.hero?.health ?? 0);
+
+const getResolvedTargetGroups = (targets, casterRef, boards, options) => {
+  let previousCount = 0;
+  return (targets || []).map((_, descriptorIndex) => {
+    const resolved = resolveTargets(targets.slice(0, descriptorIndex + 1), casterRef, boards, null, options);
+    const group = resolved.slice(previousCount);
+    previousCount = resolved.length;
+    return group;
+  });
+};
+
+const getBoardForTarget = (boards, board) => board === 'p1'
+  ? boards.p1Board
+  : (board === 'p2' ? boards.p2Board : boards.p3Board);
+
+const getTargetReference = (boards, token) => {
+  const tile = getBoardForTarget(boards, token?.board)?.[token?.index];
+  return tile?.hero ? {
+    hero: tile.hero,
+    tile,
+    index: token.index,
+    board: token.board,
+    reserve: false,
+  } : null;
+};
+
+const getSpecialFormulaValue = (formula, casterTile, targetRef, resolvedTargetCount, casterSpellPower, hero) => {
+  const targetTile = targetRef?.tile;
+  const targetHero = targetRef?.hero;
+  let value = formula.type === 'fixed'
+    ? Number(formula.value || 0)
+    : getFormulaBaseValue(formula, casterSpellPower, hero, targetRef);
+  const casterArmor = Number(casterTile?.currentArmor ?? hero?.currentArmor ?? hero?.armor ?? 0);
+  const targetArmor = Number(targetTile?.currentArmor ?? targetHero?.currentArmor ?? targetHero?.armor ?? 0);
+  const targetSpeed = Number(targetTile?.currentSpeed ?? targetHero?.currentSpeed ?? targetHero?.speed ?? 0);
+  const targetMissingHealth = Math.max(0, Number(targetHero?.health ?? targetHero?.maxHealth ?? 0) - getRuntimeHealth(targetTile));
+
+  if (formula.addCasterArmor) value += casterArmor;
+  if (formula.addTargetArmor) value += targetArmor;
+  if (formula.addTargetSpeed) value += targetSpeed;
+  if (formula.addTargetMissingHealth) value += targetMissingHealth;
+  if (formula.addResolvedTargetCountMultiplier) {
+    value += resolvedTargetCount * Number(formula.addResolvedTargetCountMultiplier);
+  }
+  if (Number.isFinite(Number(formula.maxValue))) value = Math.min(value, Number(formula.maxValue));
+  return Math.max(0, value);
+};
+
+const estimateSummonedHeroValue = (summonedHero, targetRef, boards) => {
+  if (!summonedHero || !targetRef) return 0;
+  const targetBoard = getBoardForTarget(boards, targetRef.board);
+  if (!targetBoard) return 0;
+  const simulatedBoard = targetBoard.map((tile, index) => (index === targetRef.index
+    ? {
+      ...tile,
+      hero: summonedHero,
+      _dead: false,
+      currentHealth: Number(summonedHero.health || 0),
+      currentArmor: Number(summonedHero.armor || 0),
+      currentSpeed: Number(summonedHero.speed || 0),
+      currentEnergy: Number(summonedHero.energy || 0),
+      currentSpellPower: Number(summonedHero.spellPower || 0),
+      effects: [],
+    }
+    : tile));
+  const summonedIsP2 = targetRef.board === 'p2';
+  const p1Board = summonedIsP2 ? boards.p1Board : simulatedBoard;
+  const p2Board = summonedIsP2 ? simulatedBoard : boards.p2Board;
+  const p1Reserve = boards.p1Reserve;
+  const p2Reserve = boards.p2Reserve;
+  return calculateHeroPoints(
+    summonedHero,
+    targetRef.index,
+    summonedIsP2,
+    summonedIsP2 ? p1Board : p2Board,
+    summonedIsP2 ? p1Reserve : p2Reserve,
+    summonedIsP2 ? p2Board : p1Board,
+    summonedIsP2 ? p2Reserve : p1Reserve,
+    simulatedBoard[targetRef.index],
+  );
+};
+
+function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserve = [], allyBoard = [], allyReserve = [], casterSpellPower = 0, hero = null, slotKey = null, evaluationOptions = {}) {
+  if (!spell?.spec || !hero || tileIndex < 0) return 0;
+
+  const boardSide = isP2 ? 'p2' : 'p1';
+  const casterTile = {
+    ...(allyBoard[tileIndex] || {}),
+    hero,
+    _dead: false,
+    currentSpellPower: Number(casterSpellPower || 0),
+  };
+  const boards = isP2
+    ? { p1Board: enemyBoard, p1Reserve: enemyReserve, p2Board: allyBoard.map((tile, index) => index === tileIndex ? casterTile : tile), p2Reserve: allyReserve }
+    : { p1Board: allyBoard.map((tile, index) => index === tileIndex ? casterTile : tile), p1Reserve: allyReserve, p2Board: enemyBoard, p2Reserve: enemyReserve };
+  const spec = spell.spec;
+  const formula = spec.formula || {};
+  const post = spec.post || {};
+  const useAdvancedSpellEvaluation = evaluationOptions.advancedSpellEvaluation === true;
+  const runtimeCasterHero = {
+    ...hero,
+    currentHealth: getRuntimeHealth(casterTile),
+    currentArmor: Number(casterTile.currentArmor ?? hero.currentArmor ?? hero.armor ?? 0),
+    currentSpeed: Number(casterTile.currentSpeed ?? hero.currentSpeed ?? hero.speed ?? 0),
+    currentSpellPower: Number(casterSpellPower || 0),
+  };
+  const targetGroups = getResolvedTargetGroups(
+    spec.targets || [],
+    { boardName: boardSide, index: tileIndex, tile: casterTile },
+    boards,
+    { bypassTriggers: !!post.bypassTriggers },
+  );
+  const resolvedTargetCount = targetGroups.reduce((count, group) => count + group.length, 0);
+  let totalImpact = 0;
+  let conditionalSecondaryTriggered = false;
+
+  targetGroups.forEach((group, descriptorIndex) => {
+    const extra = spec.perTargetExtras?.[descriptorIndex] || {};
+    group.forEach((token) => {
+      const targetRef = getTargetReference(boards, token);
+      if (!targetRef) return;
+      const targetEffects = getTileEffects(targetRef.tile);
+      const targetHasDebuff = targetEffects.some(effect => effect?.kind === 'debuff');
+      const requiredEffect = post.onlyApplyToWithEffect;
+      const isEligible = (!post.onlyApplyIfHasDebuff || targetHasDebuff)
+        && (!requiredEffect || targetEffects.some(effect => effect?.name === requiredEffect));
+      const isCorpse = !!targetRef.tile._dead || getRuntimeHealth(targetRef.tile) <= 0;
+
+      if (useAdvancedSpellEvaluation && post.raiseDeadToHeroId && isCorpse) {
+        const skeleton = HEROES.find(candidate => candidate.id === post.raiseDeadToHeroId);
+        totalImpact += estimateSummonedHeroValue(skeleton, targetRef, boards);
+        return;
+      }
+      if (useAdvancedSpellEvaluation && post.revive && isCorpse) {
+        const revivedHero = { ...targetRef.hero, currentHealth: Math.min(
+          Number(targetRef.hero.health || 0),
+          Number(post.revive.heal ?? post.revive.amount ?? post.revive.value ?? 1) + casterSpellPower,
+        ) };
+        totalImpact += estimateSummonedHeroValue(revivedHero, targetRef, boards);
+        return;
+      }
+      if (post.removeCorpse && !isCorpse) return;
+
+      const action = extra.action === undefined ? 'formula' : extra.action;
+      if (action === 'damage' || (action === 'formula' && isEligible && formula.type !== 'heal' && formula.type !== 'healPower')) {
+        let damage = action === 'damage'
+          ? Number(extra.value || 0)
+          : getSpecialFormulaValue(formula, casterTile, targetRef, resolvedTargetCount, casterSpellPower, runtimeCasterHero);
+        const conditionalBranch = useAdvancedSpellEvaluation
+          ? getConditionalDamageBranch(post, casterTile, targetRef)
+          : null;
+        if (conditionalBranch) {
+          damage = Number(conditionalBranch.attackPower ?? conditionalBranch.damage ?? damage);
+          if (conditionalBranch.healCaster) {
+            totalImpact += Math.min(
+              Number(conditionalBranch.healCaster),
+              Math.max(0, Number(hero.health || 0) - getRuntimeHealth(casterTile)),
+            );
+          }
+        }
+        if (formula.addTargetEffectNameCount) {
+          damage += targetEffects.filter(effect => effect?.name === formula.addTargetEffectNameCount).length
+            * Number(formula.addTargetEffectCountMultiplier ?? 1);
+        }
+        if (typeof formula.addTargetEffectsMultiplier === 'number') {
+          damage += targetEffects.filter(effect => effect?.kind === 'buff').length * formula.addTargetEffectsMultiplier;
+        }
+        const effectiveDamage = getArmorAdjustedDamage(
+          { ...formula, ignoreArmor: extra.ignoreArmor ?? formula.ignoreArmor },
+          damage,
+          Number(targetRef.tile.currentArmor ?? targetRef.hero.currentArmor ?? targetRef.hero.armor ?? 0),
+        );
+        totalImpact += effectiveDamage;
+        if (useAdvancedSpellEvaluation && post.conditionalSecondaryOnWouldKill && effectiveDamage >= getRuntimeHealth(targetRef.tile)) {
+          conditionalSecondaryTriggered = true;
+        }
+      } else if (action === 'formula' && isEligible && (formula.type === 'heal' || formula.type === 'healPower')) {
+        const healing = getSpecialFormulaValue(formula, casterTile, targetRef, resolvedTargetCount, casterSpellPower, runtimeCasterHero);
+        totalImpact += Math.min(healing, Math.max(0, Number(targetRef.hero.health ?? 0) - getRuntimeHealth(targetRef.tile)));
+      }
+
+      const effects = [...(spec.effects || []), ...(extra.effects || [])];
+      if (isEligible) {
+        totalImpact += effects.reduce((sum, effect) => sum + getEffectScore(effect), 0);
+      }
+      if (post.removeTopDebuff && targetHasDebuff) {
+        const removed = targetEffects.find(effect => effect?.kind === 'debuff');
+        totalImpact += useAdvancedSpellEvaluation ? getRemovedEffectValue(removed) : getEffectScore(removed);
+      }
+      if (post.removeTopPositiveEffect) {
+        const removed = targetEffects.find(effect => effect?.kind === 'buff');
+        totalImpact += useAdvancedSpellEvaluation ? getRemovedEffectValue(removed) : getEffectScore(removed);
+      }
+      if (post.removeTopEffectByName?.name) {
+        const removedEffect = targetEffects.find(effect => effect?.name === post.removeTopEffectByName.name);
+        if (removedEffect) {
+          totalImpact += useAdvancedSpellEvaluation ? getRemovedEffectValue(removedEffect) : getEffectScore(removedEffect);
+          const onRemoved = post.removeTopEffectByName.onRemoved || {};
+          if (onRemoved.damageTargetAttackPower) {
+            totalImpact += getArmorAdjustedDamage(
+              {},
+              Number(onRemoved.damageTargetAttackPower),
+              Number(targetRef.tile.currentArmor ?? targetRef.hero.currentArmor ?? targetRef.hero.armor ?? 0),
+            );
+          }
+          if (onRemoved.healCaster) {
+            totalImpact += useAdvancedSpellEvaluation
+              ? Math.min(
+                Number(onRemoved.healCaster),
+                Math.max(0, Number(hero.health || 0) - getRuntimeHealth(casterTile)),
+              )
+              : Number(onRemoved.healCaster);
+          }
+        }
+      }
+      if (post.healCasterIfRemoved && isCorpse) {
+        totalImpact += Math.min(Number(post.healCasterIfRemoved), Math.max(0, Number(hero.health || 0) - getRuntimeHealth(casterTile)));
+      }
+      if (post.secondaryHeal?.amount) totalImpact += Number(post.secondaryHeal.amount);
+      if (post.deltaEnergy) totalImpact += Math.abs(getDeltaEnergyAmount(post.deltaEnergy));
+      if (useAdvancedSpellEvaluation) totalImpact += estimatePositionalPostValue(post, targetRef);
+    });
+  });
+
+  if (useAdvancedSpellEvaluation && conditionalSecondaryTriggered && post.conditionalSecondaryOnWouldKill?.secondarySpec) {
+    totalImpact += estimateSpellValue(
+      { spec: post.conditionalSecondaryOnWouldKill.secondarySpec },
+      tileIndex,
+      isP2,
+      enemyBoard,
+      enemyReserve,
+      allyBoard,
+      allyReserve,
+      casterSpellPower,
+      hero,
+      slotKey,
+      evaluationOptions,
+    );
+  }
+
+  if (useAdvancedSpellEvaluation && post.summonFromReserveNearest) {
+    const reserveHero = allyReserve.find(tile => tile?.hero && !tile._dead)?.hero;
+    const openIndex = allyBoard.findIndex(tile => !tile?.hero);
+    if (reserveHero && openIndex >= 0) {
+      const ref = { board: boardSide, index: openIndex };
+      totalImpact += estimateSummonedHeroValue(reserveHero, ref, boards);
+    }
+  }
+  if (useAdvancedSpellEvaluation && post.placeMineInOpposingColumn) totalImpact += 7;
+
+  return totalImpact;
+}
+
+function estimateLegacySpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserve = [], allyBoard = [], allyReserve = [], casterSpellPower = 0, hero = null, slotKey = null) {
   if (!spell || !spell.spec) return 0;
   
   const spec = spell.spec;
@@ -1035,7 +1322,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
  * @param {Object} tile - Optional tile object containing runtime state like _castsRemaining
  * @returns {number} Tile value
  */
-function calculateTileValue(hero, tileIndex, isP2, enemyBoard = [], enemyReserve = [], allyBoard = [], allyReserve = [], tile = null) {
+function calculateTileValue(hero, tileIndex, isP2, enemyBoard = [], enemyReserve = [], allyBoard = [], allyReserve = [], tile = null, evaluationOptions = {}) {
   if (!hero || !hero.spells) return 0;
 
   // Reserve tiles don't contribute to spell output
@@ -1114,7 +1401,8 @@ function calculateTileValue(hero, tileIndex, isP2, enemyBoard = [], enemyReserve
       allyReserve,
       casterSpellPower,
       hero,
-      position
+      position,
+      evaluationOptions,
     );
 
     // Compute per-turn impact: (spell damage per cast) × (speed / cost)
@@ -1167,12 +1455,12 @@ export const evaluateTileValue = calculateTileValue;
  * @param {Object} tile - Optional tile object containing runtime state like _castsRemaining
  * @returns {number} Total hero points
  */
-function calculateHeroPoints(hero, tileIndex, isP2, enemyBoard = [], enemyReserve = [], allyBoard = [], allyReserve = [], tile = null) {
+function calculateHeroPoints(hero, tileIndex, isP2, enemyBoard = [], enemyReserve = [], allyBoard = [], allyReserve = [], tile = null, evaluationOptions = {}) {
   // Dead heroes have zero value
   if (tile && tile._dead) return 0;
   
   const ecv = calculateEffectiveCombatValue(hero);
-  const tileValue = calculateTileValue(hero, tileIndex, isP2, enemyBoard, enemyReserve, allyBoard, allyReserve, tile);
+  const tileValue = calculateTileValue(hero, tileIndex, isP2, enemyBoard, enemyReserve, allyBoard, allyReserve, tile, evaluationOptions);
   const incomingDamage = estimateIncomingDamagePerTurn(hero, tileIndex, isP2, enemyBoard, enemyReserve, allyBoard, allyReserve);
   
   // Expected turns alive = ECV / 4
@@ -1188,6 +1476,7 @@ function calculateHeroPoints(hero, tileIndex, isP2, enemyBoard = [], enemyReserv
 }
 
 export const evaluateHeroPoints = calculateHeroPoints;
+export const evaluateHeroPointsWithOptions = calculateHeroPoints;
 
 /**
  * Makes a ban decision - ban the hero with highest base stats

@@ -215,6 +215,7 @@ export default function TowerMenu({ runState, onContinue, onNewRun, onAbandon, o
             <div style={styles.runInfoLevel}>Level {summary.currentLevel}</div>
             <div style={styles.runInfoStats}>
               <span>Bosses: {summary.bossesDefeated}/6</span>
+              <span>Lives: {summary.lives}/5</span>
               <span>Augments: {summary.totalAugments}</span>
             </div>
             <div style={{ ...styles.runInfoStats, marginTop: '8px' }}>
@@ -272,6 +273,8 @@ export default function TowerMenu({ runState, onContinue, onNewRun, onAbandon, o
             <li>Win battles to earn powerful augments</li>
             <li>After each battle, recruit or swap a hero</li>
             <li>Face epic bosses every 5 levels</li>
+            <li>You have 5 lives; defeating a boss restores them all</li>
+            <li>Closing the game during a run costs 1 life</li>
             <li>Reach level 40 to claim victory!</li>
           </ul>
         </div>

@@ -97,7 +97,7 @@ export const HEROES = [
   {
     id: 'lancerID',
     name: 'Lancer',
-    image: '/images/heroes/Lancer Cropped.jpg',
+    image: '/images/heroes/Lancer.jpg',
     health: 11,
     armor: 2,
     speed: 3,
@@ -111,7 +111,7 @@ export const HEROES = [
   {
     id: 'warriorID',
     name: 'Warrior',
-    image: '/images/heroes/Warrior Cropped.jpg',
+    image: '/images/heroes/Warrior.jpg',
     health: 10,
     armor: 2,
     speed: 3,
@@ -127,7 +127,7 @@ export const HEROES = [
   {
     id: 'samuraiID',
     name: 'Samurai',
-    image: '/images/heroes/Samurai cropped.jpg',
+    image: '/images/heroes/Samurai.jpg',
     health: 10,
     armor: 2,
     speed: 3,
@@ -142,7 +142,7 @@ export const HEROES = [
   {
     id: 'riderID',
     name: 'Rider',
-    image: '/images/heroes/Rider Cropped.jpg',
+    image: '/images/heroes/Rider.jpg',
     health: 8,
     armor: 2,
     speed: 3,
@@ -157,7 +157,7 @@ export const HEROES = [
   {
     id: 'elementalistID',
     name: 'Elementalist',
-    image: '/images/heroes/Elementalist Cropped.jpg',
+    image: '/images/heroes/Elementalist.jpg',
     health: 9,
     armor: 0,
     speed: 2,
@@ -180,7 +180,7 @@ export const HEROES = [
   {
     id: 'blacksmithID',
     name: 'Blacksmith',
-    image: '/images/heroes/Blacksmith cropped.jpg',
+    image: '/images/heroes/Blacksmith.jpg',
     health: 7,
     armor: 2,
     speed: 3,
@@ -194,7 +194,7 @@ export const HEROES = [
   {
     id: 'arcaneMageID',
     name: 'Arcane Mage',
-    image: '/images/heroes/Arcane Mage Cropped.jpg',
+    image: '/images/heroes/Arcane Mage.jpg',
     health: 8,
     armor: 1,
     speed: 2,
@@ -210,7 +210,7 @@ export const HEROES = [
   {
     id: 'angelID',
     name: 'Angel',
-    image: '/images/heroes/Angel Cropped.jpg',
+    image: '/images/heroes/Angel.jpg',
     health: 9,
     armor: 2,
     speed: 3,
@@ -226,7 +226,7 @@ export const HEROES = [
   {
     id: 'specterID',
     name: 'Specter',
-    image: '/images/heroes/Specter cropped.jpg',
+    image: '/images/heroes/Spectre.jpg',
     health: 10,
     armor: 0,
     speed: 2,
@@ -243,7 +243,7 @@ export const HEROES = [
   {
     id: 'sorceressID',
     name: 'Sorceress',
-    image: '/images/heroes/Sorceress Cropped.jpg',
+    image: '/images/heroes/Sorceress.jpg',
     health: 8,
     armor: 1,
     speed: 3,
@@ -260,7 +260,7 @@ export const HEROES = [
   {
     id: 'nephilimID',
     name: 'Nephilim',
-    image: '/images/heroes/Nephilim Cropped.jpg',
+    image: '/images/heroes/Nephilim.jpg',
     health: 11,
     armor: 1,
     speed: 2,
@@ -277,7 +277,7 @@ export const HEROES = [
   {
     id: 'paladinID',
     name: 'Paladin',
-    image: '/images/heroes/Paladin Cropped.jpg',
+    image: '/images/heroes/Paladin.jpg',
     health: 8,
     armor: 4,
     speed: 2,
@@ -294,7 +294,7 @@ export const HEROES = [
   {
     id: 'kingID',
     name: 'King',
-    image: '/images/heroes/King Cropped.jpg',
+    image: '/images/heroes/King.jpg',
     health: 11,
     armor: 3,
     speed: 3,
@@ -311,7 +311,7 @@ export const HEROES = [
   {
     id: 'queenID',
     name: 'Queen',
-    image: '/images/heroes/Queen Cropped.jpg',
+    image: '/images/heroes/Queen.jpg',
     health: 9,
     armor: 0,
     speed: 4,
@@ -327,7 +327,7 @@ export const HEROES = [
   {
     id: 'reaperID',
     name: 'Reaper',
-    image: '/images/heroes/Reaper Cropped.jpg',
+    image: '/images/heroes/Reaper.jpg',
     health: 5,
     armor: 2,
     speed: 2,
@@ -345,7 +345,7 @@ export const HEROES = [
   {
     id: 'princeID',
     name: 'Prince',
-    image: '/images/heroes/Prince Cropped.jpg',
+    image: '/images/heroes/Prince.jpg',
     health: 11,
     armor: 0,
     speed: 3,
@@ -363,7 +363,7 @@ export const HEROES = [
   {
     id: 'monkID',
     name: 'Monk',
-    image: '/images/heroes/Monk Cropped.jpg',
+    image: '/images/heroes/Monk.jpg',
     health: 10,
     armor: 1,
     speed: 2,
@@ -380,7 +380,7 @@ export const HEROES = [
   {
     id: 'fireMageID',
     name: 'Fire Mage',
-    image: '/images/heroes/Fire Mage Cropped.jpg',
+    image: '/images/heroes/Fire Mage.jpg',
     health: 7,
     armor: 1,
     speed: 2,
@@ -396,7 +396,7 @@ export const HEROES = [
   {
     id: 'jesterID',
     name: 'Jester',
-    image: '/images/heroes/Jester Cropped.jpg',
+    image: '/images/heroes/Jester.jpg',
     // Default stats inferred from the card: health 10 (adjust if you prefer different values)
     health: 10,
     armor: 1,
@@ -432,7 +432,7 @@ export const HEROES = [
   {
     id: 'iceMageID',
     name: 'Ice Mage',
-    image: '/images/heroes/Ice Mage Cropped.jpg',
+    image: '/images/heroes/Ice Mage.jpg',
     health: 7,
     armor: 1,
     speed: 2,
@@ -449,7 +449,7 @@ export const HEROES = [
   {
     id: 'battleMageID',
     name: 'Battle Mage',
-    image: '/images/heroes/Battle Mage Cropped.jpg',
+    image: '/images/heroes/Battle Mage.jpg',
     health: 10,
     armor: 3,
     speed: 2,
@@ -466,7 +466,7 @@ export const HEROES = [
   {
     id: 'berserkerID',
     name: 'Berserker',
-    image: '/images/heroes/Berserker Cropped.jpg',
+    image: '/images/heroes/Berserker.jpg',
     health: 11,
     armor: 0,
     speed: 3,
@@ -521,7 +521,7 @@ export const HEROES = [
   {
     id: 'bileCreatureID',
     name: 'Bile Creature',
-    image: '/images/heroes/Bile Creature Cropped.jpg',
+    image: '/images/heroes/Bile Creature.jpg',
     health: 15,
     armor: 0,
     speed: 2,
@@ -539,7 +539,7 @@ export const HEROES = [
   {
     id: 'necromancerID',
     name: 'Necromancer',
-    image: '/images/heroes/Necromancer Cropped.jpg',
+    image: '/images/heroes/Necromancer.jpg',
     health: 7,
     armor: 2,
     speed: 3,
@@ -556,7 +556,7 @@ export const HEROES = [
   {
     id: 'skeletonID',
     name: 'Skeleton',
-    image: '/images/heroes/Skeleton Cropped.jpg',
+    image: '/images/heroes/Skeleton.jpg',
     health: 6,
     armor: 0,
     speed: 2,
@@ -575,7 +575,7 @@ export const HEROES = [
   {
     id: 'executionerID',
     name: 'Executioner',
-    image: '/images/heroes/Executioner Cropped.jpg',
+    image: '/images/heroes/Executioner.jpg',
     health: 11,
     armor: 3,
     speed: 2,
@@ -591,7 +591,7 @@ export const HEROES = [
   {
     id: 'clericID',
     name: 'Cleric',
-    image: '/images/heroes/Cleric Cropped.jpg',
+    image: '/images/heroes/Cleric.jpg',
     health: 8,
     armor: 0,
     speed: 3,
@@ -607,7 +607,7 @@ export const HEROES = [
   {
     id: 'priestID',
     name: 'Priest',
-    image: '/images/heroes/Priest Cropped.jpg',
+    image: '/images/heroes/Priest.jpg',
     health: 8,
     armor: 1,
     speed: 3,
@@ -640,7 +640,7 @@ export const HEROES = [
   {
     id: 'geishaID',
     name: 'Geisha',
-    image: '/images/heroes/Geisha Cropped.jpg',
+    image: '/images/heroes/Geisha.jpg',
     health: 7,
     armor: 0,
     speed: 4,
@@ -655,7 +655,7 @@ export const HEROES = [
   {
     id: 'ninjaID',
     name: 'Ninja',
-    image: '/images/heroes/Ninja Cropped.jpg',
+    image: '/images/heroes/Ninja.jpg',
     health: 6,
     armor: 1,
     speed: 4,
@@ -669,7 +669,7 @@ export const HEROES = [
   {
     id: 'thiefID',
     name: 'Thief',
-    image: '/images/heroes/Thief Cropped.jpg',
+    image: '/images/heroes/Thief.jpg',
     health: 7,
     armor: 2,
     speed: 5,
@@ -684,7 +684,7 @@ export const HEROES = [
   {
     id: 'summonerID',
     name: 'Summoner',
-    image: '/images/heroes/Summoner Cropped.jpg',
+    image: '/images/heroes/Summoner.jpg',
     health: 9,
     armor: 0,
     speed: 2,
@@ -699,7 +699,7 @@ export const HEROES = [
   {
     id: 'tetheredSpiritID',
     name: 'Tethered Spirit',
-    image: '/images/heroes/Tethered Spirit Cropped.jpg',
+    image: '/images/heroes/Tethered Spirit.jpg',
     health: 9,
     armor: 1,
     speed: 1,
@@ -716,7 +716,7 @@ export const HEROES = [
   {
     id: 'nymphID',
     name: 'Nymph',
-    image: '/images/heroes/Dryad.jpeg',
+    image: '/images/heroes/Nymph.jpg',
     health: 10,
     armor: 0,
     speed: 2,
@@ -731,7 +731,7 @@ export const HEROES = [
   {
     id: 'lightningMageID',
     name: 'Lightning Mage',
-    image: '/images/heroes/Lightning Mage Cropped.jpg',
+    image: '/images/heroes/Lightning Mage.jpg',
     health: 5,
     armor: 0,
     speed: 3,
@@ -748,7 +748,7 @@ export const HEROES = [
   {
     id: 'archerID',
     name: 'Archer',
-    image: '/images/heroes/Archer Cropped.jpg',
+    image: '/images/heroes/Archer.jpg',
     health: 6,
     armor: 1,
     speed: 5,
@@ -763,7 +763,7 @@ export const HEROES = [
   {
     id: 'alchemistID',
     name: 'Alchemist',
-    image: '/images/heroes/Alchemist Cropped.jpg',
+    image: '/images/heroes/Alchemist.jpg',
     health: 8,
     armor: 0,
     speed: 2,
@@ -779,7 +779,7 @@ export const HEROES = [
   {
     id: 'drunkardID',
     name: 'Drunkard',
-    image: '/images/heroes/Drunkard Cropped.jpg',
+    image: '/images/heroes/Drunkard.jpg',
     health: 10,
     armor: 0,
     speed: 3,
@@ -795,7 +795,7 @@ export const HEROES = [
   {
     id: 'apothecaryID',
     name: 'Apothecary',
-    image: '/images/heroes/Apothecary Cropped.jpg',
+    image: '/images/heroes/Apothecary.jpg',
     health: 9,
     armor: 0,
     speed: 2,
@@ -810,7 +810,7 @@ export const HEROES = [
   {
     id: 'poisonMageID',
     name: 'Poison Mage',
-    image: '/images/heroes/Poison Mage Cropped.jpg',
+    image: '/images/heroes/Poison Mage.jpg',
     health: 6,
     armor: 1,
     speed: 4,
@@ -826,7 +826,7 @@ export const HEROES = [
   {
     id: 'innKeeperID',
     name: 'Inn Keeper',
-    image: '/images/heroes/Inn Keeper Cropped.jpg',
+    image: '/images/heroes/Inn Keeper.jpg',
     health: 8,
     armor: 0,
     speed: 2,
@@ -842,7 +842,7 @@ export const HEROES = [
   {
     id: 'huntressID',
     name: 'Huntress',
-    image: '/images/heroes/Huntress Cropped.jpg',
+    image: '/images/heroes/Huntress.jpg',
     health: 10,
     armor: 0,
     speed: 3,
@@ -857,7 +857,7 @@ export const HEROES = [
   {
     id: 'rogueID',
     name: 'Rogue',
-    image: '/images/heroes/Rogue Cropped.jpg',
+    image: '/images/heroes/Rogue.jpg',
     health: 8,
     armor: 0,
     speed: 4,
@@ -873,7 +873,7 @@ export const HEROES = [
   {
     id: 'elderID',
     name: 'Elder',
-    image: '/images/heroes/Elder Cropped.jpg',
+    image: '/images/heroes/Elder.jpg',
     health: 9,
     armor: 0,
     speed: 1,
@@ -888,7 +888,7 @@ export const HEROES = [
   {
     id: 'bloodmageID',
     name: 'Blood Mage',
-    image: '/images/heroes/Blood Mage Cropped.jpg',
+    image: '/images/heroes/Blood Mage.jpg',
     health: 7,
     armor: 2,
     speed: 2,
@@ -904,7 +904,7 @@ export const HEROES = [
   {
     id: 'assassinID',
     name: 'Assassin',
-    image: '/images/heroes/Assassin cropped.jpg',
+    image: '/images/heroes/Assassin.jpg',
     health: 9,
     armor: 0,
     speed: 3,
@@ -919,7 +919,7 @@ export const HEROES = [
   {
     id: 'bountyHunterID',
     name: 'Bounty Hunter',
-    image: '/images/heroes/Bounty Hunter Cropped.jpg',
+    image: '/images/heroes/Bounty Hunter.jpg',
     health: 10,
     armor: 1,
     speed: 2,
@@ -934,7 +934,7 @@ export const HEROES = [
   {
     id: 'darkKnightID',
     name: 'Dark Knight',
-    image: '/images/heroes/Dark Knight 2 Cropped.jpg',
+    image: '/images/heroes/Dark Knight.jpg',
     health: 9,
     armor: 3,
     speed: 3,
@@ -948,7 +948,7 @@ export const HEROES = [
   {
     id: 'darkMageID',
     name: 'Dark Mage',
-    image: '/images/heroes/Dark Mage Cropped.jpg',
+    image: '/images/heroes/Dark Mage.jpg',
     health: 6,
     armor: 1,
     speed: 2,
@@ -1028,7 +1028,7 @@ export const HEROES = [
   {
     id: 'knightID',
     name: 'Knight',
-    image: '/images/heroes/Knight Cropped.jpg',
+    image: '/images/heroes/Knight.jpg',
     health: 11,
     armor: 3,
     speed: 2,
@@ -1078,7 +1078,7 @@ export const HEROES = [
   {
     id: 'vampireID',
     name: 'Vampire',
-    image: '/images/heroes/Vampire Cropped.jpg',
+    image: '/images/heroes/Vampire.jpg',
     health: 12,
     armor: 1,
     speed: 3,
@@ -1095,7 +1095,7 @@ export const HEROES = [
   {
     id: 'titanID',
     name: 'Titan',
-    image: '/images/heroes/Titan Cropped.jpg',
+    image: '/images/heroes/Titan.jpg',
     health: 22,
     armor: 0,
     speed: 3,
@@ -1161,7 +1161,7 @@ export const HEROES = [
   {
     id: 'giantID',
     name: 'Giant',
-    image: '/images/heroes/Giant Cropped.jpg',
+    image: '/images/heroes/Giant.jpg',
     health: 19,
     armor: 0,
     speed: 3,
@@ -1177,7 +1177,7 @@ export const HEROES = [
   {
     id: 'palaceGuardID',
     name: 'Palace Guard',
-    image: '/images/heroes/Palace Guard Cropped.jpg',
+    image: '/images/heroes/Palace Guard.jpg',
     health: 10,
     armor: 2,
     speed: 2,
@@ -1208,7 +1208,7 @@ export const HEROES = [
   {
     id: 'demonID',
     name: 'Demon',
-    image: '/images/heroes/Demon Cropped.jpg',
+    image: '/images/heroes/Demon.jpg',
     health: 7,
     armor: 1,
     speed: 3,
@@ -1222,7 +1222,7 @@ export const HEROES = [
   {
     id: 'witchDoctorID',
     name: 'Witch Doctor',
-    image: '/images/heroes/Witch Doctor Cropped.jpg',
+    image: '/images/heroes/Witch Doctor.jpg',
     health: 9,
     armor: 1,
     speed: 2,
@@ -1237,7 +1237,7 @@ export const HEROES = [
   {
     id: 'axemanID',
     name: 'Axeman',
-    image: '/images/heroes/Axeman Cropped.jpg',
+    image: '/images/heroes/Axeman.jpg',
     health: 11,
     armor: 3,
     speed: 3,
@@ -1252,7 +1252,7 @@ export const HEROES = [
   {
     id: 'prisonerID',
     name: 'Prisoner',
-    image: '/images/heroes/Prisoner Cropped.jpg',
+    image: '/images/heroes/Prisoner.jpg',
     health: 10,
     armor: 0,
     speed: 2,
@@ -1267,7 +1267,7 @@ export const HEROES = [
   {
     id: 'fallenAngelID',
     name: 'Fallen Angel',
-    image: '/images/heroes/Fallen  Angle cropped.jpg',
+    image: '/images/heroes/Fallen Angel.jpg',
     health: 9,
     armor: 2,
     speed: 3,
@@ -1282,7 +1282,7 @@ export const HEROES = [
   {
     id: 'stonecasedKingID',
     name: 'Stonecased King',
-    image: '/images/heroes/Stone cased king cropped.jpg',
+    image: '/images/heroes/Stonecased King.jpg',
     health: 14,
     armor: 3,
     speed: 0,
@@ -1299,7 +1299,7 @@ export const HEROES = [
   {
     id: 'shieldMaidenID',
     name: 'Shield Maiden',
-    image: '/images/heroes/Shield Maiden Cropped.jpg',
+    image: '/images/heroes/Shield Maiden.jpg',
     health: 13,
     armor: 3,
     speed: 3,
@@ -1314,7 +1314,7 @@ export const HEROES = [
   {
     id: 'pyroID',
     name: 'Pyro',
-    image: '/images/heroes/Pyro Cropped.jpg',
+    image: '/images/heroes/Pyro.jpg',
     health: 8,
     armor: 0,
     speed: 3,
@@ -1329,7 +1329,7 @@ export const HEROES = [
   {
     id: 'timeMageID',
     name: 'Time Mage',
-    image: '/images/heroes/Time Mage Cropped.jpg',
+    image: '/images/heroes/Time Mage.jpg',
     health: 6,
     armor: 0,
     speed: 2,
@@ -1344,7 +1344,7 @@ export const HEROES = [
   {
     id: 'tinkererID',
     name: 'Tinkerer',
-    image: '/images/heroes/Tinkerer Cropped.jpg',
+    image: '/images/heroes/Tinkerer.jpg',
     health: 9,
     armor: 1,
     speed: 2,
@@ -1359,7 +1359,7 @@ export const HEROES = [
   {
     id: 'trollID',
     name: 'Troll',
-    image: '/images/heroes/troll Cropped.jpg',
+    image: '/images/heroes/Troll.jpg',
     health: 18,
     armor: 0,
     speed: 2,
@@ -1407,7 +1407,7 @@ export const HEROES = [
   {
     id: 'rogueMageID',
     name: 'Rogue Mage',
-    image: '/images/heroes/Dark Mage Cropped.jpg',
+    image: '/images/heroes/Dark Mage.jpg',
     health: 8,
     armor: 1,
     speed: 3,
@@ -1423,7 +1423,7 @@ export const HEROES = [
   {
     id: 'outcastAssassinID',
     name: 'Outcast Assassin',
-    image: '/images/heroes/Assassin cropped.jpg',
+    image: '/images/heroes/Assassin.jpg',
     health: 8,
     armor: 1,
     speed: 4,
@@ -1439,7 +1439,7 @@ export const HEROES = [
   {
     id: 'garrukRedID',
     name: 'Garruk the Red',
-    image: '/images/heroes/Axeman Cropped.jpg',
+    image: '/images/heroes/Axeman.jpg',
     health: 13,
     armor: 2,
     speed: 2,

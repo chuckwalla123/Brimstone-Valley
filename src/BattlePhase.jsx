@@ -1029,7 +1029,8 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
     localSide,
     serverMovementPhase: gameState?.movementPhase || null,
     onServerMove: socket ? ((sourceId, targetId) => {
-      if (isStepProcessingRef.current || isHiddenRef.current) return;
+      // The engine only starts a movement phase after its final animation ACK.
+      // Do not discard a valid move while the client finishes that animation.
       socket.emit('movementMove', { sourceId, targetId });
     }) : null
   });
@@ -3092,4 +3093,3 @@ export default function BattlePhase({ gameState, socket, onGameEnd, onBattleVisu
   );
 
 }
-

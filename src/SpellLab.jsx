@@ -39,10 +39,20 @@ function buildAnimationPreview(animationKey) {
 }
 
 export default function SpellLab() {
+  const [spellDataRevision, setSpellDataRevision] = useState(0);
+
+  useEffect(() => {
+    if (!import.meta.hot) return;
+
+    const bumpSpellDataRevision = () => setSpellDataRevision((value) => value + 1);
+    import.meta.hot.accept('./spells.js', bumpSpellDataRevision);
+    import.meta.hot.accept('./spellConfigs', bumpSpellDataRevision);
+  }, []);
+
   const searchParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const spellOptions = useMemo(
     () => Object.values(SPELLS).filter(Boolean).slice().sort((left, right) => String(left.name || left.id).localeCompare(String(right.name || right.id))),
-    []
+    [spellDataRevision]
   );
   const initialSpellId = searchParams.get('spell') || (spellOptions[0] ? spellOptions[0].id : 'basicAttack');
 
@@ -63,6 +73,12 @@ export default function SpellLab() {
     () => spellOptions.find(spell => spell.id === selectedSpellId) || spellOptions[0] || null,
     [selectedSpellId, spellOptions]
   );
+
+  useEffect(() => {
+    if (!spellOptions.length) return;
+    if (spellOptions.some((spell) => spell.id === selectedSpellId)) return;
+    setSelectedSpellId(spellOptions[0].id);
+  }, [selectedSpellId, spellOptions]);
 
   useEffect(() => {
     if (!selectedSpell) return;

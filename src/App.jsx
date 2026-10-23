@@ -15,9 +15,13 @@ import { StoryMode } from "./story";
 import League4Mode from "./League4Mode";
 import BettingMode from "./BettingMode";
 
+const DEFAULT_ONLINE_SERVER_URL = 'https://brimstonevalley.fly.dev';
+const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron;
+
 const resolveServerUrl = () => {
   const fromEnv = (import.meta.env.VITE_SERVER_URL || '').trim();
   if (fromEnv) return fromEnv;
+  if (isElectron) return DEFAULT_ONLINE_SERVER_URL;
   if (typeof window !== 'undefined') {
     const host = window.location.hostname;
     const isLocalHost = host === 'localhost' || host === '127.0.0.1';
@@ -39,8 +43,7 @@ const isLocalServerUrl = (url) => {
   }
 };
 
-// Check if we're running in Electron or offline mode
-const isElectron = typeof window !== 'undefined' && window.electronAPI?.isElectron;
+// Check if we're running in offline mode
 const forceOffline = typeof window !== 'undefined' && (
   new URLSearchParams(window.location.search).has('offline') ||
   localStorage.getItem('forceOffline') === 'true'
@@ -163,9 +166,7 @@ function App() {
       reconnectionAttempts: 20,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
-      // Use websocket-first everywhere, but keep polling as fallback when ws handshake is rejected.
-      transports: ['websocket', 'polling'],
-      tryAllTransports: true,
+      transports: ['websocket'],
       rememberUpgrade: !localServer
     });
     setSocket(newSocket);

@@ -4,13 +4,14 @@
 
 import * as superEasyAI from './superEasyAI.js';
 import * as easyAI from './easyAI.js';
+import * as easyAIPlusAI from './easyAIPlusAI.js';
 import * as mediumAI from './mediumAI.js';
 import * as neuralAI from './neuralAI.js';
 import * as hardAI from './hardAI.js';
 
 /**
  * Get the AI module for a specific difficulty
- * @param {string} difficulty - 'super-easy', 'easy', 'medium', or 'hard'
+ * @param {string} difficulty - Player-selectable difficulty, or internal 'easy-plus'
  * @returns {Object} AI module with decision-making functions
  */
 export const getAI = (difficulty) => {
@@ -19,6 +20,8 @@ export const getAI = (difficulty) => {
       return superEasyAI;
     case 'easy':
       return easyAI;
+    case 'easy-plus':
+      return easyAIPlusAI;
     case 'medium':
       return mediumAI;
     case 'hard':
@@ -28,4 +31,4 @@ export const getAI = (difficulty) => {
   }
 };
 
-export { superEasyAI, easyAI, mediumAI, neuralAI, hardAI };
+export { superEasyAI, easyAI, easyAIPlusAI, mediumAI, neuralAI, hardAI };

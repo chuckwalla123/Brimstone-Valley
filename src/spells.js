@@ -262,14 +262,19 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   consumeCorpse: {
     id: 'consumeCorpse',
     name: 'Consume Corpse',
     description: 'Targets the nearest ally corpse and removes it from play. If a corpse is removed, target caster for a Heal Power of 7.',
     spec: {
-      targets: [{ type: 'nearestDeadAlly', side: 'ally' }],
+      targets: [{ type: 'nearestDeadAlly', side: 'ally', allowFreshCorpse: true }],
       formula: { type: 'healPower', value: 0 }, // no base heal
       animationMs: 1200,
       post: {
@@ -278,7 +283,12 @@ export const SPELLS = {
       }
     },
     animation: 'Healing_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
 
   // Necromancer spells
@@ -314,7 +324,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Raise Dead_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Raise Dead.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.20,
+    soundEndTime: 2.00
   },
   soulDrain: {
     id: 'soulDrain',
@@ -335,7 +350,17 @@ export const SPELLS = {
     },
     animation: 'Soul Drain_2x2_4frames',
     animationSecondary: 'Healing_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Soul Drain.mp3',
+    soundVolume: 1.20,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.40,
+    secondarySound: '/images/sounds/Healing.mp3',
+    secondarySoundVolume: 1.50,
+    secondarySoundDelayMs: 0,
+    secondarySoundStartTime: 0.30,
+    secondarySoundEndTime: 1.50
   },
 
   // Behemoth — Monster hero spells
@@ -367,7 +392,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Monstrous Claws_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Bear Swipe.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   berserk: {
@@ -398,7 +428,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Fire Mage spells
@@ -407,7 +442,17 @@ export const SPELLS = {
     description: '(1) Projectile dealing 5 Attack Power and applying an effect: Burn (2) Targets all tiles adjacent to the enemy hit dealing 5 Attack Power and applying an effect: Burn which deals 1 Damage at the start of each Round.',
     spec: { targets: [{ type: 'projectile', side: 'enemy', max: 1 }, { type: 'adjacent', side: 'enemy' }], formula: { type: 'attackPower', value: 5 }, effects: [EFFECTS.Burn], animationMs: 1200 },
     animation: 'Fire Bomb_2x2_4frames', animationPlacement: 'travel',
-    animationSecondary: 'Fire Bomb Secondary_2x2_4frames'
+    animationSecondary: 'Fire Bomb Secondary_2x2_4frames',
+    sound: '/images/sounds/Fire Bomb.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.20,
+    soundEndTime: 1.70,
+    secondarySound: '/images/sounds/Fire Bomb Secondary.mp3',
+    secondarySoundVolume: 1.00,
+    secondarySoundDelayMs: 0,
+    secondarySoundStartTime: 1.00,
+    secondarySoundEndTime: 2.50
   },
 
   fireBolt: {
@@ -415,7 +460,12 @@ export const SPELLS = {
     description: 'Targets the enemy with the highest Health, dealing 6 Attack Power and applying an effect: Burn which deals 1 Damage at the start of each Round.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6 }, effects: [EFFECTS.Burn], animationMs: 1200 },
     animation: 'Fire Bolt_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Fire Bolt.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 0,
+    soundStartTime: 0.70,
+    soundEndTime: 2.30
   },
 
   consumedByFlames: {
@@ -440,7 +490,12 @@ export const SPELLS = {
     description: "Targets the nearest ally and applies an effect: Heating Up which causes the effected Hero's spells to apply Burn to all targeted enemies.",
     spec: { targets: [{ type: 'nearest', side: 'ally', max: 1, excludeSelf: true }], effects: [EFFECTS.HeatingUp], animationMs: 1200 },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   consumeBurn: {
@@ -476,7 +531,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Tidal Wave_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Tidal Wave.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.50
   },
   cleansingWater: {
     id: 'cleansingWater', name: 'Cleansing Water',
@@ -503,14 +563,24 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   meteor: {
     id: 'meteor', name: 'Meteor',
     description: 'Targets the entire enemy board, dealing 6 Attack Power.',
     spec: { targets: [{ type: 'board', side: 'enemy' }], formula: { type: 'attackPower', value: 6 }, animationMs: 1200 },
-    animation: 'Blaze_2x2_4frames', animationPlacement: 'inplace'
+    animation: 'Meteor_2x2_4frames', animationPlacement: 'inplace',
+    sound: '/images/sounds/Meteor.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.50
   },
 
   // wildfireTrap and pyreBlast (commented out - Flamewright not active)
@@ -553,7 +623,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Skirmish_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Skirmish.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   shieldMaidenShieldBash: {
@@ -567,7 +642,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Shield Bash_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Shield Bash.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 500,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   shieldMaidenLoyalty: {
@@ -580,7 +660,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
     boulder: {
@@ -601,7 +686,12 @@ export const SPELLS = {
       description: 'Targets the enemy with the highest Speed, dealing 4 Attack Power ignoring Armor.',
       spec: { targets: [{ type: 'highestSpeed', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4, ignoreArmor: true }, animationMs: 1200 },
       animation: 'Vortex_2x2_4frames',
-      animationPlacement: 'travel'
+      animationPlacement: 'travel',
+      sound: '/images/sounds/Vortex.mp3',
+      soundVolume: 1.00,
+      soundDelayMs: 0,
+      soundStartTime: 0.00,
+      soundEndTime: 1.40
     },
 
     blaze: {
@@ -629,7 +719,12 @@ export const SPELLS = {
     description: 'Targets the enemy with the highest Speed, dealing 3 Attack Power and applying Slowed (-1 Speed).',
     spec: { targets: [{ type: 'highestSpeed', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 3 }, effects: [EFFECTS.Slowed], animationMs: 1200 },
     animation: 'Hamstring_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Hamstring.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 400,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Battle Mage spells (new)
@@ -637,14 +732,24 @@ export const SPELLS = {
     id: 'forceBlast', name: 'Force Blast',
     description: "Targets the enemy with the highest Armor for 9 Attack Power and grants the caster +4 Energy.",
     spec: { targets: [{ type: 'highestArmor', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 9 }, post: { deltaEnergy: { amount: 4, side: 'ally', target: 'self' } }, animationMs: 1200 },
-    animation: 'Force Blast_2x2_4frames', animationPlacement: 'travel'
+    animation: 'Force Blast_2x2_4frames', animationPlacement: 'travel',
+    sound: '/images/sounds/Force Blast.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.50,
+    soundEndTime: 2.20
   },
 
   staffFinisher: {
     id: 'staffFinisher', name: 'Staff Finisher',
     description: 'Targets the enemy with the lowest Health, dealing 2 Attack Power (ignores Armor).',
     spec: { targets: [{ type: 'lowestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 2, ignoreArmor: true }, animationMs: 1200 },
-    animation: 'Staff Finisher_2x2_4frames', animationPlacement: 'travel'
+    animation: 'Staff Finisher_2x2_4frames', animationPlacement: 'travel',
+    sound: '/images/sounds/Staff Finisher.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.30
   },
 
   battle: {
@@ -686,7 +791,12 @@ export const SPELLS = {
     description: 'Targets the nearest 3 enemies for 5 Attack Power.',
     spec: { targets: [{ type: 'nearest', side: 'enemy', max: 3 }], formula: { type: 'attackPower', value: 5 }, animationMs: 1200 },
     animation: 'Forked Lightning_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Forked Lightning.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   lightningBolt: {
@@ -694,15 +804,25 @@ export const SPELLS = {
     description: 'Targets the enemy with the highest Health dealing 7 Attack Power and applies Static Shock (adjacent damage each round).',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 7 }, effects: [EFFECTS.StaticShock], animationMs: 1200 },
     animation: 'Lightning Bolt_2x2_4frames',
-    animationPlacement: 'travel'
-  },
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Lightning Bolt.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
+  },  
 
   zeusWrath: {
     id: 'zeusWrath', name: "Zeus' Wrath",
     description: "Targets the entire enemy board for 10 Attack Power.",
     spec: { targets: [{ type: 'board', side: 'enemy' }], formula: { type: 'attackPower', value: 10 }, animationMs: 1200 },
     animation: "Zeus's Wrath_2x2_4frames",
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Zeus Wrath.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 2.00
   },
 
 
@@ -724,14 +844,24 @@ export const SPELLS = {
     description: 'Column attack dealing 4 Attack Power.',
     spec: { targets: [{ type: 'column', side: 'enemy' }], formula: { type: 'attackPower', value: 4 }, animationMs: 1200 },
     animation: 'Engage_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Engage.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   flank: {
     id: 'flank', name: 'Flank',
     description: 'Targets the enemy row with the most Heroes dealing 5 Attack Power.',
     spec: { targets: [{ type: 'rowWithMostHeroes', side: 'enemy' }], formula: { type: 'attackPower', value: 5 }, animationMs: 1200 },
     animation: 'Flank_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Engage.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   slash: {
@@ -751,7 +881,12 @@ export const SPELLS = {
     description: "Targets the enemy with the most Health and deals Attack Power equal to the caster's Armor.",
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 0, addCasterArmor: true, ignoreSpellPower: true }, animationMs: 1200 },
     animation: 'Iron Hand_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Iron Hand.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.50,
+    soundEndTime: 2.00
   },
   magnetize: {
     id: 'magnetize', name: 'Magnetize',
@@ -766,7 +901,17 @@ export const SPELLS = {
     },
     animation: 'Magnetize_2x2_4frames',
     animationSecondary: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Magnetize.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.70,
+    soundSecondary: '/images/sounds/Armor Bearer.mp3',
+    secondarySoundVolume: 1.00,
+    secondarySoundDelayMs: 300,
+    secondarySoundStartTime: 0.00,
+    secondarySoundEndTime: 1.20
   },
   bodySlam: {
     id: 'bodySlam', name: 'Body Slam',
@@ -790,7 +935,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Masamune_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Masamune.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   harakiri: {
     id: 'harakiri', name: 'Harakiri',
@@ -809,7 +959,17 @@ export const SPELLS = {
     },
     animation: 'Harakiri_2x2_4frames',
     animationSecondary: 'Elixir_2x2_4frames',  // Secondary animation for allies
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Harakiri.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20,
+    secondarySound: '/images/sounds/Armor Bearer.mp3',
+    secondarySoundVolume: 1.00,
+    secondarySoundDelayMs: 300,
+    secondarySoundStartTime: 0.00,
+    secondarySoundEndTime: 1.20
   },
   honor: {
     id: 'honor', name: 'Honor',
@@ -824,7 +984,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Honor_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Honor.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 100,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   // King (new)
   subjugation: {
@@ -836,7 +1001,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   benevolence: {
     id: 'benevolence', name: 'Benevolence',
@@ -898,7 +1068,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Tyranny_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Tyranny.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.50,
+    soundEndTime: 2.20
   },
   queensWrath: {
     id: 'queensWrath', name: 'Queen\'s Wrath',
@@ -910,7 +1085,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: "Queen's Wrath_2x2_4frames",
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Queens Wrath.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.50,
+    soundEndTime: 2.00
   },
   // Reaper (new)
   reapersHarvest: {
@@ -922,7 +1102,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Scythes Harvest_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Scythes Harvest.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 400,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   reap: {
     id: 'reap', name: 'Reap',
@@ -933,7 +1118,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   cleave: {
     id: 'cleave', name: 'Cleave',
@@ -979,7 +1169,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Duel_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Duel.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   armorBearer: {
     id: 'armorBearer', name: 'Armor Bearer',
@@ -1029,7 +1224,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Deadly Fist_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Deadly Fist.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 400,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   exorcism: {
     id: 'exorcism', name: 'Exorcism',
@@ -1040,18 +1240,28 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Excorcism_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Exorcism.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.50
   },
   revive: {
     id: 'revive', name: 'Revive',
     description: 'Targets the nearest ally corpse reviving them with a Heal Power of 8.',
     spec: {
-      targets: [{ type: 'nearestDeadAlly', side: 'ally', max: 1 }],
+      targets: [{ type: 'nearestDeadAlly', side: 'ally', max: 1, allowFreshCorpse: true }],
       post: { revive: { heal: 8 } },
       animationMs: 1200
     },
     animation: 'Revive_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Revive.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   // Mud Golem (new)
   mudSling: {
@@ -1064,7 +1274,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Mud Sling_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Mud Sling.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 400,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   mudArmor: {
     id: 'mudArmor', name: 'Mud Armor',
@@ -1074,8 +1289,14 @@ export const SPELLS = {
       effects: [EFFECTS.MudArmor],
       animationMs: 1200
     },
-    animation: 'Mud Armor_2x2_4frames',
-    animationPlacement: 'inplace'
+    animation: 'Elixir_2x2_4frames',
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
+
   },
   quicksand: {
     id: 'quicksand', name: 'Quicksand',
@@ -1086,7 +1307,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Quicksand_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Quicksand.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.50,
+    soundEndTime: 2.10
   },
   // Nature Golem (new)
   entanglingRoots: {
@@ -1099,7 +1325,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Entangling Roots_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Entangling Roots.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   naturesBlessing: {
     id: 'naturesBlessing', name: "Nature's Blessing",
@@ -1110,7 +1341,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Natures Blessing_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Natures Blessing.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   protectiveGrowth: {
     id: 'protectiveGrowth', name: 'Protective Growth',
@@ -1121,7 +1357,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   // Jester (new) -- front: copies last enemy cast; middle: slash; back: special conditional
   copyCat: {
@@ -1147,7 +1388,17 @@ export const SPELLS = {
     },
     animation: 'Oops_2x2_4frames',
     animationPlacement: 'travel',
-    animationSecondary: 'Oops Secondary_2x2_4frames'
+    animationSecondary: 'Oops Secondary_2x2_4frames',
+    sound: '/images/sounds/Cut.mp3',
+    soundVolume: 1,
+    soundDelayMs: 400,
+    soundStartTime: 0.0,
+    soundEndTime: 1.2,
+    secondarySound: '/images/sounds/Bomb Toss Secondary.mp3',
+    secondarySoundVolume: 1.00,
+    secondarySoundDelayMs: 0.0,
+    secondarySoundStartTime: 0.00,
+    secondarySoundEndTime: 1.20
   },
 
   // Drunkard
@@ -1168,28 +1419,48 @@ export const SPELLS = {
     description: 'Targets the enemy with the highest Health, dealing attack power equal to 2 + d6.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'roll', base: 2, die: 6 }, animationMs: 1200 },
     animation: 'Wild Punch_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Wild Punch.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.40
   },
   specialBrew: {
     id: 'specialBrew', name: 'Special Brew',
     description: 'Targets allied back-row heroes and increases their Energy by 2.',
     spec: { targets: [{ type: 'backRow', side: 'ally' }], post: { deltaEnergy: 2 }, animationMs: 1200 },
     animation: 'Special Brew_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Special Brew.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.40
   },
   pierce: {
     id: 'pierce', name: 'Pierce',
     description: 'Column attack dealing 4 Attack Power.',
     spec: { targets: [{ type: 'column', side: 'enemy' }], formula: { type: 'attackPower', value: 4 }, animationMs: 1200 },
     animation: 'Pierce_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Pierce.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   javelin: {
     id: 'javelin', name: 'Javelin',
     description: 'Targets the first enemy encountered via reverse book reading, dealing 4 Attack Power and applies Bleed.',
     spec: { targets: [{ type: 'reverseBook', side: 'enemy' }], formula: { type: 'attackPower', value: 4 }, effects: [EFFECTS.Bleed], animationMs: 1200 },
     animation: 'Javelin_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Javelin.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Giant
@@ -1198,7 +1469,12 @@ export const SPELLS = {
     description: 'Targets the enemy with the lowest Speed, dealing 6 Attack Power.',
     spec: { targets: [{ type: 'lowestSpeed', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6 }, animationMs: 1200 },
     animation: 'Stomp_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Stomp.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   throwBoulder: {
     id: 'throwBoulder', name: 'Throw Boulder',
@@ -1211,7 +1487,18 @@ export const SPELLS = {
     },
     animation: 'Throw Boulder_2x2_4frames',
     animationSecondary: 'Elixir_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Throw Boulder.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 2000,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20,
+    secondarySound: '/images/sounds/Armor Bearer.mp3',
+    secondarySoundVolume: 1.00,
+    secondarySoundDelayMs: 0.0,
+    secondarySoundStartTime: 0.00,
+    secondarySoundEndTime: 1.20
+
   },
   rockSmash: {
     id: 'rockSmash', name: 'Rock Smash',
@@ -1231,7 +1518,11 @@ export const SPELLS = {
     description: 'Column attack dealing 2 Attack Power ignoring Armor and applying Slowed (-1 Speed).',
     spec: { targets: [{ type: 'column', side: 'enemy' }], formula: { type: 'attackPower', value: 2, ignoreArmor: true }, effects: [EFFECTS.Slowed], animationMs: 1200 },
     animation: 'Trample_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 1.20,
+    soundEndTime: 3.00
   },
   defend: {
     id: 'defend', name: 'Defend',
@@ -1242,7 +1533,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   throwRock: {
     id: 'throwRock', name: 'Throw Rock',
@@ -1255,7 +1551,17 @@ export const SPELLS = {
     },
     animation: 'Throw Rock_2x2_4frames',
     animationSecondary: 'Elixir_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Throw Boulder.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 2000,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20,
+    secondarySound: '/images/sounds/Armor Bearer.mp3',
+    secondarySoundVolume: 1.00,
+    secondarySoundDelayMs: 0.0,
+    secondarySoundStartTime: 0.00,
+    secondarySoundEndTime: 1.20
   },
   demoralizingBlow: {
     id: 'demoralizingBlow',
@@ -1268,8 +1574,13 @@ export const SPELLS = {
       post: { removeTopPositiveEffect: true },
       animationMs: 1200
     },
-    animation: 'Humble_2x2_4frames',
-    animationPlacement: 'travel'
+    animation: 'Demoralizing Blow_2x2_4frames',
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Demoralizing Blow.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   stab: {
     id: 'stab',
@@ -1281,7 +1592,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Stab_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Stab.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   pilfer: {
     id: 'pilfer',
@@ -1318,7 +1634,12 @@ export const SPELLS = {
     description: "Targets Giant and applies Hard Fall: upon the effected Hero's death, deals 3 Attack Power (ignores Armor) to all enemies with 2 or less Speed.",
     spec: { targets: [{ type: 'self' }], effects: [EFFECTS.HardFall], animationMs: 1200 },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Angel
@@ -1327,7 +1648,12 @@ export const SPELLS = {
     description: 'Column attack dealing 4 Attack Power and removing the top positive effect.',
     spec: { targets: [{ type: 'column', side: 'enemy' }], formula: { type: 'attackPower', value: 4 }, post: { removeTopPositiveEffect: true }, animationMs: 1200 },
     animation: 'Light Pillar_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Light Pillar.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.70,
+    soundEndTime: 2.40
   },
 
   // Arcane Mage
@@ -1368,7 +1694,12 @@ export const SPELLS = {
     description: 'Targets the caster and applies Prayer: heals all allies except the effected Hero by 1 each time the effected Hero is damaged.',
     spec: { targets: [{ type: 'self' }], effects: [EFFECTS.Prayer], animationMs: 1200 },
     animation: 'Prayer_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Prayer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.40
   },
 
   // Nephilim
@@ -1383,7 +1714,17 @@ export const SPELLS = {
     },
     animation: 'Duality Strike_2x2_4frames',
     animationSecondary: 'Healing_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Duality Strike.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 1.00,
+    soundEndTime: 2.50,
+    secondarySound: '/images/sounds/Healing.mp3',
+    secondarySoundVolume: 1.50,
+    secondarySoundDelayMs: 0.0,
+    secondarySoundStartTime: 0.30,
+    secondarySoundEndTime: 1.50
   },
   lifeForALife: {
     id: 'lifeForALife', name: 'Life for a Life',
@@ -1400,7 +1741,17 @@ export const SPELLS = {
     },
     animation: 'Life for a Life_2x2_4frames',
     animationSecondary: 'Healing_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Life for a Life.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.50,
+    secondarySound: '/images/sounds/Healing.mp3',
+    secondarySoundVolume: 1.50,
+    secondarySoundDelayMs: 0.0,
+    secondarySoundStartTime: 0.30,
+    secondarySoundEndTime: 1.50
   },
   lightAndDark: {
     id: 'lightAndDark', name: 'Light and Dark',
@@ -1413,7 +1764,17 @@ export const SPELLS = {
     },
     animation: 'Dark Pillar_2x2_4frames',
     animationSecondary: 'Healing_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Dark Pillar.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.40,
+    secondarySound: '/images/sounds/Healing.mp3',
+    secondarySoundVolume: 1.50,
+    secondarySoundDelayMs: 0.0,
+    secondarySoundStartTime: 0.30,
+    secondarySoundEndTime: 1.50
   },
 
   // Titan
@@ -1432,7 +1793,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Flex_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Flex.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 400,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   tableTilt: {
     id: 'tableTilt', name: 'Table Tilt',
@@ -1443,7 +1809,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Table Tilt_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Table Tilt.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   avalanche: {
     id: 'avalanche', name: 'Avalanche',
@@ -1473,7 +1844,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Searing Light_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Searing Light.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.50
   },
   enrage: {
     id: 'enrage', name: 'Enrage',
@@ -1484,7 +1860,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   energyWave: {
     id: 'energyWave', name: 'Energy Wave',
@@ -1496,7 +1877,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Energy Wave_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Energy Wave.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Enchantress spells (use exact card text in descriptions)
@@ -1505,7 +1891,12 @@ export const SPELLS = {
     description: 'Targets the ally with the least combined Speed and Armor with a Heal Power of 2 and gives the effect: Dexterity which increases armor and speed by 1.',
     spec: { targets: [{ type: 'leastSpeedAndArmor', side: 'ally', max: 1 }], formula: { type: 'healPower', value: 2 }, effects: [EFFECTS.Dexterity], animationMs: 1200 },
     animation: 'Healing_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
 
   enchantStamina: {
@@ -1513,7 +1904,12 @@ export const SPELLS = {
     description: 'Targets the ally with least effects and applies Regen (heals 1 at the beginning of each round for 10 rounds).',
     spec: { targets: [{ type: 'leastEffects', side: 'ally', max: 1 }], effects: [EFFECTS.Regen], animationMs: 1200 },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   enchantStrength: {
@@ -1521,7 +1917,12 @@ export const SPELLS = {
     description: 'Targets the ally with the least effects, excluding the caster, and applies Strength (+1 Spell Power).',
     spec: { targets: [{ type: 'leastEffects', side: 'ally', max: 1, excludeSelf: true }], effects: [EFFECTS.Strength], animationMs: 1200 },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Demon: Death Pact — apply an effect that reflects damage back to the attacker
@@ -1530,7 +1931,13 @@ export const SPELLS = {
     description: 'Targets the caster and applies Death Pact: when the effected Hero is damaged by an enemy spell, equal damage is returned to the attacker.',
     spec: { targets: [{ type: 'self' }], effects: [EFFECTS.DeathPact], animationMs: 1200 },
     animation: 'Death Pact_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
+    
   },
 
   // Demon: Siphon — damage enemy and heal caster
@@ -1538,7 +1945,17 @@ export const SPELLS = {
     id: 'siphon', name: 'Siphon',
     description: 'Targets the enemy with the highest Health, dealing 4 Attack Power. Also heals the caster for 3.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4 }, post: { secondaryHeal: { amount: 3, side: 'ally', target: 'self' } }, animationMs: 1200 },
-    animation: 'Siphon_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames'
+    animation: 'Siphon_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames',
+        sound: '/images/sounds/Blood Drain.mp3',
+    soundVolume: 2.00,
+    soundDelayMs: 0.00,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20,
+    secondarySound: '/images/sounds/Healing.mp3',
+    secondarySoundVolume: 1.50,
+    secondarySoundDelayMs: 0.0,
+    secondarySoundStartTime: 0.30,
+    secondarySoundEndTime: 1.50
   },
 
   // Demon: Curse — applies a debuff that reduces Spell Power by 1 and deals 3 damage ignoring Armor
@@ -1564,7 +1981,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Spook_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Spook.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.40
   },
   hex: {
     id: 'hex', name: 'Hex',
@@ -1576,7 +1998,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Hex_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Hex.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Witch Doctor spells
@@ -1607,7 +2034,12 @@ export const SPELLS = {
       animationMs: 1200
     },
     animation: 'Healing_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
 
   toads: {
@@ -1624,7 +2056,17 @@ export const SPELLS = {
     },
     animation: 'Toads_2x2_4frames',
     animationPlacement: 'travel',
-    animationSecondary: 'Toads Secondary_2x2_4frames'
+    animationSecondary: 'Toads Secondary_2x2_4frames',
+    sound: '/images/sounds/Toads.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20,
+    secondarySound: '/images/sounds/Bomb Toss Secondary.mp3',
+    secondarySoundVolume: 1.00,
+    secondarySoundDelayMs: 0,
+    secondarySoundStartTime: 0.00,
+    secondarySoundEndTime: 1.20
   },
 
   rage: {
@@ -1638,7 +2080,12 @@ export const SPELLS = {
       animationMs: 800
     },
     animation: 'Rage_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   // Blacksmith
   hammer: {
@@ -1646,14 +2093,24 @@ export const SPELLS = {
     description: 'Targets the enemy with the highest Energy, dealing 5 Attack Power.',
     spec: { targets: [{ type: 'highestEnergy', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 5 }, animationMs: 1200 },
     animation: 'Hammer_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Hammer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 400,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   justice: {
     id: 'justice', name: 'Justice',
     description: 'Targets the enemy with the highest Energy, dealing 6 Attack Power.',
     spec: { targets: [{ type: 'highestEnergy', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6 }, animationMs: 1200 },
     animation: 'Justice_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Justice.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 3.80,
+    soundEndTime: 5.20
   },
   armorUp: {
     id: 'armorUp', name: 'Armor Up',
@@ -1672,21 +2129,36 @@ export const SPELLS = {
     description: 'Targets the enemy with the most positive effects, dealing 4 Attack Power plus 2× the number of positive effects.',
     spec: { targets: [{ type: 'mostBuffs', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4, addTargetEffectsMultiplier: 2 }, animationMs: 1200 },
     animation: 'Humble_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Humble.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   ironForge: {
     id: 'ironForge', name: 'Iron Forge',
     description: 'Targets the ally with the least Armor and applies Iron Forge (+1 Armor, +1 SpellPower).',
     spec: { targets: [{ type: 'leastArmor', side: 'ally', max: 1 }], effects: [EFFECTS.IronForge], animationMs: 1200 },
     animation: 'Iron Forge_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   moltenPour: {
     id: 'moltenPour', name: 'Molten Pour',
     description: 'Targets the row containing the enemy with the highest Armor, dealing 3 Attack Power ignoring Armor.',
     spec: { targets: [{ type: 'rowContainingHighestArmor', side: 'enemy' }], formula: { type: 'attackPower', value: 3, ignoreArmor: true }, animationMs: 1200 },
     animation: 'Molten Pour_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Molten Pour.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 0,
+    soundStartTime: 1.00,
+    soundEndTime: 2.50
   },
 
   // Elder (new)
@@ -1695,7 +2167,12 @@ export const SPELLS = {
     description: 'Targets the enemy with the highest Energy, dealing 7 Attack Power and reducing their Energy by 1.',
     spec: { targets: [{ type: 'highestEnergy', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 7 }, post: { deltaEnergy: -1 }, animationMs: 1200 },
     animation: 'Malign_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Malign.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.20,
+    soundEndTime: 1.50
   },
 
   humility: {
@@ -1703,7 +2180,12 @@ export const SPELLS = {
     description: 'Targets the enemy with the most positive effects, dealing 5 Attack Power and removing the top positive effect.',
     spec: { targets: [{ type: 'mostBuffs', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 5 }, post: { removeTopPositiveEffect: true }, animationMs: 1200 },
     animation: 'Humiliation_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Humility.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.50
   },
 
   truth: {
@@ -1711,7 +2193,12 @@ export const SPELLS = {
     description: 'Targets all enemies who currently have any negative effects, dealing 6 Attack Power.',
     spec: { targets: [{ type: 'board', side: 'enemy' }], formula: { type: 'attackPower', value: 6 }, post: { onlyApplyIfHasDebuff: true }, animationMs: 1200 },
     animation: 'Truth_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Truth.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.50
   },
 
   // Archer
@@ -1736,21 +2223,35 @@ export const SPELLS = {
   lieInWait: {
     id: 'lieInWait', name: 'Lie In Wait',
     description: 'Grants an ally +2 Spell Power and makes them untargetable by single-target spells for 5 rounds.',
-    spec: { targets: [{ type: 'self', side: 'ally' }], effects: [EFFECTS.LieInWait], animationMs: 1200 }, animation: 'Elixir_2x2_4frames', animationPlacement: 'inplace'
+    spec: { targets: [{ type: 'self', side: 'ally' }], effects: [EFFECTS.LieInWait], animationMs: 1200 }, animation: 'Elixir_2x2_4frames', animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   shadowStrike: {
     id: 'shadowStrike', name: 'Shadow Strike',
     description: 'Targets the enemy first encountered according to a reverse book reading, dealing 7 Attack Power.',
     spec: { targets: [{ type: 'reverseBook', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 7 }, animationMs: 1200 },
     animation: 'Shadow Strike_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.20,
+    soundEndTime: 1.90
   },
   fade: {
     id: 'fade', name: 'Fade',
     description: 'Targets the caster and applies Fade (+1 Spell Power, untargetable by single-target spells for 5 rounds).',
     spec: { targets: [{ type: 'self', side: 'ally' }], effects: [EFFECTS.Fade], animationMs: 1200 },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   combo: {
     id: 'combo', name: 'Combo',
@@ -1785,7 +2286,7 @@ export const SPELLS = {
     secondarySoundVolume: 1.50,
     secondarySoundDelayMs: 0,
     secondarySoundStartTime: 0.00,
-secondarySoundEndTime: 1.20
+    secondarySoundEndTime: 1.20
   },
   spear: {
     id: 'spear', name: 'Spear',
@@ -1841,7 +2342,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the highest Health dealing 5 Attack Power and applying Poison.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy' }], formula: { type: 'attackPower', value: 5 }, effects: [EFFECTS.Poison], animationMs: 1200 },
     animation: 'Poison Dagger_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Poison Dagger.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   poison: {
@@ -1849,7 +2355,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the least effects, and applies Poison which deals 2 damage at the start of each round.',
     spec: { targets: [{ type: 'leastEffects', side: 'enemy', max: 1 }], effects: [EFFECTS.Poison], animationMs: 1200 },
     animation: 'Poison_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Poison.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.20,
+    soundEndTime: 1.80
   },
 
   venomStrike: {
@@ -1857,7 +2368,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the highest Health, dealing 4 Attack Power and applying Poison.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4 }, effects: [EFFECTS.Poison], animationMs: 1200 },
     animation: 'Venom Strike_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Poison Dagger.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   poisonExplosion: {
@@ -1869,7 +2385,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Poison Explosion_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Poison Explosion.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Apothecary spells
@@ -1877,7 +2398,12 @@ secondarySoundEndTime: 1.20
     id: 'vitalityPotion', name: 'Vitality Potion',
     description: 'Targets the ally with the lowest Health and heals them for 7 (+spellPower). Also grants Strength (spellPower +1).',
     spec: { targets: [{ type: 'lowestHealth', side: 'ally', max: 1 }], formula: { type: 'healPower', value: 7 }, effects: [EFFECTS.Strength], animationMs: 1200 },
-    animation: 'Healing_2x2_4frames', animationPlacement: 'inplace'
+    animation: 'Healing_2x2_4frames', animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
 
   brimberryLeaves: {
@@ -1899,7 +2425,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the closest ally and applies Give A Quest. If they get a killing blow, they heal 2 and gain Iron Forge.',
     spec: { targets: [{ type: 'nearest', side: 'ally', max: 1, excludeSelf: true }], effects: [EFFECTS.GiveAQuest], animationMs: 1200 },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   offerARoom: {
@@ -1907,7 +2438,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the ally with the most missing Health and heals for 5 (+spellPower).',
     spec: { targets: [{ type: 'mostMissingHealth', side: 'ally', max: 1 }], formula: { type: 'healPower', value: 5 }, animationMs: 1200 },
     animation: 'Healing_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
 
   herbs: {
@@ -1915,7 +2451,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the entire ally board and removes the top negative effect.',
     spec: { targets: [{ type: 'board', side: 'ally' }], post: { removeTopDebuff: true }, animationMs: 1200 },
     animation: 'Herbs_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Herbs.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.5
   },
 
   assassinate: {
@@ -1936,7 +2477,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the most positive (buff) effects, dealing 8 Attack Power.',
     spec: { targets: [{ type: 'mostBuffs', side: 'enemy' }], formula: { type: 'attackPower', value: 8 }, animationMs: 1200 },
     animation: 'Priority Target_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Priority Target.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Bounty Hunter spells
@@ -1957,7 +2503,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy first encountered according to a reverse book reading, dealing 5 Attack Power.',
     spec: { targets: [{ type: 'reverseBook', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 5 }, animationMs: 1200 },
     animation: 'Sneak attack_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Sneak Attack.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.00
   },
 
   trackDown: {
@@ -1972,11 +2523,21 @@ secondarySoundEndTime: 1.20
   experimentalToxin: {
     id: 'experimentalToxin', name: 'Experimental Toxin',
     description: 'Damages the enemy with least Armor for 1 + d6.',
-    spec: { targets: [{ type: 'leastArmor', side: 'enemy' }], formula: { type: 'roll', base: 1, die: 6 }, animationMs: 1200 }, animation: 'Experimental Toxin_2x2_4frames', animationPlacement: 'travel' },
+    spec: { targets: [{ type: 'leastArmor', side: 'enemy' }], formula: { type: 'roll', base: 1, die: 6 }, animationMs: 1200 }, animation: 'Experimental Toxin_2x2_4frames', animationPlacement: 'travel',
+    sound: '/images/sounds/Experimental Toxin.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 500,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
+  },
   elixir: {
     id: 'elixir', name: 'Elixir',
     description: 'Removes all debuffs from an ally and grants a permanent Elixir buff (+1 Speed, +1 Armor, +1 SpellPower).',
-    spec: { targets: [{ type: 'mostDebuffs', side: 'ally' }], effects: [EFFECTS.Elixir], post: { removeDebuffs: true }, animationMs: 1200 }, animation: 'Elixir_2x2_4frames', animationPlacement: 'inplace' },
+    spec: { targets: [{ type: 'mostDebuffs', side: 'ally' }], effects: [EFFECTS.Elixir], post: { removeDebuffs: true }, animationMs: 1200 }, animation: 'Elixir_2x2_4frames', animationPlacement: 'inplace', sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20 },
   bombToss: {
     id: 'bombToss', name: 'Bomb Toss',
     description: 'Throws a bomb (projectilePlus1) dealing 6 Attack Power and applying Burn (1) to affected tiles.',
@@ -2000,7 +2561,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the least effects and applies Leech (3 damage at start of each round).',
     spec: { targets: [{ type: 'leastEffects', side: 'enemy', max: 1 }], effects: [EFFECTS.Leech], animationMs: 1200 },
     animation: 'Leech_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Leech.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   cut: {
     id: 'cut', name: 'Cut',
@@ -2018,7 +2584,17 @@ secondarySoundEndTime: 1.20
     id: 'transfusion', name: 'Transfusion',
     description: 'Targets enemy with the highest Health, dealing 4 Attack Power. Also targets the ally with the lowest Health with a Heal Power of 4.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }, { type: 'lowestHealth', side: 'ally', max: 1 }], formula: { type: 'attackPower', value: 4 }, post: { secondaryHeal: { amount: 4, side: 'ally', target: 'lowestHealth' } }, animationMs: 1200 },
-    animation: 'Slash_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames'
+    animation: 'Slash_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames',
+    sound: '/images/sounds/Cut.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20,
+    secondarySound: '/images/sounds/Healing.mp3',
+    secondarySoundVolume: 1.50,
+    secondarySoundDelayMs: 0.0,
+    secondarySoundStartTime: 0.30,
+    secondarySoundEndTime: 1.50
   }
   ,
 
@@ -2081,7 +2657,18 @@ secondarySoundEndTime: 1.20
     id: 'drain', name: 'Drain',
     description: "Targets the enemy with the highest Armor, dealing 5 Attack Power (ignores Armor). Also heals the caster for 5.",
     spec: { targets: [{ type: 'highestArmor', side: 'enemy', max: 1 }, { type: 'self' }], formula: { type: 'attackPower', value: 5, ignoreArmor: true }, post: { secondaryHeal: { amount: 5, side: 'ally', target: 'self' } }, animationMs: 1200 },
-    animation: 'Drain_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames'
+    animation: 'Drain_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames',
+    sound: '/images/sounds/Drain.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20,
+    secondarySound: '/images/sounds/Healing.mp3',
+    secondarySoundVolume: 1.50,
+    secondarySoundDelayMs: 0.0,
+    secondarySoundStartTime: 0.30,
+    secondarySoundEndTime: 1.50
+    
   },
 
   darkBolt: {
@@ -2097,7 +2684,12 @@ secondarySoundEndTime: 1.20
     description: "Targets the entire enemy board, dealing Attack Power equal to 3 plus the target's Armor (ignores Armor).",
     spec: { targets: [{ type: 'board', side: 'enemy' }], formula: { type: 'attackPower', value: 3, ignoreArmor: true, addTargetArmor: true }, animationMs: 1200 },
     animation: 'Gravity_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Gravity.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.20,
+    soundEndTime: 2.00
   },
 
   // Dark Knight spells
@@ -2106,7 +2698,11 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the highest Health, dealing 3 Attack Power ignoring Armor.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 3, ignoreArmor: true }, animationMs: 1200 },
     animation: 'Dark Slash_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Slash.mp3',
+    soundVolume: 1,
+    soundStartTime: 0.0,
+    soundEndTime: 1.2
   },
 
   soulCrush: {
@@ -2114,7 +2710,12 @@ secondarySoundEndTime: 1.20
     description: "Targets the enemy with the highest Armor, dealing Attack Power equal to 3 + the target's Armor (ignores Armor).",
     spec: { targets: [{ type: 'highestArmor', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 3, ignoreArmor: true, addTargetArmor: true }, animationMs: 1200 },
     animation: 'Soul Crush_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Soul Crush.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.40
   },
 
   treachery: {
@@ -2122,7 +2723,12 @@ secondarySoundEndTime: 1.20
     description: 'Projectile that applies Treachery: deals damage equal to the Armor of the affected Hero at the start of each Round.',
     spec: { targets: [{ type: 'projectile', side: 'enemy' }], effects: [EFFECTS.Treachery], animationMs: 1200 },
     animation: 'Treachery_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Molten Pour.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 0,
+    soundStartTime: 1.00,
+    soundEndTime: 2.50
   }
   ,
   // Dragon spells
@@ -2131,7 +2737,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the Enemy with the highest Health and deals 4 Attack Power.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4 }, animationMs: 1200 },
     animation: 'Dragon Fangs_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Dragon Fangs.mp3',
+    soundVolume: 2.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Green Dragon spells
@@ -2140,7 +2751,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the entire enemy board and moves them to the backmost available row.',
     spec: { targets: [{ type: 'board', side: 'enemy' }], post: { moveAllBack: true }, animationMs: 1200 },
     animation: 'Gale_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Gale.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 2.00
   },
 
   viciousBite: {
@@ -2148,7 +2764,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the highest Health, dealing 6 Attack Power and applies an effect: Poison which deals 2 damage at the start of each Round.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6 }, effects: [EFFECTS.Poison], animationMs: 1200 },
     animation: 'Vicious Bite_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Dragon Fangs.mp3',
+    soundVolume: 2.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   poisonBreath: {
@@ -2156,7 +2777,12 @@ secondarySoundEndTime: 1.20
     description: 'Column attack that applies Poison which deals 2 damage at the start of each Round.',
     spec: { targets: [{ type: 'column', side: 'enemy' }], formula: { type: 'attackPower', value: 0 }, effects: [EFFECTS.Poison], animationMs: 1200 },
     animation: 'Poison Breath_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Poison.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.20,
+    soundEndTime: 1.80
   },
 
   // Werewolf spells
@@ -2198,7 +2824,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Howl_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Howl.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   maul: {
@@ -2216,7 +2847,17 @@ secondarySoundEndTime: 1.20
     },
     animation: 'Maul_2x2_4frames',
     animationSecondary: 'Healing_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Maul.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.50,
+    secondarySound: '/images/sounds/Healing.mp3',
+    secondarySoundVolume: 1.50,
+    secondarySoundDelayMs: 0.0,
+    secondarySoundStartTime: 0.30,
+    secondarySoundEndTime: 1.50
   },
 
   // Ninja spells
@@ -2225,7 +2866,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the furthest enemy, dealing 4 Attack Power.',
     spec: { targets: [{ type: 'furthest', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 4 }, animationMs: 1200 },
     animation: 'Shuriken_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Shuriken.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   smokeBomb: {
@@ -2237,7 +2883,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Smoke Bomb_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Smoke Bomb.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Summoner spells
@@ -2250,7 +2901,11 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Summon Ally_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.50
   },
 
   summonerSummonMinion: {
@@ -2262,7 +2917,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   summonerSupportMinion: {
@@ -2274,7 +2934,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Healing_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
 
   etherium: {
@@ -2287,7 +2952,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   helpingHand: {
@@ -2301,7 +2971,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Healing_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
 
   voidShield: {
@@ -2314,7 +2989,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   swiftness: {
@@ -2326,7 +3006,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Swiftness_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Swiftness.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Nymph spells
@@ -2335,7 +3020,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the least effects and applies Spores.',
     spec: { targets: [{ type: 'leastEffects', side: 'enemy', max: 1 }], effects: [EFFECTS.Spores], animationMs: 1200 },
     animation: 'Spores_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Spores.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.20,
+    soundEndTime: 1.50
   },
 
   naturesWrath: {
@@ -2348,7 +3038,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Natures Wrath_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Natures Wrath.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   fruitOfTheVine: {
@@ -2370,7 +3065,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the frontmost enemy row that has at least 1 Hero and move all Heroes back 1 row if available.',
     spec: { targets: [{ type: 'frontmostRowWithHero', side: 'enemy' }], post: { moveRowBack: true }, animationMs: 1200 },
     animation: 'Fan_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Fan.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   slap: {
@@ -2378,7 +3078,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the Highest Health dealing 6 Attack Power and decreases their number of spell casts by 1 for the row the target is in.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6 }, post: { reduceRowCastsBy: 1 }, animationMs: 1200 },
     animation: 'Slap_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Slap.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   poisonedHairpin: {
@@ -2441,7 +3146,12 @@ secondarySoundEndTime: 1.20
     id: 'rejuvenate', name: 'Rejuvenate',
     description: 'Targets the ally with the Lowest Health for a Heal Power of 1 (+spellPower) and applies Rejuvenate which heals 2 at the start of each round for 10 rounds.',
     spec: { targets: [{ type: 'lowestHealth', side: 'ally', max: 1 }], formula: { type: 'healPower', value: 1 }, effects: [EFFECTS.Rejuvenate], animationMs: 1200 },
-    animation: 'Healing_2x2_4frames', animationPlacement: 'inplace'
+    animation: 'Healing_2x2_4frames', animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
   // Cleric spells
   holyFervor: {
@@ -2449,14 +3159,24 @@ secondarySoundEndTime: 1.20
     description: 'Targets the ally with the highest Energy with a Heal Power of 2 and applies Quickness (+1 Speed, +1 Spell Power).',
     spec: { targets: [{ type: 'highestEnergy', side: 'ally', max: 1 }], formula: { type: 'healPower', value: 2 }, effects: [EFFECTS.Quickness], animationMs: 1200 },
     animation: 'Healing_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
   purify: {
     id: 'purify', name: 'Purify',
     description: 'Targets the enemy with the most positive effects, dealing 5 Attack Power and removing the top positive effect.',
     spec: { targets: [{ type: 'mostBuffs', side: 'enemy' }], formula: { type: 'attackPower', value: 5 }, post: { removeTopPositiveEffect: true }, animationMs: 1200 },
     animation: 'Purify_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Purify.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.50
   },
   cleanse: {
     id: 'cleanse', name: 'Cleanse',
@@ -2474,13 +3194,23 @@ secondarySoundEndTime: 1.20
     id: 'clericHeal', name: 'Heal',
     description: 'Targets the two allies with the lowest Health, with a Heal Power of 5 (+spellPower).',
     spec: { targets: [{ type: 'lowestHealth', side: 'ally', max: 2 }], formula: { type: 'healPower', value: 5 }, animationMs: 1200 },
-    animation: 'Healing_2x2_4frames', animationPlacement: 'inplace'
+    animation: 'Healing_2x2_4frames', animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
   massHeal: {
     id: 'massHeal', name: 'Mass Heal',
     description: 'Targets the entire ally board with a Heal Power of 2 (+spellPower).',
     spec: { targets: [{ type: 'board', side: 'ally' }], formula: { type: 'healPower', value: 2 }, animationMs: 1200 },
-    animation: 'Healing_2x2_4frames', animationPlacement: 'inplace'
+    animation: 'Healing_2x2_4frames', animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
   // Dragonling spells (each heals the caster for 2 and applies Dragon Year to self)
   // Note: Dragonling secondary heals are flat (ignoreSpellPower: true) unlike other secondaryHeals
@@ -2488,13 +3218,33 @@ secondarySoundEndTime: 1.20
     id: 'tailWhip', name: 'Tail Whip',
     description: 'Targets the frontmost enemy row that has at least one Hero, dealing 2 Attack Power. Heals caster for 2 and applies Dragon Year (+2 Spell Power, +1 Armor).',
     spec: { targets: [{ type: 'frontmostRowWithHero', side: 'enemy' }, { type: 'self' }], formula: { type: 'attackPower', value: 2 }, post: { secondaryHeal: { amount: 2, side: 'ally', target: 'self', ignoreSpellPower: true }, applyEffectToSelf: { effects: ['DragonYear'] } }, animationMs: 1200 },
-    animation: 'Tail Whip_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames'
+    animation: 'Tail Whip_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames',
+    sound: '/images/sounds/Tail Whip.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20,
+    secondarySound: '/images/sounds/Healing.mp3',
+    secondarySoundVolume: 1.00,
+    secondarySoundDelayMs: 0,
+    secondarySoundStartTime: 0.00,
+    secondarySoundEndTime: 1.20
   },
   dragonsBreath: {
     id: 'dragonsBreath', name: "Dragon's Breath",
     description: 'Column attack dealing 1 Attack Power. Heals caster for 2 and applies Dragon Year (+2 Spell Power, +1 Armor).',
     spec: { targets: [{ type: 'column', side: 'enemy' }, { type: 'self' }], formula: { type: 'attackPower', value: 1 }, post: { secondaryHeal: { amount: 2, side: 'ally', target: 'self', ignoreSpellPower: true }, applyEffectToSelf: { effects: ['DragonYear'] } }, animationMs: 1200 },
-    animation: 'Dragon Breath_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames'
+    animation: 'Dragon Breath_2x2_4frames', animationPlacement: 'travel', animationSecondary: 'Healing_2x2_4frames',
+    sound: '/images/sounds/Dragon Breath.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.70,
+    secondarySound: '/images/sounds/Healing.mp3',
+    secondarySoundVolume: 1.50,
+    secondarySoundDelayMs: 0.0,
+    secondarySoundStartTime: 0.30,
+    secondarySoundEndTime: 1.50
   },
   claw: {
     id: 'claw', name: 'Claw',
@@ -2530,7 +3280,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the highest Health, dealing 7 Attack Power. (50% chance to apply Slowed)',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 7 }, animationMs: 1200, post: { applyEffectWithChance: { effect: 'Slowed', chance: 0.5 } } },
     animation: 'Ice Bolt_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Ice Bolt.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
   blizzard: {
     id: 'blizzard', name: 'Blizzard',
@@ -2589,7 +3344,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200 
     },
     animation: 'Excecute_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Execute.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   guillotine: {
@@ -2602,7 +3362,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200 
     },
     animation: 'Guillotine_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Guillotine.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   shackle: {
@@ -2614,7 +3379,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200 
     },
     animation: 'Shackle_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Shackle.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.70,
+    soundEndTime: 2.20
   },
 
   // Pyro spells
@@ -2627,7 +3397,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Wild Fire_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Wildfire.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 1.00,
+    soundEndTime: 2.50
   },
 
   conflagration: {
@@ -2657,7 +3432,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Flame Thrower_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Flame Thrower.mp3',
+    soundVolume: 1.30,
+    soundDelayMs: 0,
+    soundStartTime: 0.40,
+    soundEndTime: 2.20
   },
 
   // Prisoner spells
@@ -2666,7 +3446,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the backmost enemy row that has at least 1 Hero, dealing 4 Attack Power (ignores Armor).',
     spec: { targets: [{ type: 'backmostRowWithHero', side: 'enemy' }], formula: { type: 'attackPower', value: 4, ignoreArmor: true }, animationMs: 1200 },
     animation: 'Release The Inmates_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Release Inmates.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 500,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   usurp: {
@@ -2674,7 +3459,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the highest Armor, dealing 6 Attack Power (ignores Armor).',
     spec: { targets: [{ type: 'highestArmor', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6, ignoreArmor: true }, animationMs: 1200 },
     animation: 'Usurrp_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Usurp.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.40
   },
 
   chainWhip: {
@@ -2696,7 +3486,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the highest Health, dealing 8 Attack Power.',
     spec: { targets: [{ type: 'highestHealth', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 8 }, animationMs: 1200 },
     animation: 'Vengeful Slash_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Vengeful Slash.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 1.60
   },
 
   decreeOfHatred: {
@@ -2712,7 +3507,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Decree Of Hatred_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Decree Of Hatred.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 1.00,
+    soundEndTime: 2.00
   },
 
   reclaimThrone: {
@@ -2720,7 +3520,12 @@ secondarySoundEndTime: 1.20
     description: 'Targets the enemy with the highest Armor, dealing 6 Attack Power ignoring Armor.',
     spec: { targets: [{ type: 'highestArmor', side: 'enemy', max: 1 }], formula: { type: 'attackPower', value: 6, ignoreArmor: true }, animationMs: 1200 },
     animation: 'Reclaim Throne_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Reclaim Throne.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.20,
+    soundEndTime: 2.00
   },
 
   // Fallen Angel spells
@@ -2751,7 +3556,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200 
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Time Mage spells
@@ -2764,7 +3574,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Time Warp_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Time Warp.mp3',
+    soundVolume: 1.20,
+    soundDelayMs: 200,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   haste: {
@@ -2776,7 +3591,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   energyBlast: {
@@ -2788,7 +3608,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Energy Blast_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Energy Blast.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 1.00,
+    soundEndTime: 2.50
   },
 
   // Tinkerer spells
@@ -2820,7 +3645,12 @@ secondarySoundEndTime: 1.20
       animationMs: 500
     },
     animation: 'Turret_2x2_4frames',
-    animationPlacement: 'travel'
+    animationPlacement: 'travel',
+    sound: '/images/sounds/Turret.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 0,
+    soundStartTime: 0.00,
+    soundEndTime: 0.8
   },
 
   buildTurret: {
@@ -2850,7 +3680,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   // Troll spells
@@ -2881,7 +3716,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Healing_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Healing.mp3',
+    soundVolume: 1.50,
+    soundDelayMs: 300.0,
+    soundStartTime: 0.30,
+    soundEndTime: 1.50
   },
 
   payTheToll: {
@@ -2893,7 +3733,12 @@ secondarySoundEndTime: 1.20
       animationMs: 1200
     },
     animation: 'Elixir_2x2_4frames',
-    animationPlacement: 'inplace'
+    animationPlacement: 'inplace',
+    sound: '/images/sounds/Armor Bearer.mp3',
+    soundVolume: 1.00,
+    soundDelayMs: 300,
+    soundStartTime: 0.00,
+    soundEndTime: 1.20
   },
 
   payTheTollTrigger: {

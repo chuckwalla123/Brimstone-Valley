@@ -94,7 +94,7 @@ const clericNoBuffs = evaluateMove(({ p2Board, p1Board }) => {
 });
 
 assert.equal(clericNoBuffs.sourceId, 'p2:0');
-assert(!FRONT_ROW.has(clericNoBuffs.destinationId), `Expected Cleric to leave the no-op Purify row, got ${clericNoBuffs.destinationId}`);
+assert(FRONT_ROW.has(clericNoBuffs.destinationId), `Expected Cleric to keep Purify active for its damage even without an enemy buff, got ${clericNoBuffs.destinationId}`);
 
 const clericWithBuffedEnemy = evaluateMove(({ p2Board, p1Board }) => {
   placeHero(p2Board, 4, 'clericID', { currentHealth: 8, currentArmor: 0, currentEnergy: 0, currentSpeed: 3, currentSpellPower: 0 });
