@@ -1108,7 +1108,16 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
                   const pre = { type: 'effectPreCast', target: ownerTarget, effectName: rx.effectName, amount: vsResult.damage, scale: getEffectPrecastScale(vsResult.damage), reactionIndex: rxIdx, ownerBoardName: rx.ownerBoardName, ownerIndex: rx.ownerIndex, effectIndex: rx.effectIndex };
                   try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction: pre }); } catch (e) {}
                   // effectPulse shows damage on the ATTACKER
-                  const lastAction = { type: 'effectPulse', target: { boardName: rx.attackerBoard, index: rx.attackerIndex }, effectName: rx.effectName, action: 'damage', amount: vsResult.damage };
+                  const lastAction = {
+                    type: 'effectPulse',
+                    target: { boardName: rx.attackerBoard, index: rx.attackerIndex },
+                    effectName: rx.effectName,
+                    action: 'damage',
+                    amount: vsResult.damage,
+                    ownerBoardName: rx.ownerBoardName,
+                    ownerIndex: rx.ownerIndex,
+                    effectIndex: rx.effectIndex
+                  };
                   try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction }); } catch (e) {}
                 }
               }
@@ -1259,7 +1268,18 @@ export async function executeRound({ p1Board = [], p2Board = [], p3Board = [], p
               if (applied && applied.type === 'heal') { pulseAction = 'heal'; pulseAmount = Number(applied.amount || 0); }
 
               if (pulseAction && typeof onStep === 'function') {
-                const lastAction = { type: 'effectPulse', target: { boardName: tref.boardName, index: tref.index }, source: { boardName, index: idx }, effectName: effect.name, action: pulseAction, amount: pulseAmount, effectIndex: ei };
+                const effectOwner = applierRef && applierRef.boardName && typeof applierRef.index === 'number'
+                  ? { boardName: applierRef.boardName, index: applierRef.index }
+                  : { boardName, index: idx };
+                const lastAction = {
+                  type: 'effectPulse',
+                  target: { boardName: tref.boardName, index: tref.index },
+                  source: effectOwner,
+                  effectName: effect.name,
+                  action: pulseAction,
+                  amount: pulseAmount,
+                  effectIndex: ei
+                };
                 try { onStep({ p1Board: cloneArr(cP1), p2Board: cloneArr(cP2), p3Board: cloneArr(cP3), p1Reserve: cloneArr(cR1), p2Reserve: cloneArr(cR2), p3Reserve: cloneArr(cR3), priorityPlayer, lastAction }); } catch (e) {}
               }
             }
@@ -1834,12 +1854,17 @@ function slotForIndex(boardName, idx) {
   return mod === 0 ? 'front' : (mod === 1 ? 'middle' : 'back');
 }
 
-function evaluateGameWinner(p1Board, p2Board, p3Board) {
+function evaluateGameWinner(p1Board, p2Board, p3Board, priorityPlayer = null) {
   const aliveP1 = (p1Board || []).some(t => t && t.hero && !t._dead);
   const aliveP2 = (p2Board || []).some(t => t && t.hero && !t._dead);
   const aliveP3 = (p3Board || []).some(t => t && t.hero && !t._dead);
   const aliveCount = (aliveP1 ? 1 : 0) + (aliveP2 ? 1 : 0) + (aliveP3 ? 1 : 0);
-  if (aliveCount === 0) return 'draw';
+  if (aliveCount === 0) {
+    // 1v1 simultaneous wipe: the player holding the priority arrow wins
+    const hasP3 = (p3Board || []).some(t => t && t.hero);
+    if (!hasP3 && (priorityPlayer === 'player1' || priorityPlayer === 'player2')) return priorityPlayer;
+    return 'draw';
+  }
   if (aliveCount === 1) return aliveP1 ? 'player1' : (aliveP2 ? 'player2' : 'player3');
   return null;
 }
@@ -5412,7 +5437,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
 
       // After marking deaths, check main boards (reserves excluded) for a game end
       try {
-        const winner = evaluateGameWinner(cP1, cP2, cP3);
+        const winner = evaluateGameWinner(cP1, cP2, cP3, priorityPlayer);
         if (winner) {
           gameWinner = winner;
           addLog && addLog(`Game end detected: ${winner}`);
@@ -6164,7 +6189,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
 
         // After marking deaths, check main boards (reserves excluded) for a game end
         try {
-          const winner = evaluateGameWinner(cP1, cP2, cP3);
+          const winner = evaluateGameWinner(cP1, cP2, cP3, priorityPlayer);
           if (winner) {
             gameWinner = winner;
             addLog && addLog(`Game end detected: ${winner}`);
@@ -6452,7 +6477,7 @@ function evaluateGameWinner(p1Board, p2Board, p3Board) {
   // Final winner check (in case no early detection occurred during casts)
   try {
     if (!gameWinner) {
-      gameWinner = evaluateGameWinner(cP1, cP2, cP3);
+      gameWinner = evaluateGameWinner(cP1, cP2, cP3, priorityPlayer);
     }
   } catch (e) {}
 

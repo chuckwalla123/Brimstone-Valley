@@ -1,491 +1,233 @@
-# Neural AI Training System
+# HardAI Movement Training
 
-Self-play reinforcement learning system for board game AI (AlphaZero-style).
+This guide is for training the **HardAI movement candidate scorer** from the repository root. The current workflow uses supervised movement labels and evaluates the trained candidate against **EasyAI+ by default**.
 
-## Architecture
+> **Do not use `train.html` for this workflow.** It runs the older browser-based neural self-play trainer, which is separate from the current HardAI movement scorer.
 
-### Core Components
+## The training workflow at a glance
 
-1. **State Encoder** (`stateEncoder.js`)
-   - Converts game state to neural network input
-   - Encodes 14 slots (7 per player): hero stats, spells, effects, positions
-   - Action space: 50 actions (7×7 board moves + noop)
+1. Generate legal movement examples and shallow-search labels scored with the EasyAI+ position evaluator.
+2. Train the candidate scorer on those labels.
+3. Evaluate it against EasyAI+ in both board positions (P1 and P2).
+4. Review the metrics and, only when ready, request champion promotion.
 
-2. **Neural Network** (`model.js`)
-   - ResNet-style with residual blocks
-   - **Policy Head**: Outputs move probability distribution
-   - **Value Head**: Outputs win probability (-1 to +1)
-   - ~100K parameters (configurable)
+Labels use the EasyAI+ position evaluator and shallow movement-response search. The shallow-search oracle is also benchmarked against EasyAI+. This aligns the training target and oracle benchmark with the **EasyAI+ opponent used to evaluate and gate the candidate**; this is not online self-play or reinforcement learning.
 
-3. **Monte Carlo Tree Search** (`mcts.js`)
-   - Explores move tree using neural network guidance
-   - UCB formula balances exploration vs exploitation
-   - Integrates with `executeRound` for accurate battle simulation
+## Before the first run
 
-4. **Self-Play Generator** (`selfPlay.js`)
-   - AI plays games against itself
-   - Each move guided by MCTS
-   - Produces training examples: (state, policy, outcome)
-
-5. **Training Loop** (`trainer.js`)
-   - Generate self-play games → Train network → Repeat
-   - Saves model to IndexedDB (browser storage)
-   - Keeps last 10,000 training examples
-
-6. **Production-rule training environment** (`training/environment.js`)
-   - Uses the production battle engine to resolve rounds
-   - Provides immutable movement state transitions and exact priority sequencing
-   - Enumerates and validates legal movement actions before a model can score them
-   - Is intentionally separate from the legacy neural self-play loop until that loop is migrated
-
-## Training Environment Parity Check
-
-Before using the environment for generated training data, verify that its round resolution remains identical to the production engine:
+Open a terminal in the repository root, then run the focused checks:
 
 ```bash
 node ./test-training-environment.js
-```
-
-The test covers priority order, shackle-aware legal movement generation, immutable movement transitions, and a seeded production-engine round parity check. It ignores only generated hero instance IDs, which differ across otherwise equivalent engine executions.
-
-## Movement Scenario Corpus
-
-`training/scenarioCorpus.js` supplies the movement-only input set for the first HardAI milestone. It keeps draft and ban decisions out of scope and produces:
-
-- Fixed tactical fixtures for conditional spells, cleanse and buff removal, shackle restrictions, full-board reserve swaps, corpses, and Burn.
-- Seeded random valid battle states with 3-5 main heroes and 0-2 reserve heroes per side.
-- Only states with at least one action validated by `training/environment.js`.
-
-Generate a corpus from code:
-
-```javascript
-import { createMovementScenarioCorpus } from './src/ai/training/scenarioCorpus.js';
-
-const corpus = createMovementScenarioCorpus({ randomCount: 500, seed: 20261016 });
-```
-
-The supplied seed makes the random portion reproducible. Validate the corpus with:
-
-```bash
 node ./test-movement-scenario-corpus.js
-```
-
-## Shallow-Search Movement Labels
-
-`training/labelGenerator.js` turns every legal action in a movement scenario into a supervised ranking label:
-
-1. Applies the candidate through `training/environment.js`.
-2. Evaluates a bounded set of the immediate mover's strongest static responses.
-3. Completes the remaining movement decisions with deterministic greedy rollouts.
-4. Resolves the battle round with the production battle engine.
-5. Scores the resulting board using the existing EasyAI hero evaluator from the active mover's perspective.
-
-The immediate responder maximizes the score when it is the active side and minimizes it when it is the opponent. The default response bound is eight; increase it only for offline label production after measuring runtime.
-
-```javascript
-import { generateMovementLabels } from './src/ai/training/labelGenerator.js';
-import { createMovementScenarioCorpus } from './src/ai/training/scenarioCorpus.js';
-
-const [scenario] = createMovementScenarioCorpus({ randomCount: 0 });
-const labels = await generateMovementLabels(scenario, { maxResponses: 8, seed: 20261016 });
-// labels.bestAction, labels.bestScore, labels.labels
-```
-
-The generator is deterministic for the same state, configuration, and seed. Validate it with:
-
-```bash
 node ./test-movement-label-generator.js
-```
-
-## Legal-Candidate Scorer
-
-`training/candidateScorer.js` is the first trainable HardAI component. Unlike the legacy global policy network, it scores only actions already confirmed legal by `training/environment.js`.
-
-The corresponding `training/candidateFeatures.js` encoder includes:
-
-- Every main and reserve slot for both teams, before and after the candidate move.
-- Per-slot hero identity, current health, armor, energy, speed, spell power, and casts remaining.
-- Per-slot alive/dead corpse state, buffs, debuffs, movement locks, revived state, and exact effect counts.
-- Source and destination board slots, active side, and movement index.
-
-Train it from Step 3 labels:
-
-```javascript
-import {
-  compileCandidateScorer,
-  createCandidateScorer,
-  scoreLegalMovementActions,
-  trainCandidateScorer,
-} from './src/ai/training/candidateScorer.js';
-
-const model = compileCandidateScorer(createCandidateScorer());
-await trainCandidateScorer(model, labelSets, { epochs: 20, batchSize: 32 });
-const rankedMoves = await scoreLegalMovementActions(model, state, perspectiveSide);
-```
-
-Scores are learned from bounded production-round labels and returned in descending order. The model can be saved with `saveCandidateScorer` and loaded with `loadCandidateScorer`; the default IndexedDB path is separate from the legacy AlphaZero-style model.
-
-### Feature encoder migration
-
-The current board-aware encoder is feature version 2. Checkpoints trained before this upgrade use the retired aggregate encoder and cannot be resumed or evaluated safely. Start a fresh candidate:
-
-```bash
-npm run hardai:quick
-```
-
-Then run a fresh full training command **without** `--resume`. New portable checkpoints record their feature version and reject incompatible loads explicitly.
-
-Validate the scorer with:
-
-```bash
-node ./test-movement-candidate-scorer.js
-```
-
-## Champion Evaluation and Promotion
-
-`training/championEvaluation.js` prevents an unmeasured scorer from becoming HardAI. It evaluates a candidate in both P1 and P2 positions against:
-
-- **EasyAI**, always.
-- The current saved candidate-scorer champion, when one exists.
-
-MediumAI is intentionally not included. Its self-play cost is too high for a meaningful evaluation volume, and EasyAI is the selected baseline.
-
-Each movement decision is made through the production-rule environment. Matches are seedable, capped by a configurable round count, and record any explicit fallback if a controller emits no legal move. The default promotion gate requires:
-
-- At least 40 color-balanced EasyAI games.
-- At least a 55% candidate win rate against EasyAI.
-- A Wilson lower confidence bound of at least 50% against EasyAI.
-- At least a 50% win rate against the current champion, if one exists.
-
-Use the gate with an explicit persistence callback:
-
-```javascript
-import {
-  evaluateAndPromoteCandidate,
-  savePromotedChampion,
-} from './src/ai/training/championEvaluation.js';
-
-const result = await evaluateAndPromoteCandidate({
-  candidateModel,
-  championModel,
-  scenarios,
-  onPromote: savePromotedChampion,
-});
-```
-
-No model is saved automatically; promotion requires the gate to pass and a supplied `onPromote` callback. Validate the harness with:
-
-```bash
 node ./test-champion-evaluation.js
 ```
 
-## Run HardAI Movement Training
+If a check fails, stop and resolve it before training. These checks verify the production movement environment, scenario generation, labels, and EasyAI+ evaluation path.
 
-The movement scorer can now be trained from the repository root with Node. It writes portable JSON checkpoints under `models/`; these are separate from the legacy browser IndexedDB model.
+## First: run the quick smoke test
 
-### First run: quick verification
-
-```bash
-npm run hardai:quick
-```
-
-This generates labels for the five tactical fixtures plus two seeded random scenarios, trains for five epochs, saves:
-
-- `models/hardai-movement-candidate.json`
-- `models/hardai-movement-candidate.metadata.json`
-
-It then evaluates the candidate against EasyAI. This is a smoke run, not a model expected to pass promotion.
-
-### Full training
+Copy and run:
 
 ```bash
-npm run hardai:train
+npm run hardai:quick -- --fresh --evaluation-opponent easyplus
 ```
 
-The default run uses five fixtures, 50 random training scenarios, four immediate responses per labeled action, 20 epochs, and 20 held-out random evaluation scenarios. It evaluates only against EasyAI and a current champion checkpoint when one exists.
+This starts from new model weights, trains on a small corpus, and checks evaluation against EasyAI+. It is only a setup test; do not expect it to produce a strong candidate or pass the promotion gate.
 
-### Terminal progress
+## Then: start a full training run from scratch
 
-Training prints progress while it is running:
-
-- Labeling and held-out labeling: approximately ten evenly spaced scenario updates, including the most recently completed scenario.
-- Model fitting: one ranking-loss update for every pairwise epoch, or loss and MSE for the legacy MSE objective.
-- EasyAI/champion evaluation: approximately ten evenly spaced scenario updates for each benchmark.
-- Shallow-search oracle benchmark: periodic completed-scenario updates.
-
-For example:
-
-```text
-[HardAI] Labeling: 33/105 scenarios; latest: random-20261020-28.
-[HardAI] Training epoch 12/30 (pairwise): loss=0.241823.
-[HardAI] Match (easyai): HardAI=P1, result=WIN, outcome=P1, rounds=3, scenario=random-20261021-7.
-[HardAI] Match (easyai): HardAI=P2, result=LOSS, outcome=P1, rounds=2, scenario=random-20261021-7.
-[HardAI] Evaluating (easyai): 18/45 scenarios.
-```
-
-Each benchmark scenario is played once with HardAI as P1 and once as P2. The match lines make side-specific win/loss patterns and fallback counts visible for diagnosing mirroring or legal-action issues.
-
-Useful overrides can be passed after `--`:
+Copy and run:
 
 ```bash
-npm run hardai:train -- --random-count 100 --max-responses 6 --epochs 30 --evaluation-random-count 40 --seed 20261020
+npm run hardai:train -- --fresh --evaluation-opponent easyplus --seed 20261016
 ```
 
-The default `pairwise` objective learns that the shallow-search-preferred legal action must rank above another legal action from the same state. This directly optimizes move selection. Use `--objective mse` only as a same-corpus baseline comparison with the legacy absolute-score regression objective.
+This uses the full default training configuration:
 
-To compare objectives, use the same corpus options and seed, but separate output paths so neither run overwrites the other:
+- 50 random training scenarios per round, one round (no fixtures by default). Use `--rounds N` to keep training on newly generated scenarios.
+- Up to 4 immediate responses per labeled action.
+- 20 training epochs per round with the pairwise ranking objective.
+- 20 random evaluation scenarios, played once as P1 and once as P2. Only "balanced" scenarios are kept: an EasyAI+ mirror match must finish and last at least 3 rounds.
+- Evaluation plays the model as a shortlist (top 4 moves) followed by the EasyAI+ lookahead search (`--evaluation-mode hybrid`); the model alone is also reported as a diagnostic.
+- EasyAI+ as the evaluation and promotion baseline.
+- Up to 20 rounds per evaluation match.
+- A fresh random seed each run (printed at the start). Every run, and every round, trains and evaluates on new random scenarios; pass `--seed N` to reproduce one.
+
+The run writes the candidate to `models/hardai-movement-candidate.json` and its metadata beside it. It updates `models/hardai-movement-best.json` only if the candidate was evaluated on at least `--min-best-games` games (default 40), scored at least `--min-best-score-rate` (default 50%) against the baseline, and improved on the previous best. A previous best only counts as comparable if it used the same feature version, opponent, evaluation mode and also had enough games.
+
+The report includes paired results per scenario: won both colors, lost both, or split. Split scenarios only show that one color was favored, so the won-vs-lost ratio is the better signal.
+
+## Next run: choose fresh weights or resume
+
+Use **one** of these commands. Do not combine `--fresh` and `--resume`.
+
+### Start a new independent model
 
 ```bash
-npm run hardai:train -- --objective pairwise --seed 20261022 --output models/hardai-pairwise.json --best models/hardai-pairwise-best.json
-npm run hardai:train -- --objective mse --seed 20261022 --output models/hardai-mse.json --best models/hardai-mse-best.json
+npm run hardai:train -- --fresh --evaluation-opponent easyplus --seed 20261017
 ```
 
-Compare the two metadata files' held-out top-1/top-3 agreement and Spearman correlation first. Use the EasyAI score only as a later confirmation because it is much noisier.
-
-Resume a previously saved candidate checkpoint:
+`--fresh` initializes new weights. It does not delete the best checkpoint. It overwrites the configured candidate output when training completes. If you want to keep the current candidate too, choose another output path:
 
 ```bash
-npm run hardai:train -- --resume --epochs 20
+npm run hardai:train -- --fresh --evaluation-opponent easyplus --seed 20261017 --output models/hardai-easyplus-seed-20261017.json --best models/hardai-easyplus-seed-20261017-best.json
 ```
 
-Evaluate an existing checkpoint without training:
+### Continue from the saved candidate
 
 ```bash
-npm run hardai:evaluate
+npm run hardai:train -- --resume --evaluation-opponent easyplus --seed 20261017
 ```
 
-### Reading evaluation outcomes
+`--resume` loads `models/hardai-movement-candidate.json` and continues fitting it on the labels generated for this run. It does **not** reload a previous run's label dataset. If the candidate checkpoint is missing or incompatible, the command stops with an error; it will not silently start from scratch.
 
-The evaluation JSON and terminal match lines distinguish four outcomes:
+The current labels use the EasyAI+ position evaluator. A candidate trained before this label change is not compatible for resuming; use `--fresh` for the next run. The trainer will reject `--resume` when its metadata shows a different label evaluator.
 
-- `win` / `loss`: a terminal game where one side was eliminated.
-- `draw`: a real terminal draw, where neither side remains.
-- `unfinished`: the configured round cap was reached before a terminal result. This is **not** counted as a draw and blocks promotion by default.
+### Which option should I use?
 
-The default maximum is 20 rounds, matching the betting battle limit. Use `--max-rounds` only when intentionally running a shorter smoke evaluation.
+| What you want | Command choice |
+|---|---|
+| New model, first run, or independent experiment | Use `--fresh` |
+| Continue training the existing candidate checkpoint | Use `--resume` |
+| Evaluate only; do not train | Use `npm run hardai:evaluate` |
+| Promote only after reviewing a passing run | Add `--promote` to the training command |
 
-The aggregate output includes an `againstEasy.bySide` section so P1 and P2 records can be compared directly, plus `fallbackByController` and `fallbackByReason`. A fallback means a controller returned no action or an illegal action while a legal move existed, and warrants investigation; each affected terminal match line also identifies the rejected attempted action. `forcedSkipCount` and `forcedSkipsByController` separately report turns with no legal movement action, such as when every living hero is Shackled; forced skips are expected game behavior and are not controller failures.
+You do not need `--fresh` when running `npm run hardai:quick` by itself: the trainer starts fresh by default. The examples include `--fresh` to make the intended behavior explicit. There is no automatic resume.
 
-### Promotion
+## Evaluation only
 
-Training never replaces the champion by default. After a candidate meets the EasyAI/champion gate, rerun with:
+Evaluate the current candidate against EasyAI+ without training:
 
 ```bash
-npm run hardai:train -- --promote
+npm run hardai:evaluate -- --model models/hardai-movement-candidate.json --evaluation-opponent easyplus
 ```
 
-If the gate passes, the candidate checkpoint is copied to `models/hardai-movement-champion.json`; otherwise the command exits with an error and leaves the champion unchanged.
-
-## Training Diagnostics
-
-Every training run now generates held-out labels from a different seed and reports:
-
-- **Top-1 agreement:** how often the scorer selects the shallow-search label's best legal move.
-- **Top-3 agreement:** how often the label's best move appears in the scorer's top three.
-- **Spearman correlation:** agreement between the full predicted and labeled action rankings.
-- **Shallow-search oracle vs EasyAI:** whether the labels themselves produce stronger decisions than EasyAI.
-
-These values diagnose the next action:
-
-| Observation | Meaning | Next step |
-|---|---|---|
-| Training loss falls, but held-out agreement stays low | The scorer is overfitting or features/model capacity are insufficient. | Improve features/model selection; do not merely add epochs. |
-| Oracle loses to EasyAI | The shallow-search labels are weak. | Improve label search depth, response policy, or evaluator before training again. |
-| Oracle wins, scorer loses | Labels are useful but the scorer is not reproducing them. | Improve encoder, training data, architecture, or checkpoint selection. |
-| Held-out agreement and EasyAI score both improve | Training is productive. | Continue from the best checkpoint with a new seed and more scenarios. |
-
-Each run writes disagreement examples to the candidate metadata file. The candidate checkpoint is always saved, but `models/hardai-movement-best.json` is replaced only when it improves the recorded EasyAI score, held-out top-1 agreement, or held-out ranking correlation.
-
-Validate the diagnostic components with:
+For a comparison against regular EasyAI instead:
 
 ```bash
+npm run hardai:evaluate -- --model models/hardai-movement-candidate.json --evaluation-opponent easy
+```
+
+Training also accepts `--evaluation-opponent easy` if you specifically want the regular EasyAI benchmark. If omitted, the training and evaluation scripts use EasyAI+.
+
+## Promotion
+
+Training never promotes a model unless `--promote` is explicitly supplied. The default gate checks the selected baseline and, if a champion exists, the current champion. The EasyAI+ baseline gate requires:
+
+- At least 40 completed baseline games, balanced across P1 and P2.
+- At least a 55% win rate and a 50% Wilson lower confidence bound.
+- No unfinished games.
+- At least a 50% win rate against the existing champion, when present.
+- The candidate must also improve the recorded best-candidate quality.
+
+After reviewing a run, continue from the candidate and request promotion with:
+
+```bash
+npm run hardai:train -- --resume --promote --evaluation-opponent easyplus --seed 20261018
+```
+
+The champion is copied to `models/hardai-movement-champion.json` only if all promotion and best-candidate checks pass. Otherwise, the command reports failure and leaves the champion unchanged.
+
+## Useful commands
+
+Use the full training command with overrides when you want a larger run:
+
+```bash
+npm run hardai:train -- --fresh --evaluation-opponent easyplus --random-count 100 --max-responses 6 --epochs 30 --evaluation-random-count 40 --seed 20261020
+```
+
+Compare the pairwise objective with the legacy absolute-score regression objective using the same seed and separate output files:
+
+```bash
+npm run hardai:train -- --fresh --evaluation-opponent easyplus --objective pairwise --seed 20261022 --output models/hardai-pairwise.json --best models/hardai-pairwise-best.json
+npm run hardai:train -- --fresh --evaluation-opponent easyplus --objective mse --seed 20261022 --output models/hardai-mse.json --best models/hardai-mse-best.json
+```
+
+The supported training options are:
+
+| Option | Default | Purpose |
+|---|---:|---|
+| `--fresh` | off | Explicitly initialize new model weights. |
+| `--resume` | off | Resume from the selected candidate checkpoint; errors if it is missing. |
+| `--promote` | off | Copy the candidate to the champion path only if all gates pass. |
+| `--evaluation-opponent easyplus\|easy` | `easyplus` | Select the evaluation and promotion baseline. |
+| `--random-count N` | `50` | Random training scenarios per round. |
+| `--rounds N` | `1` | Training rounds; each generates new random scenarios and trains `--epochs` epochs. |
+| `--fixture-count N` | `0` | Number of tactical fixtures (maximum 5). |
+| `--max-responses N` | `4` | Immediate responses evaluated for each action label. |
+| `--epochs N` | `20` | Training epochs per round. |
+| `--batch-size N` | `32` | Training batch size. |
+| `--objective pairwise\|mse` | `pairwise` | Ranking loss or legacy score regression. |
+| `--evaluation-random-count N` | `20` | Balanced random scenarios used in baseline evaluation. |
+| `--evaluation-mode hybrid\|net` | `hybrid` | Evaluate the model shortlist plus search, or the model alone. |
+| `--shortlist-size N` | `4` | Moves the model passes to the search in hybrid mode. |
+| `--min-balanced-rounds N` | `3` | Minimum EasyAI+ mirror-match length for an evaluation scenario. |
+| `--min-best-games N` | `40` | Games required before a candidate can become the best checkpoint. |
+| `--min-best-score-rate X` | `0.5` | Baseline score rate required to become the best checkpoint. |
+| `--max-rounds N` | `20` | Round cap per evaluation match. |
+| `--seed N` | random | Reproducible training and scenario seed; a new one is chosen each run if omitted. |
+| `--output PATH` | `models/hardai-movement-candidate.json` | Candidate checkpoint path. |
+| `--best PATH` | `models/hardai-movement-best.json` | Best-candidate checkpoint path. |
+| `--champion PATH` | `models/hardai-movement-champion.json` | Champion checkpoint path. |
+
+`--fresh` and `--resume` are mutually exclusive. When `--resume` is omitted, the trainer starts fresh; it never resumes implicitly.
+
+## Reading the results
+
+The terminal output reports per-match outcomes, candidate side, round count, fallback moves, forced skips, and baseline results broken down by P1/P2. The JSON metadata beside the candidate also includes:
+
+- Held-out top-1 and top-3 agreement with the shallow-search labels.
+- Spearman correlation between predicted and labeled action rankings.
+- A shallow-search oracle benchmark against EasyAI+.
+- Evaluation and promotion-gate details for the selected baseline.
+
+Interpretation:
+
+| Result | What to check next |
+|---|---|
+| Many fallbacks | Investigate action translation or legal-action handling before comparing win rates. |
+| P1 and P2 results differ sharply | Inspect board mirroring and side-specific behavior using `npm run hardai:monitor`. |
+| Oracle loses to EasyAI+ | Improve the labels/search/evaluator before increasing training time. |
+| Oracle wins but the scorer loses | Improve features, training data, or scorer fitting. |
+| Held-out ranking improves but EasyAI+ results do not | The scorer is matching labels better, but those labels may not improve play against EasyAI+. |
+
+`unfinished` means the configured round cap was reached. It is not a draw and blocks promotion by default. Forced skips, such as when all eligible heroes are movement-locked, are expected game behavior; fallbacks from an invalid or missing controller action are not.
+
+To inspect individual movement choices and board snapshots, run:
+
+```bash
+npm run hardai:monitor -- --games 4 --seed 20261016 --p1 easyplus --p2 easy
+```
+
+## Checkpoints and feature versions
+
+Candidate checkpoints record the candidate feature version. If the feature encoder changes, an old checkpoint cannot be resumed safely. Start with `--fresh` (and use a new `--output` path if you want to retain the old file). The trainer reports incompatible checkpoints rather than silently loading them.
+
+The current scorer and its checkpoints are Node-based JSON files under `models/`. They are separate from the older browser IndexedDB neural model.
+
+## Focused tests
+
+Run these after changing training or evaluation code:
+
+```bash
+node ./test-training-environment.js
+node ./test-movement-candidate-scorer.js
+node ./test-movement-label-generator.js
+node ./test-champion-evaluation.js
 node ./test-training-diagnostics.js
 ```
 
-## How to Train
+## Main implementation files
 
-### Option 1: Training UI (Recommended)
-
-1. Start dev server:
-   ```bash
-   npm run dev
-   ```
-
-2. Open in browser:
-   ```
-   http://localhost:5173/train.html
-   ```
-
-3. Configure training:
-   - **Iterations**: Number of self-play → training cycles
-   - **Games per Iteration**: How many games to generate
-   - **MCTS Simulations**: Search depth per move (higher = smarter but slower)
-   - **Training Epochs**: How many times to train on data
-
-4. Click "⚡ Quick Test" for a fast test run (3 iterations)
-   - Or "▶️ Start Training" for full custom training
-
-### Option 2: Programmatic Training
-
-```javascript
-import { runTrainingLoop } from './src/ai/training/trainer.js';
-
-// Quick test (fast)
-await runTrainingLoop({
-  iterations: 3,
-  gamesPerIteration: 2,
-  mctsSimulations: 20,
-  trainEpochs: 3
-});
-
-// Production training (slow but high quality)
-await runTrainingLoop({
-  iterations: 20,
-  gamesPerIteration: 10,
-  mctsSimulations: 50,
-  trainEpochs: 10
-});
-```
-
-## Training Process
-
-Each iteration:
-
-1. **Self-Play Phase**
-   - Generate N games (AI vs AI)
-   - Each move: Run MCTS with M simulations
-   - Store training examples: (state, MCTS policy, game outcome)
-
-2. **Training Phase**
-   - Train neural network on all collected examples
-   - Policy head learns to predict MCTS move distribution
-   - Value head learns to predict game outcome
-
-3. **Save Phase**
-   - Save model to IndexedDB every 2 iterations
-   - Save training examples to localStorage
-
-## Using the Trained AI
-
-Once trained, the AI can be used in the game:
-
-```javascript
-import { initializeNeuralAI, makeMovementDecision } from './src/ai/neuralAI.js';
-
-// Initialize (loads trained model)
-await initializeNeuralAI();
-
-// Make decisions
-const decision = await makeMovementDecision(
-  p2Board, 
-  p2Reserve, 
-  movement, 
-  p1Board, 
-  p1Reserve
-);
-```
-
-## Performance Expectations
-
-### Training Time (approximate)
-
-With default settings (MCTS simulations = 30):
-- **Quick Test** (3 iterations, 2 games): ~10-15 minutes
-- **Full Training** (20 iterations, 10 games): ~2-4 hours
-
-Time per game depends on:
-- MCTS simulations (more = slower but better)
-- Game length (longer games = more moves)
-- Hardware (GPU acceleration helps)
-
-### Quality Progression
-
-- **0 iterations**: Random moves (baseline)
-- **5 iterations**: Basic patterns emerge
-- **10 iterations**: Decent strategic play
-- **20+ iterations**: Strong tactical awareness
-
-## Tips for Better Training
-
-1. **Start small**: Run quick test first to verify setup
-2. **Monitor logs**: Watch for errors or unusual patterns
-3. **Iterative training**: Train for 5 iterations, test, then continue
-4. **Balance MCTS sims**: 25-50 is good balance of speed/quality
-5. **Add new heroes**: Retrain whenever you add heroes to the game
-
-## Troubleshooting
-
-**Training is very slow**
-- Reduce MCTS simulations (try 20)
-- Reduce games per iteration
-- Each MCTS simulation runs full battle engine
-
-**Model not improving**
-- Need more training data (more games)
-- Increase MCTS simulations for better data quality
-- Check that battles are ending (not infinite loops)
-
-**Out of memory**
-- Training data capped at 10,000 examples
-- TensorFlow.js will dispose tensors automatically
-- Refresh page if memory issues persist
-
-**Model not loading in game**
-- Verify model saved: Check browser DevTools → Application → IndexedDB
-- Reinitialize: Call `initializeNeuralAI()` again
-
-## File Structure
-
-```
-src/ai/
-├── neuralAI.js              # Game integration (use this in DraftBoard, etc.)
-├── training/
-│   ├── environment.js       # Production-rule movement and round adapter
-│   ├── scenarioCorpus.js    # Tactical fixtures and seeded movement states
-│   ├── labelGenerator.js    # Bounded exact-round labels for every legal movement
-│   ├── candidateFeatures.js # Runtime pre/post-action feature encoder
-│   ├── candidateScorer.js   # Supervised legal-candidate model and inference
-│   ├── championEvaluation.js # EasyAI/champion evaluation and promotion gates
-│   ├── nodeModelCheckpoint.js # Node-only portable scorer checkpoint support
-│   ├── trainingDiagnostics.js # Held-out agreement, oracle benchmark, checkpoint quality
-│   ├── stateEncoder.js      # State → tensor conversion
-│   ├── model.js             # Neural network architecture
-│   ├── mcts.js              # Monte Carlo Tree Search
-│   ├── selfPlay.js          # Self-play game generator
-│   ├── trainer.js           # Training loop
-│   └── test-setup.js        # Verification script
-└── models/                  # (Reserved for future file-based models)
-
-train.html                   # Training UI
-```
-
-## Next Steps
-
-- [ ] Add "Neural" difficulty option to game
-- [ ] Implement model evaluation (new vs old)
-- [ ] Add training progress visualization
-- [ ] Export models for sharing
-- [ ] Train specialized models per hero pool
-
-## Advanced: Custom Training
-
-Customize training behavior:
-
-```javascript
-import { createModel, compileModel } from './src/ai/training/model.js';
-
-// Create bigger model
-const model = createModel({
-  hiddenSize: 512,        // More neurons
-  numResidualBlocks: 8    // Deeper network
-});
-
-compileModel(model, 0.0005);  // Lower learning rate
-```
-
-## Credits
-
-Based on AlphaZero architecture (Silver et al., 2017):
-- Neural network guides Monte Carlo Tree Search
-- Self-play generates training data
-- Policy and value heads learn from MCTS results
+- `scripts/train-hardai-movement.mjs` - training CLI, checkpoint handling, evaluation, and optional promotion.
+- `scripts/evaluate-hardai-movement.mjs` - evaluation-only CLI.
+- `src/ai/training/environment.js` - legal movement and production battle-round transitions.
+- `src/ai/training/scenarioCorpus.js` - tactical fixtures and seeded random states.
+- `src/ai/training/labelGenerator.js` - shallow-search labels for legal actions.
+- `src/ai/training/candidateFeatures.js` - board-aware feature encoding.
+- `src/ai/training/candidateScorer.js` - trainable movement scorer.
+- `src/ai/training/easyAIPlusTeacher.js` - EasyAI+ movement decision logic.
+- `src/ai/training/championEvaluation.js` - side-balanced baseline/champion matches and promotion gates.
+- `src/ai/training/trainingDiagnostics.js` - held-out label ranking and oracle diagnostics.

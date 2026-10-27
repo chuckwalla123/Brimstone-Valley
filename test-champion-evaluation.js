@@ -35,35 +35,45 @@ const second = await evaluateCandidate({
 });
 
 assert.deepEqual(first, second, 'Seeded evaluation must be deterministic');
-assert.equal(first.againstEasy.games, 2, 'Evaluation must play both candidate colors');
-assert.deepEqual(evaluationProgress, [{ completed: 1, total: 1, benchmark: 'easyai' }]);
+assert.equal(first.baseline, 'easyplus');
+assert.equal(first.againstEasyPlus.games, 2, 'EasyAI+ evaluation must play both candidate colors');
+assert.deepEqual(evaluationProgress, [{ completed: 1, total: 1, benchmark: 'easyaiplus' }]);
 assert.deepEqual(completedMatches.map((match) => match.candidateSide), ['p1', 'p2']);
 assert(completedMatches.every((match) => ['win', 'draw', 'loss', 'unfinished'].includes(match.candidateResult)));
 assert.equal(first.againstChampion, null, 'MediumAI is not part of the evaluation benchmark');
-assert.equal(first.againstEasy.wins + first.againstEasy.draws + first.againstEasy.losses + first.againstEasy.unfinished, 2);
-assert.equal(first.againstEasy.bySide.p1.games, 1);
-assert.equal(first.againstEasy.bySide.p2.games, 1);
+assert.equal(first.againstEasyPlus.wins + first.againstEasyPlus.draws + first.againstEasyPlus.losses + first.againstEasyPlus.unfinished, 2);
+assert.equal(first.againstEasyPlus.bySide.p1.games, 1);
+assert.equal(first.againstEasyPlus.bySide.p2.games, 1);
 assert.equal(
-  first.againstEasy.bySide.p1.wins + first.againstEasy.bySide.p1.draws + first.againstEasy.bySide.p1.losses + first.againstEasy.bySide.p1.unfinished,
+  first.againstEasyPlus.bySide.p1.wins + first.againstEasyPlus.bySide.p1.draws + first.againstEasyPlus.bySide.p1.losses + first.againstEasyPlus.bySide.p1.unfinished,
   1,
 );
 assert.equal(
-  first.againstEasy.bySide.p2.wins + first.againstEasy.bySide.p2.draws + first.againstEasy.bySide.p2.losses + first.againstEasy.bySide.p2.unfinished,
+  first.againstEasyPlus.bySide.p2.wins + first.againstEasyPlus.bySide.p2.draws + first.againstEasyPlus.bySide.p2.losses + first.againstEasyPlus.bySide.p2.unfinished,
   1,
 );
 assert.equal(
-  first.againstEasy.bySide.p1.fallbackCount + first.againstEasy.bySide.p2.fallbackCount,
-  first.againstEasy.fallbackCount,
+  first.againstEasyPlus.bySide.p1.fallbackCount + first.againstEasyPlus.bySide.p2.fallbackCount,
+  first.againstEasyPlus.fallbackCount,
 );
 assert.equal(
-  first.againstEasy.bySide.p1.forcedSkipCount + first.againstEasy.bySide.p2.forcedSkipCount,
-  first.againstEasy.forcedSkipCount,
+  first.againstEasyPlus.bySide.p1.forcedSkipCount + first.againstEasyPlus.bySide.p2.forcedSkipCount,
+  first.againstEasyPlus.forcedSkipCount,
 );
 assert(wilsonLowerBound(5, 10) >= 0 && wilsonLowerBound(5, 10) <= 1);
 
 const failingGate = evaluatePromotionGate(first, { minGames: 3 });
 assert.equal(failingGate.passed, false);
-assert.equal(failingGate.checks.enoughEasyGames, false);
+assert.equal(failingGate.checks.enoughBaselineGames, false);
+
+const easyEvaluation = await evaluateCandidate({
+  candidateModel: model,
+  scenarios: [scenario],
+  evaluationOpponent: 'easy',
+  maxRounds: 1,
+  seed: 41,
+});
+assert.equal(easyEvaluation.againstEasy.games, 2, 'EasyAI must remain an available evaluation baseline');
 
 let promoted = false;
 const result = await evaluateAndPromoteCandidate({

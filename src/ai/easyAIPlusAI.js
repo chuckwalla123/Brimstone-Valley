@@ -14,7 +14,7 @@ export const makePickDecision = (availableHeroes, boardState) =>
 	easyAI.makePickDecision(availableHeroes, boardState);
 
 export const makeMovementDecision = (p2Board, p2ReserveBoard, movement, p1Board = [], p1ReserveBoard = []) =>
-	makeEasyAIPlusMovementDecision(p2Board, p2ReserveBoard, p1Board, p1ReserveBoard)
+	makeEasyAIPlusMovementDecision(p2Board, p2ReserveBoard, p1Board, p1ReserveBoard, movement)
 	|| mediumAI.makeMovementDecision(p2Board, p2ReserveBoard, movement, p1Board, p1ReserveBoard);
 
 export const getThinkingDelay = () => 450;

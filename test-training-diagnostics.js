@@ -36,6 +36,7 @@ const oracle = await evaluateShallowSearchOracle([scenario], {
   onProgress: (progress) => oracleProgress.push(progress),
 });
 assert.equal(oracle.games, 2, 'Oracle benchmark must play both colors');
+assert.equal(oracle.opponent, 'easyplus');
 assert.equal(oracle.wins + oracle.draws + oracle.losses + oracle.unfinished, 2);
 assert.deepEqual(oracleProgress, [{ completed: 1, total: 1 }]);
 

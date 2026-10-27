@@ -11,7 +11,7 @@ function countdownText(deadlineTs, nowMs = Date.now()) {
   return `${mm}:${ss}`;
 }
 
-function HeroTile({ tile }) {
+function HeroTile({ tile, selected = false, onSelect = null }) {
   const tileWidth = 82;
   const tileHeight = 112;
   const portraitHeight = 64;
@@ -22,7 +22,20 @@ function HeroTile({ tile }) {
   }
 
   return (
-    <div style={{ width: tileWidth, minHeight: tileHeight, borderRadius: 8, border: '1px solid rgba(255,255,255,0.28)', background: 'rgba(20,20,28,0.8)', overflow: 'hidden' }}>
+    <div
+      onClick={onSelect ? () => onSelect(tile.hero._bettingUid) : undefined}
+      style={{
+        width: tileWidth,
+        minHeight: tileHeight,
+        borderRadius: 8,
+        border: selected ? '2px solid #ff4fd8' : '1px solid rgba(255,255,255,0.28)',
+        background: 'rgba(20,20,28,0.8)',
+        overflow: 'hidden',
+        cursor: onSelect ? 'pointer' : 'default',
+        boxShadow: selected ? '0 0 14px 4px rgba(255, 79, 216, 0.85)' : 'none',
+        transition: 'box-shadow 0.15s, border-color 0.15s'
+      }}
+    >
       <div style={{ height: portraitHeight, background: 'rgba(0,0,0,0.35)' }}>
         <img
           src={heroImage}
@@ -38,15 +51,15 @@ function HeroTile({ tile }) {
   );
 }
 
-function TeamBoard({ teamName, main, reserve }) {
+function TeamBoard({ teamName, main, reserve, selectedUid = null, onSelectHero = null }) {
   return (
     <div style={{ display: 'grid', gap: 8, justifyItems: 'center', maxWidth: '100%' }}>
       <div style={{ fontWeight: 800, color: '#fff', fontSize: 16 }}>{teamName}</div>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 82px)', gap: 8 }}>
-        {(main || []).map((tile, idx) => <HeroTile key={`m-${idx}`} tile={tile} />)}
+        {(main || []).map((tile, idx) => <HeroTile key={`m-${idx}`} tile={tile} selected={!!selectedUid && tile?.hero?._bettingUid === selectedUid} onSelect={onSelectHero} />)}
       </div>
       <div style={{ display: 'flex', gap: 8 }}>
-        {(reserve || []).map((tile, idx) => <HeroTile key={`r-${idx}`} tile={tile} />)}
+        {(reserve || []).map((tile, idx) => <HeroTile key={`r-${idx}`} tile={tile} selected={!!selectedUid && tile?.hero?._bettingUid === selectedUid} onSelect={onSelectHero} />)}
       </div>
     </div>
   );
@@ -107,6 +120,7 @@ export default function BettingMode({ socket, onExit }) {
   const [primaryAmount, setPrimaryAmount] = useState(1);
   const [sideAmount, setSideAmount] = useState('0');
   const [sidePrediction, setSidePrediction] = useState('');
+  const [carryPick, setCarryPick] = useState(null);
   const [localBetSubmitted, setLocalBetSubmitted] = useState(false);
   const [battleVisualCompleteAcked, setBattleVisualCompleteAcked] = useState(false);
   const [nowMs, setNowMs] = useState(Date.now());
@@ -289,7 +303,8 @@ export default function BettingMode({ socket, onExit }) {
   useEffect(() => {
     if (lobbyState?.phase !== 'betting') return;
     const sideBet = lobbyState?.battle?.sideBet;
-    setPrimaryAmount((prev) => Math.max(1, Number(prev || 1)));
+    setCarryPick(null);
+    setPrimaryAmount((prev) => Math.max(0, Number(prev || 0)));
     setSideAmount((prev) => {
       if (prev === '') return '';
       return String(Math.max(0, Number(prev || 0)));
@@ -358,7 +373,6 @@ export default function BettingMode({ socket, onExit }) {
   const battle = lobbyState?.battle || null;
   const sideBet = battle?.sideBet || null;
   const hasSubmittedBet = lobbyState?.phase === 'betting' && (localBetSubmitted || !!lobbyState?.me?.hasSubmittedBet);
-  const canUseDesperationBet = lobbyState?.phase === 'betting' && !!lobbyState?.me?.canUseDesperationBet;
 
   const isHost = useMemo(() => {
     if (!lobbyState || !me) return false;
@@ -457,8 +471,8 @@ export default function BettingMode({ socket, onExit }) {
   const placeBet = () => {
     if (!socket || !lobbyState || lobbyState.phase !== 'betting') return;
     if (hasSubmittedBet) return;
-    const normalizedPrimaryAmount = canUseDesperationBet ? 1 : Number(primaryAmount || 0);
-    const normalizedSideAmount = canUseDesperationBet ? 0 : Number(sideAmount === '' ? 0 : sideAmount);
+    const normalizedPrimaryAmount = Math.max(0, Number(primaryAmount || 0));
+    const normalizedSideAmount = Number(sideAmount === '' ? 0 : sideAmount);
     const normalizedSidePrediction = sideBet?.predictionType === 'number'
       ? (() => {
           const numeric = Number(sidePrediction);
@@ -471,7 +485,8 @@ export default function BettingMode({ socket, onExit }) {
       primaryPick,
       primaryAmount: normalizedPrimaryAmount,
       sideAmount: normalizedSideAmount,
-      sidePrediction: normalizedSidePrediction
+      sidePrediction: normalizedSidePrediction,
+      carryPick
     });
   };
 
@@ -653,8 +668,8 @@ export default function BettingMode({ socket, onExit }) {
                     </div>
                   ) : (
                     <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', alignItems: 'start', justifyItems: 'center', width: '100%' }}>
-                      <TeamBoard teamName={battle.bots.p1} main={battle.p1Main} reserve={battle.p1Reserve} />
-                      <TeamBoard teamName={battle.bots.p2} main={battle.p2Main} reserve={battle.p2Reserve} />
+                      <TeamBoard teamName={battle.bots.p1} main={battle.p1Main} reserve={battle.p1Reserve} selectedUid={carryPick} onSelectHero={lobbyState.phase === 'betting' && !hasSubmittedBet ? (uid) => setCarryPick(uid || null) : null} />
+                      <TeamBoard teamName={battle.bots.p2} main={battle.p2Main} reserve={battle.p2Reserve} selectedUid={carryPick} onSelectHero={lobbyState.phase === 'betting' && !hasSubmittedBet ? (uid) => setCarryPick(uid || null) : null} />
                     </div>
                   )}
                 </div>
@@ -662,10 +677,10 @@ export default function BettingMode({ socket, onExit }) {
 
               {lobbyState.phase === 'betting' && sideBet && (
                 <div style={{ marginTop: 12, borderTop: '1px solid rgba(255,255,255,0.18)', paddingTop: 12, display: 'grid', gap: 10 }}>
-                  <div style={{ fontWeight: 900 }}>Primary Bet ({canUseDesperationBet ? 'desperation bet: 1 coin only' : 'minimum 1 coin'})</div>
-                  {canUseDesperationBet && (
+                  <div style={{ fontWeight: 900 }}>Primary Bet (minimum 1 coin total across main + side)</div>
+                  {Number(me?.coins || 0) <= 1 && (
                     <div style={{ fontSize: 13, color: '#ffd166' }}>
-                      You are out of coins. You may place one desperation bet on the main winner only. If you win, you come back with 1 coin.
+                      Running low? If you hit 0 coins you are given 1 coin back each round. Spend it on the main bet or the side bet.
                     </div>
                   )}
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
@@ -675,12 +690,11 @@ export default function BettingMode({ socket, onExit }) {
                       <option value="p2">{battle.bots.p2}</option>
                     </select>
                     <label>Amount</label>
-                    <input type="number" min={1} value={canUseDesperationBet ? 1 : primaryAmount} disabled={canUseDesperationBet} onChange={(e) => setPrimaryAmount(e.target.value)} style={{ width: 90, padding: 8, borderRadius: 8, opacity: canUseDesperationBet ? 0.7 : 1 }} />
+                    <input type="number" min={0} value={primaryAmount} onChange={(e) => setPrimaryAmount(e.target.value)} style={{ width: 90, padding: 8, borderRadius: 8 }} />
                   </div>
 
                   <div style={{ fontWeight: 900, marginTop: 4 }}>Side Bet ({sideBet.title})</div>
                   <div style={{ fontSize: 13, color: '#c8cff3' }}>{sideBet.prompt} | Max 5 coins | Pays {sideBet.multiplier}x</div>
-                  {canUseDesperationBet && <div style={{ fontSize: 12, color: '#e8d9b8' }}>Side bets are disabled while using a desperation bet.</div>}
                   <div style={{ fontSize: 12, color: '#e8d9b8' }}>{getSideBetWinConditionText(sideBet)}</div>
                   <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
                     <label>Side Amount</label>
@@ -688,8 +702,7 @@ export default function BettingMode({ socket, onExit }) {
                       type="number"
                       min={0}
                       max={5}
-                      value={canUseDesperationBet ? '0' : sideAmount}
-                      disabled={canUseDesperationBet}
+                      value={sideAmount}
                       onChange={(e) => {
                         const raw = e.target.value;
                         if (raw === '') {
@@ -699,13 +712,13 @@ export default function BettingMode({ socket, onExit }) {
                         const next = Math.max(0, Math.min(5, Number(raw)));
                         setSideAmount(String(next));
                       }}
-                      style={{ width: 90, padding: 8, borderRadius: 8, opacity: canUseDesperationBet ? 0.7 : 1 }}
+                      style={{ width: 90, padding: 8, borderRadius: 8 }}
                     />
 
                     {sideBet.predictionType === 'hero' && (
                       <>
                         <label>Pick Hero</label>
-                        <select value={sidePrediction} disabled={canUseDesperationBet} onChange={(e) => setSidePrediction(e.target.value)} style={{ minWidth: 220, padding: 8, borderRadius: 8, opacity: canUseDesperationBet ? 0.7 : 1 }}>
+                        <select value={sidePrediction} onChange={(e) => setSidePrediction(e.target.value)} style={{ minWidth: 220, padding: 8, borderRadius: 8 }}>
                           {(sideBet.heroOptions || []).map((option) => (
                             <option key={option.uid} value={option.uid}>{option.name} ({option.team})</option>
                           ))}
@@ -716,9 +729,15 @@ export default function BettingMode({ socket, onExit }) {
                     {sideBet.predictionType === 'number' && (
                       <>
                         <label>Prediction</label>
-                        <input value={sidePrediction} disabled={canUseDesperationBet} onChange={(e) => setSidePrediction(e.target.value)} type="number" min={0} style={{ width: 120, padding: 8, borderRadius: 8, opacity: canUseDesperationBet ? 0.7 : 1 }} />
+                        <input value={sidePrediction} onChange={(e) => setSidePrediction(e.target.value)} type="number" min={0} style={{ width: 120, padding: 8, borderRadius: 8 }} />
                       </>
                     )}
+                  </div>
+
+                  <div style={{ fontWeight: 900, marginTop: 4, color: '#ff8de6' }}>Carry Pick (free bonus bet)</div>
+                  <div style={{ fontSize: 13, color: '#c8cff3' }}>
+                    Click a champion above to pick your carry (glows pink). If they finish with the highest damage + healing of all champions, you win +5 bonus coins.
+                    {' '}Selected: <b style={{ color: '#ff8de6' }}>{[...(battle.p1Main || []), ...(battle.p1Reserve || []), ...(battle.p2Main || []), ...(battle.p2Reserve || [])].find((t) => t?.hero?._bettingUid === carryPick)?.hero?.name || 'None'}</b>
                   </div>
 
                   <button
@@ -754,6 +773,9 @@ export default function BettingMode({ socket, onExit }) {
                   <div style={{ fontSize: 13, marginBottom: 10, color: '#d6dcff' }}>
                     Side Bet Correct Answer: {formatSideBetCorrectAnswer(lobbyState.roundSummary)}
                   </div>
+                  <div style={{ fontSize: 13, marginBottom: 10, color: '#d6dcff' }}>
+                    Carry (highest damage + healing): {(lobbyState.roundSummary.sideBetOutcome?.carryWinnerHeroes || []).map((uid) => lobbyState.roundSummary.sideBetOutcome?.heroNameByUid?.[uid] || uid).join(', ') || 'None'}
+                  </div>
                   {lobbyState.roundSummary.debug && (
                     <div style={{ marginBottom: 10, padding: '8px 10px', borderRadius: 8, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.14)', fontSize: 12, color: '#c8cff3' }}>
                       Debug: source={String(lobbyState.roundSummary.debug.outcomeSource || 'unknown')} | simMs={Number(lobbyState.roundSummary.debug.simulationElapsedMs || 0)} | simTimeout={String(!!lobbyState.roundSummary.debug.simulationTimedOut)} | replaySteps={Number(lobbyState.roundSummary.debug.replaySteps || 0)} | settleMs={Number(lobbyState.roundSummary.debug.settleElapsedMs || 0)}
@@ -761,7 +783,7 @@ export default function BettingMode({ socket, onExit }) {
                   )}
                   <div style={{ maxHeight: 220, overflow: 'auto', display: 'grid', gap: 6 }}>
                     {(lobbyState.roundSummary.rows || []).map((row) => (
-                      <div key={row.playerId} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr', gap: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '6px 8px', fontSize: 13, alignItems: 'center' }}>
+                      <div key={row.playerId} style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr 1fr 1fr 1fr', gap: 6, background: 'rgba(255,255,255,0.08)', borderRadius: 8, padding: '6px 8px', fontSize: 13, alignItems: 'center' }}>
                         <span>{row.username}</span>
                         <span>{row.coinsBefore} {'->'} {row.coinsAfter}</span>
                         <span>Main: {row.wonPrimary ? '+' : '-'}{Number(row.primaryAmount || 0)}</span>
@@ -770,6 +792,7 @@ export default function BettingMode({ socket, onExit }) {
                             ? `+${Math.max(0, Number(row.sideAmount || 0) * (Number(lobbyState.roundSummary.sideBet?.multiplier || 0) - 1))}`
                             : `-${Number(row.sideAmount || 0)}`}
                         </span>
+                        <span style={{ color: row.wonCarry ? '#ff8de6' : undefined }}>Carry: {row.wonCarry ? `+${Number(row.carryBonus || 0)}` : (row.carryPick ? 'miss' : '-')}</span>
                       </div>
                     ))}
                   </div>

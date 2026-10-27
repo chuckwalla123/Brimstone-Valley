@@ -1,14 +1,16 @@
-import { evaluateHeroPoints } from '../easyAI.js';
+import { evaluateEasyAIPlusPosition } from './easyAIPlusTeacher.js';
 import {
   advanceToNextDecision,
   applyMovementAction,
   createTrainingState,
   getCurrentMover,
+  getMovementSequence,
   isTerminal,
   listLegalMovementActions,
 } from './environment.js';
 
 const TERMINAL_SCORE = 100000;
+export const MOVEMENT_LABEL_EVALUATOR = 'easyplus-position-v1';
 
 const compareActions = (left, right) => {
   const leftKey = `${left.sourceId || ''}:${left.destinationId || ''}:${left.type || ''}`;
@@ -36,27 +38,21 @@ const withSeededRandom = async (seed, callback) => {
   }
 };
 
-const scoreSide = (state, side) => {
-  const ownMain = side === 'p1' ? state.p1Main : state.p2Main;
-  const ownReserve = side === 'p1' ? state.p1Reserve : state.p2Reserve;
-  const enemyMain = side === 'p1' ? state.p2Main : state.p1Main;
-  const enemyReserve = side === 'p1' ? state.p2Reserve : state.p1Reserve;
-  const isP2 = side === 'p2';
+const mirrorMainBoard = (board) => Array.from({ length: 9 }, (_, index) => board[8 - index] || null);
 
-  return [...ownMain, ...ownReserve].reduce((score, tile, index) => {
-    if (!tile?.hero || tile._dead) return score;
-    const tileIndex = index < ownMain.length ? index : -1 - (index - ownMain.length);
-    return score + evaluateHeroPoints(
-      tile.hero,
-      tileIndex,
-      isP2,
-      enemyMain,
-      enemyReserve,
-      ownMain,
-      ownReserve,
-      tile,
-    );
-  }, 0);
+const evaluateEasyAIPlusPositionForSide = (state, side) => {
+  const isP2 = side === 'p2';
+  const ownMain = isP2 ? state.p2Main : mirrorMainBoard(state.p1Main);
+  const ownReserve = isP2 ? state.p2Reserve : state.p1Reserve;
+  const enemyMain = isP2 ? state.p1Main : mirrorMainBoard(state.p2Main);
+  const enemyReserve = isP2 ? state.p1Reserve : state.p2Reserve;
+  const sequence = getMovementSequence(state.priorityPlayer);
+  const opponentHasLastMove = sequence[sequence.length - 1] !== side
+    && state.movementIndex < sequence.length - 1;
+
+  return evaluateEasyAIPlusPosition(ownMain, ownReserve, enemyMain, enemyReserve, {
+    opponentHasLastMove,
+  }).totalScore;
 };
 
 export const evaluateMovementState = (state, perspectiveSide) => {
@@ -71,7 +67,7 @@ export const evaluateMovementState = (state, perspectiveSide) => {
     return ownAlive ? TERMINAL_SCORE : -TERMINAL_SCORE;
   }
 
-  return scoreSide(state, perspectiveSide) - scoreSide(state, opponent);
+  return evaluateEasyAIPlusPositionForSide(state, perspectiveSide);
 };
 
 const rankActions = (state, perspectiveSide, moverSide) => {
@@ -159,12 +155,17 @@ const simulateCandidate = async (state, action, perspectiveSide, maxResponses, s
 export const generateMovementLabels = async (scenario, {
   maxResponses = 8,
   seed = 1,
+  actions: restrictedActions = null,
 } = {}) => {
   const state = createTrainingState(scenario.state || scenario);
   const perspectiveSide = getCurrentMover(state);
   if (!perspectiveSide) throw new Error('Movement scenario has no active mover');
 
-  const actions = listLegalMovementActions(state).sort(compareActions);
+  // An optional shortlist limits the search to those legal actions (used by the hybrid selector).
+  const legalActions = listLegalMovementActions(state);
+  const allowedKeys = restrictedActions ? new Set(restrictedActions.map(actionKey)) : null;
+  const actions = (allowedKeys ? legalActions.filter((action) => allowedKeys.has(actionKey(action))) : legalActions)
+    .sort(compareActions);
   if (!actions.length) throw new Error(`Movement scenario ${scenario.id || 'unnamed'} has no legal actions`);
 
   const labels = [];
@@ -188,6 +189,7 @@ export const generateMovementLabels = async (scenario, {
 
   return {
     scenarioId: scenario.id || null,
+    evaluator: MOVEMENT_LABEL_EVALUATOR,
     perspectiveSide,
     state,
     labels,

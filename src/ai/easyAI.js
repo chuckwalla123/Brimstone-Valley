@@ -13,6 +13,7 @@ import { getEffectByName } from '../effects.js';
 import { HEROES } from '../heroes.js';
 import { indexToRow, indexToColumn, resolveTargets, columnIndicesForBoard } from '../targeting.js';
 import { EFFECT_EVALUATION_OVERRIDES } from './effectEvaluationOverrides.js';
+import { evaluateEffectValue } from './effectValue.js';
 
 const EASY_AI_DEBUG = (() => {
   try {
@@ -177,10 +178,13 @@ const getEffectScore = (effect) => {
   return score > 0 ? score : 1;
 };
 
+const getAdvancedEffectScore = (effect) => {
+  return evaluateEffectValue(effect);
+};
+
 const getRemovedEffectValue = (effect) => {
   const resolved = typeof effect === 'string' ? getEffectByName(effect) : effect;
-  const override = EFFECT_EVALUATION_OVERRIDES[resolved?.name];
-  return Math.max(getEffectScore(resolved), Number.isFinite(override) ? override : 0);
+  return Math.max(getEffectScore(resolved), evaluateEffectValue(resolved));
 };
 
 const getConditionalDamageBranch = (post, casterTile, targetRef) => {
@@ -212,7 +216,7 @@ const getEffectThreatScore = (effect) => {
   const resolved = typeof effect === 'string' ? getEffectByName(effect) : effect;
   if (!resolved) return 0;
   if (resolved.kind !== 'debuff' && !(resolved.pulse && resolved.pulse.type === 'damage')) return 0;
-  return getEffectScore(resolved);
+  return Math.max(0, evaluateEffectValue(resolved));
 };
 
 const estimateIncomingDamagePerTurn = (hero, tileIndex, isP2, enemyBoard = [], enemyReserve = [], allyBoard = [], allyReserve = []) => {
@@ -272,7 +276,18 @@ const estimateIncomingDamagePerTurn = (hero, tileIndex, isP2, enemyBoard = [], e
 
     const formula = spell.spec.formula || {};
     const targetRef = createTargetRef(allyBoardSim[tileIndex], tileIndex, targetSide);
-    const baseValue = getFormulaBaseValue(formula, casterSpellPower, enemyHero, targetRef);
+    if (!targetRef) return;
+    const post = spell.spec.post || {};
+    const targetEffects = getTileEffects(targetRef.tile);
+    const isEligible = (!post.onlyApplyIfHasDebuff || targetEffects.some(effect => effect?.kind === 'debuff'))
+      && (!post.onlyApplyToWithEffect || targetEffects.some(effect => effect?.name === post.onlyApplyToWithEffect));
+    if (!isEligible) return;
+
+    let baseValue = getFormulaBaseValue(formula, casterSpellPower, enemyHero, targetRef);
+    const conditionalBranch = getConditionalDamageBranch(post, enemyTile, targetRef);
+    if (conditionalBranch) {
+      baseValue = Number(conditionalBranch.attackPower ?? conditionalBranch.damage ?? baseValue);
+    }
 
     if (formula.type === 'attackPower' || formula.type === 'damage' || formula.type === 'roll') {
       const effectiveDamage = getArmorAdjustedDamage(formula, baseValue, heroArmor);
@@ -361,6 +376,7 @@ const estimateIncomingAllyEnergyPerTurn = (
 };
 
 const getRuntimeHealth = (tile) => Number(tile?.currentHealth ?? tile?.hero?.currentHealth ?? tile?.hero?.health ?? 0);
+const REVIVE_NO_CORPSE_DISCOUNT = 0.25;
 
 const getResolvedTargetGroups = (targets, casterRef, boards, options) => {
   let previousCount = 0;
@@ -476,6 +492,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
   const resolvedTargetCount = targetGroups.reduce((count, group) => count + group.length, 0);
   let totalImpact = 0;
   let conditionalSecondaryTriggered = false;
+  let reviveEvaluated = false;
 
   targetGroups.forEach((group, descriptorIndex) => {
     const extra = spec.perTargetExtras?.[descriptorIndex] || {};
@@ -495,6 +512,7 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
         return;
       }
       if (useAdvancedSpellEvaluation && post.revive && isCorpse) {
+        reviveEvaluated = true;
         const revivedHero = { ...targetRef.hero, currentHealth: Math.min(
           Number(targetRef.hero.health || 0),
           Number(post.revive.heal ?? post.revive.amount ?? post.revive.value ?? 1) + casterSpellPower,
@@ -533,7 +551,11 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
           damage,
           Number(targetRef.tile.currentArmor ?? targetRef.hero.currentArmor ?? targetRef.hero.armor ?? 0),
         );
-        totalImpact += effectiveDamage;
+        // Damage dealt to our own side is a cost (e.g. OOPS!! hits an ally), not a benefit.
+        const damagesOwnSide = useAdvancedSpellEvaluation && targetRef.board === boardSide;
+        totalImpact += damagesOwnSide
+          ? -Math.min(effectiveDamage, Math.max(0, getRuntimeHealth(targetRef.tile)))
+          : effectiveDamage;
         if (useAdvancedSpellEvaluation && post.conditionalSecondaryOnWouldKill && effectiveDamage >= getRuntimeHealth(targetRef.tile)) {
           conditionalSecondaryTriggered = true;
         }
@@ -544,7 +566,10 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
 
       const effects = [...(spec.effects || []), ...(extra.effects || [])];
       if (isEligible) {
-        totalImpact += effects.reduce((sum, effect) => sum + getEffectScore(effect), 0);
+        totalImpact += effects.reduce(
+          (sum, effect) => sum + (useAdvancedSpellEvaluation ? getAdvancedEffectScore(effect) : getEffectScore(effect)),
+          0,
+        );
       }
       if (post.removeTopDebuff && targetHasDebuff) {
         const removed = targetEffects.find(effect => effect?.kind === 'debuff');
@@ -609,7 +634,23 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
       totalImpact += estimateSummonedHeroValue(reserveHero, ref, boards);
     }
   }
-  if (useAdvancedSpellEvaluation && post.placeMineInOpposingColumn) totalImpact += 7;
+  if (useAdvancedSpellEvaluation && post.revive && !reviveEvaluated) {
+    // No corpse yet: Revive is a delayed option on whichever ally falls first, so credit a discounted
+    // average of what each living ally would be worth revived.
+    const reviveHealth = Number(post.revive.heal ?? post.revive.amount ?? post.revive.value ?? 1) + casterSpellPower;
+    const candidates = allyBoard
+      .map((tile, index) => ({ tile, index }))
+      .filter(({ tile, index }) => index !== tileIndex && tile?.hero && !tile._dead && tile.hero.isMinion !== true);
+    if (candidates.length) {
+      const average = candidates.reduce((sum, { tile, index }) => {
+        const revivedHero = { ...tile.hero, currentHealth: Math.min(Number(tile.hero.health || 0), reviveHealth) };
+        return sum + estimateSummonedHeroValue(revivedHero, { board: boardSide, index }, boards);
+      }, 0) / candidates.length;
+      totalImpact += average * REVIVE_NO_CORPSE_DISCOUNT;
+    }
+  }
+  // A mine only pays off when an enemy later moves onto its exact tile.
+  if (useAdvancedSpellEvaluation && post.placeMineInOpposingColumn) totalImpact += 1.5;
 
   return totalImpact;
 }

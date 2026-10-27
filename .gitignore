@@ -61,3 +61,4 @@ temp/
 app/dist/
 release/
 src/electron/recovered/
+monitor-output/

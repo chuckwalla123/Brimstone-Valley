@@ -1,11 +1,10 @@
 import { getSpellById } from '../../spells.js';
 import { getEffectByName } from '../../effects.js';
-import { indexToRow } from '../../targeting.js';
+import { indexToRow, columnIndicesForBoard } from '../../targeting.js';
 import { deepClone } from '../../../shared/gameLogic.js';
 import { evaluateHeroPointsWithOptions } from '../easyAI.js';
-import { EFFECT_EVALUATION_OVERRIDES } from '../effectEvaluationOverrides.js';
+import { evaluateEffectValue } from '../effectValue.js';
 
-const DRAFT_EFFECT_HORIZON = 6;
 export const EASY_AI_PLUS_EVALUATION_OPTIONS = Object.freeze({ advancedSpellEvaluation: true });
 
 const countsTowardMainLimit = (tile) => !!(tile && tile.hero && !tile._dead && !tile._revivedExtra && tile.hero.isMinion !== true);
@@ -97,61 +96,7 @@ const getTargetCoverage = (targets = []) => {
   return coverage;
 };
 
-const getEffectTurns = (duration) => {
-  if (typeof duration === 'number' && Number.isFinite(duration)) {
-    return Math.max(1, Math.min(DRAFT_EFFECT_HORIZON, Number(duration)));
-  }
-  return DRAFT_EFFECT_HORIZON;
-};
-
-const estimateEffectValue = (effect) => {
-  const resolved = typeof effect === 'string' ? getEffectByName(effect) : effect;
-  if (!resolved) return 0;
-
-  const override = EFFECT_EVALUATION_OVERRIDES[resolved.name];
-  if (typeof override === 'number' && Number.isFinite(override)) {
-    return override;
-  }
-
-  const turns = getEffectTurns(resolved.duration);
-  let score = 0;
-
-  if (resolved.pulse?.type === 'damage') {
-    if (resolved.pulse.derivedFrom === 'roundNumber') {
-      score += (turns * (turns + 1)) / 2;
-    } else if (resolved.pulse.derivedFrom === 'armor') {
-      score += 4 * turns;
-    } else {
-      score += Number(resolved.pulse.value || 0) * turns;
-    }
-  }
-  if (resolved.pulse?.type === 'heal') {
-    score += Number(resolved.pulse.value || 0) * turns * 0.85;
-  }
-  if (resolved.modifiers && typeof resolved.modifiers === 'object') {
-    const modifierMagnitude = Object.values(resolved.modifiers)
-      .reduce((sum, value) => sum + Math.abs(Number(value) || 0), 0);
-    score += modifierMagnitude * turns * (resolved.kind === 'debuff' ? 1.15 : 0.8);
-  }
-  if (resolved.onTargeted?.value) score += Math.abs(Number(resolved.onTargeted.value || 0)) * 1.15;
-  if (resolved.onDamaged?.value) score += Math.abs(Number(resolved.onDamaged.value || 0)) * 1.15;
-  if (resolved.onDeath?.value) score += Math.abs(Number(resolved.onDeath.value || 0)) * 0.75;
-  if (resolved.healApplierOnPulse?.amount) score += Number(resolved.healApplierOnPulse.amount || 0) * turns * 0.65;
-  if (resolved.spreadEffectToAdjacentOnPulse?.effect) score += turns * 1.6;
-  if (resolved.preventSingleTarget) score += 5;
-  if (resolved.taunt) score += 4;
-  if (resolved.blocksProjectileAndColumn) score += 4;
-  if (resolved.redirectSingleTargetToEffectApplier) score += 4;
-  if (resolved.forceMultiTargetToSelf) score += 4;
-  if (resolved.forceSingleTargetLowestArmor) score += 2.5;
-
-  if (score === 0) {
-    if (resolved.kind === 'debuff') score = 1.5;
-    else if (resolved.kind === 'buff') score = 1;
-  }
-
-  return Math.max(0, score);
-};
+const estimateEffectValue = evaluateEffectValue;
 
 const getProfileFormulaValue = (formula = {}) => {
   if (!formula) return 0;
@@ -265,9 +210,44 @@ const getTileProfile = (tile) => {
   return getHeroProfile(tile.hero, rowKey);
 };
 
-const getRosterProfiles = (tiles = []) => tiles
-  .filter(isAliveTile)
-  .map(tile => ({ hero: tile.hero, profile: getHeroProfile(tile.hero) }));
+const RESERVE_PROFILE_WEIGHT = 0.5;
+
+const scaleProfile = (profile, weight) => ({
+  ...profile,
+  effectPressure: profile.effectPressure * weight,
+  buffValue: profile.buffValue * weight,
+  maxDebuffValue: profile.maxDebuffValue * weight,
+  maxBuffValue: profile.maxBuffValue * weight,
+  cleanseCoverage: profile.cleanseCoverage * weight,
+  cleanseHealBonus: profile.cleanseHealBonus * weight,
+  buffStripCoverage: profile.buffStripCoverage * weight,
+});
+
+// Main-board heroes contribute only the spell for their current row (by array position, since
+// simulated moves do not rewrite tile.index); reserve heroes are discounted.
+const getRosterProfiles = (tiles = [], mainCount = Infinity, side = 'p2') => tiles
+  .map((tile, position) => ({ tile, position }))
+  .filter(({ tile }) => isAliveTile(tile))
+  .map(({ tile, position }) => ({
+    hero: tile.hero,
+    profile: position < mainCount
+      ? getHeroProfile(tile.hero, getRowKey(position, side))
+      : scaleProfile(getHeroProfile(tile.hero), RESERVE_PROFILE_WEIGHT),
+  }));
+
+const getActiveEffectStats = (tiles = [], kind) => {
+  let total = 0;
+  let max = 0;
+  tiles.filter(isAliveTile).forEach((tile) => {
+    getTileEffects(tile).forEach((effect) => {
+      if (!effect || effect.kind !== kind) return;
+      const value = estimateEffectValue(effect);
+      total += value;
+      max = Math.max(max, value);
+    });
+  });
+  return { total, max };
+};
 
 export const evaluateEasyAIPlusBoardAdvantage = (p2Main, p2Reserve, p1Main, p1Reserve) => {
   let p2Score = 0;
@@ -338,35 +318,33 @@ export const evaluateEasyAIPlusBoardAdvantage = (p2Main, p2Reserve, p1Main, p1Re
   return p2Score - p1Score;
 };
 
-export const evaluateEasyAIPlusEffectMatchup = (allyTiles, enemyTiles) => {
-  const allyProfiles = getRosterProfiles(allyTiles).map(entry => entry.profile);
-  const enemyProfiles = getRosterProfiles(enemyTiles).map(entry => entry.profile);
+export const evaluateEasyAIPlusEffectMatchup = (allyTiles, enemyTiles, layout = {}) => {
+  const allyProfiles = getRosterProfiles(allyTiles, layout.allyMainCount, layout.allySide || 'p2').map(entry => entry.profile);
+  const enemyProfiles = getRosterProfiles(enemyTiles, layout.enemyMainCount, layout.enemySide || 'p1').map(entry => entry.profile);
   if (!allyProfiles.length && !enemyProfiles.length) return 0;
 
   const allyEffectPressure = allyProfiles.reduce((sum, profile) => sum + profile.effectPressure, 0);
   const enemyEffectPressure = enemyProfiles.reduce((sum, profile) => sum + profile.effectPressure, 0);
-  const allyBuffValue = allyProfiles.reduce((sum, profile) => sum + profile.buffValue, 0);
-  const enemyBuffValue = enemyProfiles.reduce((sum, profile) => sum + profile.buffValue, 0);
 
   const enemyMaxDebuffValue = enemyProfiles.reduce((max, profile) => Math.max(max, profile.maxDebuffValue || 0), 0);
   const allyMaxDebuffValue = allyProfiles.reduce((max, profile) => Math.max(max, profile.maxDebuffValue || 0), 0);
-  const enemyMaxBuffValue = enemyProfiles.reduce((max, profile) => Math.max(max, profile.maxBuffValue || 0), 0);
-  const allyMaxBuffValue = allyProfiles.reduce((max, profile) => Math.max(max, profile.maxBuffValue || 0), 0);
+
+  // Buff stripping is only valuable against buffs that are actually on the board right now.
+  const allyActiveBuffs = getActiveEffectStats(allyTiles.slice(0, layout.allyMainCount ?? allyTiles.length), 'buff');
+  const enemyActiveBuffs = getActiveEffectStats(enemyTiles.slice(0, layout.enemyMainCount ?? enemyTiles.length), 'buff');
 
   const allyCleanseValue = allyProfiles.reduce((sum, profile) => sum + (profile.cleanseCoverage * enemyMaxDebuffValue) + profile.cleanseHealBonus, 0);
   const enemyCleanseValue = enemyProfiles.reduce((sum, profile) => sum + (profile.cleanseCoverage * allyMaxDebuffValue) + profile.cleanseHealBonus, 0);
-  const allyBuffStripValue = allyProfiles.reduce((sum, profile) => sum + (profile.buffStripCoverage * enemyMaxBuffValue), 0);
-  const enemyBuffStripValue = enemyProfiles.reduce((sum, profile) => sum + (profile.buffStripCoverage * allyMaxBuffValue), 0);
+  const allyBuffStripValue = allyProfiles.reduce((sum, profile) => sum + (profile.buffStripCoverage * enemyActiveBuffs.max), 0);
+  const enemyBuffStripValue = enemyProfiles.reduce((sum, profile) => sum + (profile.buffStripCoverage * allyActiveBuffs.max), 0);
 
   let score = 0;
   score += Math.min(allyCleanseValue, enemyEffectPressure) * 0.55;
   score -= Math.min(enemyCleanseValue, allyEffectPressure) * 0.2;
   score += Math.max(0, allyEffectPressure - enemyCleanseValue * 0.7) * 0.35;
   score -= Math.max(0, enemyEffectPressure - allyCleanseValue * 0.7) * 0.45;
-  score += Math.min(allyBuffStripValue, enemyBuffValue) * 0.45;
-  score -= Math.min(enemyBuffStripValue, allyBuffValue) * 0.12;
-  score += Math.min(allyBuffStripValue, enemyBuffValue) * 0.45;
-  score -= Math.min(enemyBuffStripValue, allyBuffValue) * 0.3;
+  score += Math.min(allyBuffStripValue, enemyActiveBuffs.total) * 0.6;
+  score -= Math.min(enemyBuffStripValue, allyActiveBuffs.total) * 0.3;
 
   if (enemyEffectPressure > 0 && allyCleanseValue === 0) score -= enemyEffectPressure * 0.1;
   if (allyEffectPressure > 0 && enemyCleanseValue === 0) score += allyEffectPressure * 0.08;
@@ -410,6 +388,20 @@ export const evaluateEasyAIPlusSetupScore = (p2Main, p2Reserve, p1Main, p1Reserv
         isAliveTile(enemyTile) && getTileEffects(enemyTile).some(effect => effect?.kind === 'debuff')
       ).length;
       score += eligibleEnemyCount > 0 ? Math.min(4, eligibleEnemyCount * 2) : -4;
+    } else if (post.onlyApplyToWithEffect) {
+      // Spell evaluation already credits damage only to targets that have the effect. A slot with
+      // nothing to consume is a dead cast, so discourage moving into it unless a mark could appear.
+      const requiredEffect = post.onlyApplyToWithEffect;
+      const enemyHasEffect = (p1Main || []).some(enemyTile =>
+        isAliveTile(enemyTile) && getTileEffects(enemyTile).some(effect => effect?.name === requiredEffect)
+      );
+      const canProduceEffect = allyProducerTags.has(requiredEffect)
+        || (requiredEffect === 'Marked'
+          && allyRoster.some(tile => (tile?.hero?.passives || []).some(passive => passive?.name === 'Accept Contract'))
+          // Accept Contract only marks enemies whose energy crosses above 4 at round start
+          && [...(p1Main || [])].some(enemyTile => isAliveTile(enemyTile)
+            && Number(enemyTile.currentEnergy || 0) >= 3 && Number(enemyTile.currentEnergy || 0) <= 4));
+      if (!enemyHasEffect && !canProduceEffect) score -= 6;
     } else if (activeTag && allyProducerTags.has(activeTag)) {
       score += 2;
     } else if (activeTag) {
@@ -422,7 +414,7 @@ export const evaluateEasyAIPlusSetupScore = (p2Main, p2Reserve, p1Main, p1Reserv
     const activeSpell = getActiveSpell(tile.hero, index, 'p1');
     const spec = activeSpell?.spec || {};
     const post = spec.post || {};
-    if (post.onlyApplyIfHasDebuff || post.onlyApplyToWithEffect || post.removeTopPositiveEffect || post.removeTopEffectByName || post.removeCorpse) {
+    if (post.onlyApplyIfHasDebuff || post.removeTopPositiveEffect || post.removeTopEffectByName || post.removeCorpse) {
       score -= 1.25;
     }
   });
@@ -430,15 +422,57 @@ export const evaluateEasyAIPlusSetupScore = (p2Main, p2Reserve, p1Main, p1Reserv
   return score;
 };
 
-const evaluateEasyAIPlusPosition = (p2Main, p2Reserve, p1Main, p1Reserve) => {
+export const getOpponentColumnAttackDamage = (p1Main) => {
+  let maxDamage = 0;
+  (p1Main || []).forEach((tile, index) => {
+    if (!isAliveTile(tile)) return;
+    const spec = getActiveSpell(tile.hero, index, 'p1')?.spec;
+    if (!spec || !(spec.targets || []).some(target => target?.type === 'column' && target.side === 'enemy')) return;
+    const formula = spec.formula || {};
+    const damage = formula.type === 'roll'
+      ? Number(formula.base || 0) + ((Number(formula.die || 6) + 1) / 2)
+      : Number(formula.value || 0);
+    maxDamage = Math.max(maxDamage, damage, 1);
+  });
+  return maxDamage;
+};
+
+// Columns are the index triples [0,1,2], [3,4,5], [6,7,8] on both boards (see targeting.js). An opponent
+// with a column attack and the last move can aim at any column after we have committed, so a full
+// column of three heroes would take three hits.
+const evaluateColumnStackPenalty = (p2Main, columnAttackDamage) => {
+  if (!(columnAttackDamage > 0)) return 0;
+  let penalty = 0;
+  for (let col = 0; col < 3; col += 1) {
+    const aliveInColumn = columnIndicesForBoard(col, 'p2')
+      .filter(index => isAliveTile((p2Main || [])[index])).length;
+    if (aliveInColumn >= 3) penalty += Math.max(6, columnAttackDamage * 2);
+  }
+  return penalty;
+};
+
+export const evaluateEasyAIPlusPosition = (p2Main, p2Reserve, p1Main, p1Reserve, context = {}) => {
   const boardScore = evaluateEasyAIPlusBoardAdvantage(p2Main, p2Reserve, p1Main, p1Reserve);
-  const effectScore = evaluateEasyAIPlusEffectMatchup([...(p2Main || []), ...(p2Reserve || [])], [...(p1Main || []), ...(p1Reserve || [])]);
+  const effectScore = evaluateEasyAIPlusEffectMatchup(
+    [...(p2Main || []), ...(p2Reserve || [])],
+    [...(p1Main || []), ...(p1Reserve || [])],
+    {
+      allyMainCount: (p2Main || []).length,
+      enemyMainCount: (p1Main || []).length,
+      allySide: 'p2',
+      enemySide: 'p1',
+    },
+  );
   const setupScore = evaluateEasyAIPlusSetupScore(p2Main, p2Reserve, p1Main, p1Reserve);
+  const columnStackPenalty = context.opponentHasLastMove
+    ? evaluateColumnStackPenalty(p2Main, getOpponentColumnAttackDamage(p1Main))
+    : 0;
   return {
     boardScore,
     effectScore,
     setupScore,
-    totalScore: boardScore + effectScore + setupScore,
+    columnStackPenalty,
+    totalScore: boardScore + effectScore + setupScore - columnStackPenalty,
   };
 };
 
@@ -499,8 +533,8 @@ const compareMovesDeterministically = (left, right) => {
   return leftKey.localeCompare(rightKey);
 };
 
-export const buildEasyAIPlusMovementCandidates = (p2Board, p2ReserveBoard, p1Board = [], p1ReserveBoard = []) => {
-  const base = evaluateEasyAIPlusPosition(p2Board, p2ReserveBoard, p1Board, p1ReserveBoard);
+export const buildEasyAIPlusMovementCandidates = (p2Board, p2ReserveBoard, p1Board = [], p1ReserveBoard = [], context = {}) => {
+  const base = evaluateEasyAIPlusPosition(p2Board, p2ReserveBoard, p1Board, p1ReserveBoard, context);
   const moves = [];
 
   const movable = [];
@@ -521,7 +555,7 @@ export const buildEasyAIPlusMovementCandidates = (p2Board, p2ReserveBoard, p1Boa
       if (sourceId === destinationId) return;
       if (!isLegalMove(sourceId, destinationId, p2Board, p2ReserveBoard)) return;
       const simulated = simulateP2Move(p2Board, p2ReserveBoard, { sourceId, destinationId });
-      const scored = evaluateEasyAIPlusPosition(simulated.main, simulated.reserve, p1Board, p1ReserveBoard);
+      const scored = evaluateEasyAIPlusPosition(simulated.main, simulated.reserve, p1Board, p1ReserveBoard, context);
       moves.push({
         sourceId,
         destinationId,
@@ -542,8 +576,12 @@ export const buildEasyAIPlusMovementCandidates = (p2Board, p2ReserveBoard, p1Boa
   return moves.sort(compareMovesDeterministically);
 };
 
-export const makeEasyAIPlusMovementDecision = (p2Board, p2ReserveBoard, p1Board = [], p1ReserveBoard = []) => {
-  const candidates = buildEasyAIPlusMovementCandidates(p2Board, p2ReserveBoard, p1Board, p1ReserveBoard);
+export const makeEasyAIPlusMovementDecision = (p2Board, p2ReserveBoard, p1Board = [], p1ReserveBoard = [], movement = null) => {
+  const phase = movement?.movementPhase;
+  const sequence = phase?.sequence || [];
+  const opponentHasLastMove = sequence[sequence.length - 1] === 'p1'
+    && Number(phase?.index || 0) < sequence.length - 1;
+  const candidates = buildEasyAIPlusMovementCandidates(p2Board, p2ReserveBoard, p1Board, p1ReserveBoard, { opponentHasLastMove });
   if (!candidates.length) {
     return getNoopMove(p2Board, p2ReserveBoard);
   }

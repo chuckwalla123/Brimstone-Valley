@@ -11,6 +11,7 @@
     "hardai:quick": "node ./scripts/train-hardai-movement.mjs --random-count 2 --max-responses 2 --epochs 5 --batch-size 16 --evaluation-random-count 2 --diagnostic-random-count 1 --oracle-scenario-count 1 --max-rounds 6 --seed 20261016",
     "hardai:train": "node ./scripts/train-hardai-movement.mjs",
     "hardai:evaluate": "node ./scripts/evaluate-hardai-movement.mjs",
+    "hardai:monitor": "node ./scripts/monitor-match.mjs",
     "backup": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-to-github.ps1",
     "backup:msg": "powershell -ExecutionPolicy Bypass -File ./scripts/backup-to-github.ps1 -Message",
     "download:github": "powershell -ExecutionPolicy Bypass -File ./scripts/download-from-github.ps1"

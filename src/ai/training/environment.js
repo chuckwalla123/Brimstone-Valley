@@ -195,7 +195,7 @@ export const getOutcome = (state) => {
   return p1Alive ? 'p1' : 'p2';
 };
 
-export const resolveBattleRound = async (state) => {
+export const resolveBattleRound = async (state, { addLog = null } = {}) => {
   const current = createTrainingState(state);
   const result = await executeRound(
     {
@@ -203,6 +203,7 @@ export const resolveBattleRound = async (state) => {
       p1Reserve: current.p1Reserve,
       p2Board: current.p2Main,
       p2Reserve: current.p2Reserve,
+      addLog,
       priorityPlayer: current.priorityPlayer,
       roundNumber: current.roundNumber,
       lastCastActionBySide: current.lastCastActionBySide,
@@ -230,7 +231,7 @@ export const resolveBattleRound = async (state) => {
   });
 };
 
-export const advanceToNextDecision = async (state, action) => {
+export const advanceToNextDecision = async (state, action, { addLog = null } = {}) => {
   const movement = applyMovementAction(state, action);
   if (!movement.accepted) return movement;
 
@@ -243,12 +244,13 @@ export const advanceToNextDecision = async (state, action) => {
     priorityPlayer: toPriorityPlayer(nextPrioritySide),
     movementIndex: 0,
   };
-  const resolvedState = await resolveBattleRound(stateForRound);
+  const resolvedState = await resolveBattleRound(stateForRound, { addLog });
 
   return {
     accepted: true,
     action: movement.action,
     resolvedRound: true,
+    battlePriorityPlayer: stateForRound.priorityPlayer,
     state: resolvedState,
   };
 };

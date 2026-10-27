@@ -111,14 +111,14 @@ export const evaluateShallowSearchOracle = async (scenarios, {
       return labels.bestAction;
     },
   };
-  const easy = { type: 'easy' };
+  const easyplus = { type: 'easyplus' };
 
   for (let index = 0; index < scenarios.length; index += 1) {
     const scenario = scenarios[index];
     for (const oracleSide of ['p1', 'p2']) {
       const result = await playMovementControllerMatch(scenario.state || scenario, {
-        p1Controller: oracleSide === 'p1' ? oracle : easy,
-        p2Controller: oracleSide === 'p2' ? oracle : easy,
+        p1Controller: oracleSide === 'p1' ? oracle : easyplus,
+        p2Controller: oracleSide === 'p2' ? oracle : easyplus,
         maxRounds,
         seed: seed + index * 101 + (oracleSide === 'p1' ? 0 : 1),
       });
@@ -136,16 +136,20 @@ export const evaluateShallowSearchOracle = async (scenarios, {
     }
   }
 
-  return summarizeOracleMatches(matches);
+  return {
+    opponent: 'easyplus',
+    ...summarizeOracleMatches(matches),
+  };
 };
 
 export const isCandidateQualityImproved = (candidate, baseline) => {
   if (!baseline) return true;
   const compare = [
-    ['easyScoreRate', candidate.easyScoreRate, baseline.easyScoreRate],
+    ['baselineScoreRate', candidate.baselineScoreRate ?? candidate.easyScoreRate, baseline.baselineScoreRate ?? baseline.easyScoreRate],
+    ['pairedWinRate', candidate.pairedWinRate, baseline.pairedWinRate],
     ['heldOutTop1Agreement', candidate.heldOutTop1Agreement, baseline.heldOutTop1Agreement],
     ['heldOutSpearman', candidate.heldOutSpearman, baseline.heldOutSpearman],
-  ];
+  ].filter(([, candidateValue, baselineValue]) => Number.isFinite(candidateValue) && Number.isFinite(baselineValue));
 
   for (const [, candidateValue, baselineValue] of compare) {
     if (candidateValue > baselineValue + 0.000001) return true;

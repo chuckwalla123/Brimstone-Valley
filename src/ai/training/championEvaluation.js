@@ -1,15 +1,18 @@
 import { makeMovementDecision as makeEasyMovementDecision } from '../easyAI.js';
+import { buildEasyAIPlusMovementCandidates, makeEasyAIPlusMovementDecision } from './easyAIPlusTeacher.js';
 import { saveCandidateScorer } from './candidateScorer.js';
 import {
   advanceToNextDecision,
   createTrainingState,
   getCurrentMover,
+  getMovementSequence,
   getOutcome,
   isLegalMovementAction,
   isTerminal,
   listLegalMovementActions,
 } from './environment.js';
 import { scoreLegalMovementActions } from './candidateScorer.js';
+import { selectShortlistSearchAction } from './hybridSelector.js';
 
 const DEFAULT_GATE = {
   minGames: 40,
@@ -89,9 +92,69 @@ const selectEasyAction = (state, side) => {
   });
 };
 
-const selectModelAction = async (model, state, side) => {
-  const [best] = await scoreLegalMovementActions(model, state, side);
-  return best?.action || null;
+const selectModelAction = async (controller, state, side) => {
+  if (controller.type === 'hybrid') {
+    const { action, shortlist } = await selectShortlistSearchAction(controller.model, state, side, {
+      shortlistSize: controller.shortlistSize,
+      maxResponses: controller.maxResponses,
+      seed: controller.seed,
+    });
+    return {
+      action,
+      rationale: shortlist.map((entry) => ({
+        sourceId: entry.action.sourceId,
+        destinationId: entry.action.destinationId,
+        detail: `shortlist model score ${entry.score.toFixed(3)}`,
+      })),
+    };
+  }
+
+  const scored = await scoreLegalMovementActions(controller.model, state, side);
+  return {
+    action: scored[0]?.action || null,
+    rationale: scored.slice(0, 3).map(({ action, score }) => ({
+      sourceId: action.sourceId,
+      destinationId: action.destinationId,
+      detail: `model score ${score.toFixed(3)}`,
+    })),
+  };
+};
+
+// EasyAI+ always reasons as p2, so p1 is mirrored in and un-mirrored out (same as selectEasyAction).
+const selectEasyPlusAction = (state, side, explain = false) => {
+  const sequence = getMovementSequence(state.priorityPlayer);
+  const opponentHasLastMove = sequence[sequence.length - 1] !== side && state.movementIndex < sequence.length - 1;
+  const perspectiveSequence = side === 'p2' ? sequence : sequence.map((entry) => (entry === 'p1' ? 'p2' : 'p1'));
+  const movement = { movementPhase: { sequence: perspectiveSequence, index: state.movementIndex } };
+  const own = side === 'p2'
+    ? { main: state.p2Main, reserve: state.p2Reserve, enemyMain: state.p1Main, enemyReserve: state.p1Reserve }
+    : {
+      main: mirrorMainBoardForP2Perspective(state.p1Main),
+      reserve: state.p1Reserve,
+      enemyMain: mirrorMainBoardForP2Perspective(state.p2Main),
+      enemyReserve: state.p2Reserve,
+    };
+  const toRealToken = (token) => (side === 'p2' ? token : unmirrorP1Token(token));
+
+  const decision = makeEasyAIPlusMovementDecision(own.main, own.reserve, own.enemyMain, own.enemyReserve, movement);
+  const action = normalizeEasyAction(decision && {
+    sourceId: toRealToken(decision.sourceId),
+    destinationId: toRealToken(decision.destinationId),
+  });
+  if (!explain) return { action, rationale: null };
+
+  const candidates = buildEasyAIPlusMovementCandidates(own.main, own.reserve, own.enemyMain, own.enemyReserve, { opponentHasLastMove });
+  const round = (value) => Number(value).toFixed(1);
+  return {
+    action,
+    opponentHasLastMove,
+    rationale: candidates.slice(0, 3).map((candidate) => ({
+      sourceId: toRealToken(candidate.sourceId),
+      destinationId: toRealToken(candidate.destinationId),
+      detail: `delta ${round(candidate.delta)} = board ${round(candidate.boardScore)} + effects ${round(candidate.effectScore)}`
+        + ` + setup ${round(candidate.setupScore)} - column-stack ${round(candidate.columnStackPenalty || 0)}`,
+    })),
+  };
 };
 
 const selectAction = async (controller, state, side) => {
@@ -126,21 +189,40 @@ const selectAction = async (controller, state, side) => {
     };
   }
 
-  const action = await selectModelAction(controller.model, state, side);
-  if (action && isLegalMovementAction(state, action)) return { action, fallback: null };
+  if (controller.type === 'easyplus') {
+    const { action, rationale, opponentHasLastMove } = selectEasyPlusAction(state, side, controller.explain === true);
+    if (action?.type === 'noop' || isLegalMovementAction(state, action)) {
+      return { action, fallback: null, rationale, opponentHasLastMove };
+    }
+    return {
+      action: legalActions[0],
+      fallback: action ? 'easyaiplus-illegal-action' : 'easyaiplus-no-action',
+      forcedSkip: false,
+      attemptedAction: action,
+      rationale,
+    };
+  }
+
+  const { action, rationale } = await selectModelAction(controller, state, side);
+  if (action && isLegalMovementAction(state, action)) return { action, fallback: null, rationale };
   return {
     action: legalActions[0],
     fallback: action ? `${controller.type}-illegal-action` : `${controller.type}-no-action`,
     forcedSkip: false,
     attemptedAction: action,
+    rationale,
   };
 };
 
-const controllerForSide = (candidateModel, opponent, candidateSide, side) => {
-  if (side === candidateSide) return { type: 'candidate', model: candidateModel };
-  return opponent.type === 'model'
-    ? { type: 'champion', model: opponent.model }
-    : { type: 'easy' };
+const controllerForSide = (candidateModel, opponent, candidateSide, side, mode = {}) => {
+  const modelController = (type, model) => (
+    mode.candidateMode === 'hybrid'
+      ? { type: 'hybrid', model, shortlistSize: mode.shortlistSize, maxResponses: mode.maxResponses, seed: mode.seed }
+      : { type, model }
+  );
+  if (side === candidateSide) return modelController('candidate', candidateModel);
+  if (opponent.type === 'model') return modelController('champion', opponent.model);
+  return { type: opponent.type };
 };
 
 export const playMovementControllerMatch = async (initialState, {
@@ -148,6 +230,7 @@ export const playMovementControllerMatch = async (initialState, {
     p2Controller,
     maxRounds = DEFAULT_GATE.maxRounds,
     seed = 1,
+    observer = null,
 } = {}) => withSeededRandom(seed, async () => {
     if (!p1Controller || !p2Controller) throw new Error('Both movement controllers are required for evaluation');
 
@@ -173,9 +256,23 @@ export const playMovementControllerMatch = async (initialState, {
         forcedSkips.push({ controller: controller.type, mover });
       }
 
-      const transition = await advanceToNextDecision(state, selection.action);
+      const battleLog = [];
+      const transition = await advanceToNextDecision(state, selection.action, {
+        addLog: observer ? (line) => battleLog.push(String(line)) : null,
+      });
       if (!transition.accepted) {
         throw new Error(`Evaluation transition rejected ${selection.action.type || 'move'} action`);
+      }
+      if (observer?.onStep) {
+        observer.onStep({
+          stateBefore: state,
+          stateAfter: transition.state,
+          mover,
+          controller,
+          selection,
+          transition,
+          battleLog,
+        });
       }
       state = transition.state;
       if (transition.resolvedRound) resolvedRounds += 1;
@@ -198,13 +295,17 @@ export const playMovementEvaluationMatch = async (initialState, {
   candidateSide = 'p2',
   maxRounds = DEFAULT_GATE.maxRounds,
   seed = 1,
+  candidateMode = 'net',
+  shortlistSize,
+  maxResponses,
 } = {}) => {
   if (!candidateModel) throw new Error('Candidate model is required for evaluation');
   if (candidateSide !== 'p1' && candidateSide !== 'p2') throw new Error(`Unsupported candidate side: ${candidateSide}`);
 
+  const mode = { candidateMode, shortlistSize, maxResponses, seed };
   const result = await playMovementControllerMatch(initialState, {
-    p1Controller: controllerForSide(candidateModel, opponent, candidateSide, 'p1'),
-    p2Controller: controllerForSide(candidateModel, opponent, candidateSide, 'p2'),
+    p1Controller: controllerForSide(candidateModel, opponent, candidateSide, 'p1', mode),
+    p2Controller: controllerForSide(candidateModel, opponent, candidateSide, 'p2', mode),
     maxRounds,
     seed,
   });
@@ -220,6 +321,40 @@ export const playMovementEvaluationMatch = async (initialState, {
     candidateSide,
     candidateResult,
     ...result,
+  };
+};
+
+// Each scenario is played from both colors. Only scenarios won (or lost) from both colors say anything about
+// the candidate; a split result just means one color was favored.
+const summarizePairs = (matches) => {
+  const byScenario = new Map();
+  matches.forEach((match) => {
+    if (match.scenarioIndex === undefined) return;
+    if (!byScenario.has(match.scenarioIndex)) byScenario.set(match.scenarioIndex, []);
+    byScenario.get(match.scenarioIndex).push(match.candidateResult);
+  });
+
+  let wonBoth = 0;
+  let lostBoth = 0;
+  let split = 0;
+  let other = 0;
+  byScenario.forEach((results) => {
+    const wins = results.filter((result) => result === 'win').length;
+    const losses = results.filter((result) => result === 'loss').length;
+    if (results.length === 2 && wins === 2) wonBoth += 1;
+    else if (results.length === 2 && losses === 2) lostBoth += 1;
+    else if (results.length === 2 && wins === 1 && losses === 1) split += 1;
+    else other += 1;
+  });
+  const decisive = wonBoth + lostBoth;
+  return {
+    scenarios: byScenario.size,
+    wonBoth,
+    lostBoth,
+    split,
+    other,
+    decisive,
+    pairedWinRate: decisive ? wonBoth / decisive : 0.5,
   };
 };
 
@@ -265,6 +400,7 @@ const summarizeResults = (matches) => {
     unfinished,
     winRate: matches.length ? wins / matches.length : 0,
     scoreRate: matches.length ? (wins + draws * 0.5) / matches.length : 0,
+    paired: summarizePairs(matches),
     fallbackCount: matches.reduce((count, match) => count + match.fallbacks.length, 0),
     bySide,
     fallbackByController,
@@ -294,11 +430,14 @@ const evaluateOpponent = async (scenarios, candidateModel, opponent, options) =>
         candidateSide,
         maxRounds: options.maxRounds,
         seed: options.seed + index * 101 + (candidateSide === 'p1' ? 0 : 1),
+        candidateMode: options.candidateMode,
+        shortlistSize: options.shortlistSize,
+        maxResponses: options.maxResponses,
       });
-      matches.push(match);
+      matches.push({ ...match, scenarioIndex: index });
       if (typeof options.onMatchComplete === 'function') {
         options.onMatchComplete({
-          benchmark: opponent.type === 'model' ? 'champion' : 'easyai',
+          benchmark: opponent.type === 'model' ? 'champion' : opponent.type === 'easyplus' ? 'easyaiplus' : 'easyai',
           scenarioId: scenario.id || null,
           ...match,
         });
@@ -308,7 +447,7 @@ const evaluateOpponent = async (scenarios, candidateModel, opponent, options) =>
       options.onProgress({
         completed: index + 1,
         total: scenarios.length,
-        benchmark: opponent.type === 'model' ? 'champion' : 'easyai',
+        benchmark: opponent.type === 'model' ? 'champion' : opponent.type === 'easyplus' ? 'easyaiplus' : 'easyai',
       });
     }
   }
@@ -319,15 +458,25 @@ export const evaluateCandidate = async ({
   candidateModel,
   championModel = null,
   scenarios,
+  evaluationOpponent = 'easyplus',
   maxRounds = DEFAULT_GATE.maxRounds,
   seed = 1,
+  candidateMode = 'net',
+  shortlistSize,
+  maxResponses,
   onProgress = null,
   onMatchComplete = null,
 } = {}) => {
   if (!Array.isArray(scenarios) || !scenarios.length) throw new Error('At least one evaluation scenario is required');
+  if (!['easy', 'easyplus'].includes(evaluationOpponent)) {
+    throw new Error(`Unsupported evaluation opponent: ${evaluationOpponent}`);
+  }
+  if (!['net', 'hybrid'].includes(candidateMode)) {
+    throw new Error(`Unsupported candidate mode: ${candidateMode}`);
+  }
 
-  const options = { maxRounds, seed };
-  const againstEasy = await evaluateOpponent(scenarios, candidateModel, { type: 'easy' }, {
+  const options = { maxRounds, seed, candidateMode, shortlistSize, maxResponses };
+  const againstBaseline = await evaluateOpponent(scenarios, candidateModel, { type: evaluationOpponent }, {
     ...options,
     onProgress,
     onMatchComplete,
@@ -340,25 +489,40 @@ export const evaluateCandidate = async ({
     })
     : null;
 
-  return { againstEasy, againstChampion };
+  return {
+    baseline: evaluationOpponent,
+    [evaluationOpponent === 'easyplus' ? 'againstEasyPlus' : 'againstEasy']: againstBaseline,
+    againstChampion,
+  };
 };
 
 export const evaluatePromotionGate = (evaluation, gate = {}) => {
-  const config = { ...DEFAULT_GATE, ...gate };
-  const easy = evaluation.againstEasy;
-  const easyWilsonLowerBound = wilsonLowerBound(easy.wins, easy.games);
+  const baselineName = evaluation.baseline || (evaluation.againstEasyPlus ? 'easyplus' : 'easy');
+  const baseline = evaluation[baselineName === 'easyplus' ? 'againstEasyPlus' : 'againstEasy'];
+  if (!baseline) throw new Error(`Evaluation is missing results for baseline ${baselineName}`);
+  const config = {
+    ...DEFAULT_GATE,
+    ...gate,
+    minBaselineGames: gate.minBaselineGames ?? gate.minGames ?? DEFAULT_GATE.minGames,
+    minBaselineWinRate: gate.minBaselineWinRate ?? gate.minEasyWinRate ?? DEFAULT_GATE.minEasyWinRate,
+    minBaselineWilsonLowerBound: gate.minBaselineWilsonLowerBound
+      ?? gate.minEasyWilsonLowerBound
+      ?? DEFAULT_GATE.minEasyWilsonLowerBound,
+  };
+  const baselineWilsonLowerBound = wilsonLowerBound(baseline.wins, baseline.games);
   const checks = {
-    enoughEasyGames: easy.games >= config.minGames,
-    easyWinRate: easy.winRate >= config.minEasyWinRate,
-    easyConfidence: easyWilsonLowerBound >= config.minEasyWilsonLowerBound,
-    noUnfinishedGames: easy.unfinished <= config.maxUnfinishedGames,
+    enoughBaselineGames: baseline.games >= config.minBaselineGames,
+    baselineWinRate: baseline.winRate >= config.minBaselineWinRate,
+    baselineConfidence: baselineWilsonLowerBound >= config.minBaselineWilsonLowerBound,
+    noUnfinishedGames: baseline.unfinished <= config.maxUnfinishedGames,
     championWinRate: !evaluation.againstChampion || evaluation.againstChampion.winRate >= config.minChampionWinRate,
   };
 
   return {
     passed: Object.values(checks).every(Boolean),
     checks,
-    easyWilsonLowerBound,
+    baseline: baselineName,
+    baselineWilsonLowerBound,
     config,
   };
 };
@@ -370,12 +534,14 @@ export const evaluateAndPromoteCandidate = async ({
   gate,
   maxRounds,
   seed,
+  evaluationOpponent = 'easyplus',
   onPromote,
 } = {}) => {
   const evaluation = await evaluateCandidate({
     candidateModel,
     championModel,
     scenarios,
+    evaluationOpponent,
     maxRounds,
     seed,
   });

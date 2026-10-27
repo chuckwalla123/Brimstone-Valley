@@ -5,6 +5,7 @@ import { HEROES } from './src/heroes.js';
 import { evaluateTileValue } from './src/ai/easyAI.js';
 import {
   buildEasyAIPlusMovementCandidates,
+  evaluateEasyAIPlusSetupScore,
   EASY_AI_PLUS_EVALUATION_OPTIONS,
 } from './src/ai/training/easyAIPlusTeacher.js';
 import { deepClone } from './shared/gameLogic.js';
@@ -165,6 +166,114 @@ const placeHero = (board, index, hero, overrides = {}) => {
     truthWithDebuff.delta > truthWithoutDebuff.delta,
     `Expected an actual enemy debuff to increase Truth's value, got ${truthWithoutDebuff.delta} without and ${truthWithDebuff.delta} with one.`,
   );
+}
+
+{
+  const p1Board = emptyMain('p1');
+  const p2Board = emptyMain('p2');
+  const jester = heroById('jesterID');
+  placeHero(p1Board, 4, heroById('warriorID'));
+  placeHero(p2Board, 3, heroById('warriorID'), { currentHealth: 8 });
+  const casterTile = placeHero(p2Board, 2, jester);
+  const oopsValue = evaluateTileValue(jester, 2, true, p1Board, emptyReserve('p1'), p2Board, emptyReserve('p2'), casterTile, EASY_AI_PLUS_EVALUATION_OPTIONS);
+  assert.ok(oopsValue < 1, `Expected non-lethal OOPS!! (${oopsValue}) to count self-inflicted ally damage as a cost.`);
+}
+
+{
+  const p1Board = emptyMain('p1');
+  const p2Board = emptyMain('p2');
+  const monk = heroById('monkID');
+  placeHero(p1Board, 4, heroById('warriorID'));
+  placeHero(p2Board, 4, heroById('warriorID'));
+  const casterTile = placeHero(p2Board, 2, monk);
+  const reviveValue = evaluateTileValue(monk, 2, true, p1Board, emptyReserve('p1'), p2Board, emptyReserve('p2'), casterTile, EASY_AI_PLUS_EVALUATION_OPTIONS);
+  assert.ok(reviveValue > 1, `Expected Revive (${reviveValue}) to retain option value without a corpse.`);
+}
+
+{
+  const p1Board = emptyMain('p1');
+  const p2Board = emptyMain('p2');
+  const assassin = heroById('assassinID');
+  placeHero(p2Board, 1, assassin);
+  placeHero(p2Board, 5, heroById('warriorID'));
+  placeHero(p1Board, 4, heroById('warriorID'));
+  const assassinTile = p2Board[1];
+  const value = () => evaluateTileValue(assassin, 1, true, p1Board, emptyReserve('p1'), p2Board, emptyReserve('p2'), assassinTile, EASY_AI_PLUS_EVALUATION_OPTIONS);
+  const noMark = value();
+  assert.equal(noMark, 1, `Assassinate with no marks should add nothing beyond the basic attack, got ${noMark}.`);
+  p1Board[4].effects = [EFFECTS.Marked];
+  const oneMark = value() - 1;
+  assert.equal(oneMark, (7 - p1Board[4].currentArmor) * (assassin.speed / assassin.spells.middle.cost),
+    `Assassinate should value each marked target at (7 - armor) × speed/cost, got ${oneMark}.`);
+  placeHero(p1Board, 3, heroById('warriorID'), { effects: [EFFECTS.Marked] });
+  const twoMarks = value() - 1;
+  assert.ok(oneMark > 0 && Math.abs(twoMarks - oneMark * 2) < 1e-9, `Expected value to scale with marks (${oneMark}, ${twoMarks}).`);
+  assert.equal(evaluateEasyAIPlusSetupScore(p2Board, [], p1Board, []), 0, 'Setup score should not penalize Assassinate while an enemy is marked.');
+  assert.ok(evaluateEasyAIPlusSetupScore(p2Board, [], emptyMain('p1'), []) < 0, 'Setup score should penalize Assassinate when nothing is marked.');
+}
+
+{
+  const king = heroById('kingID');
+  const p1Reserve = emptyReserve('p1');
+  const p2Reserve = emptyReserve('p2');
+  const getKingRowValues = (enemyHero) => {
+    const p1Board = emptyMain('p1');
+    placeHero(p1Board, 4, enemyHero);
+    const values = {};
+    for (const index of [3, 2]) {
+      const p2Board = emptyMain('p2');
+      const kingTile = placeHero(p2Board, index, king);
+      values[index] = evaluateTileValue(
+        king,
+        index,
+        true,
+        p1Board,
+        p1Reserve,
+        p2Board,
+        p2Reserve,
+        kingTile,
+        EASY_AI_PLUS_EVALUATION_OPTIONS,
+      );
+    }
+    return values;
+  };
+
+  const againstWarrior = getKingRowValues(heroById('warriorID'));
+  assert.ok(
+    againstWarrior[3] > againstWarrior[2],
+    `Expected Subjugation to beat Superiority against a 2-armor Warrior (${againstWarrior[3]} vs ${againstWarrior[2]}).`,
+  );
+
+  const againstAssassin = getKingRowValues(heroById('assassinID'));
+  assert.ok(
+    againstAssassin[2] > againstAssassin[3],
+    `Expected Superiority to beat Subjugation against a 0-armor Assassin (${againstAssassin[2]} vs ${againstAssassin[3]}).`,
+  );
+}
+
+{
+  const p1Board = emptyMain('p1');
+  const p2Board = emptyMain('p2');
+  const columnCaster = {
+    id: 'column-caster',
+    name: 'Column Caster',
+    health: 10,
+    armor: 0,
+    speed: 1,
+    energy: 0,
+    spells: { front: { id: 'engage', cost: 1, casts: 3 }, middle: { id: 'engage', cost: 1, casts: 3 }, back: { id: 'engage', cost: 1, casts: 3 } },
+  };
+  placeHero(p1Board, 3, columnCaster);
+  placeHero(p2Board, 0, heroById('warriorID'));
+  placeHero(p2Board, 1, heroById('warriorID'));
+  placeHero(p2Board, 3, heroById('warriorID'));
+  const stackMove = (context) => buildEasyAIPlusMovementCandidates(p2Board, [], p1Board, [], context)
+    .find(candidate => candidate.sourceId === 'p2:3' && candidate.destinationId === 'p2:2');
+  const plain = stackMove({});
+  const lastMove = stackMove({ opponentHasLastMove: true });
+  assert.equal(plain.columnStackPenalty, 0);
+  assert.ok(lastMove.columnStackPenalty >= 8, `Expected a third hero in one column to be penalized, got ${lastMove.columnStackPenalty}.`);
+  assert.ok(lastMove.delta < plain.delta, 'Column stacking should score worse when the opponent has the last move.');
 }
 
 console.log('EasyAI spell evaluation regression test passed');

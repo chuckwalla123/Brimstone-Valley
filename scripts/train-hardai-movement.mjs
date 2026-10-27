@@ -1,3 +1,4 @@
+import '../src/ai/training/nodeBackend.js';
 import { access, copyFile, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 import {
@@ -9,8 +10,9 @@ import {
   evaluateCandidate,
   evaluatePromotionGate,
 } from '../src/ai/training/championEvaluation.js';
-import { generateCorpusLabels } from '../src/ai/training/labelGenerator.js';
+import { generateCorpusLabels, MOVEMENT_LABEL_EVALUATOR } from '../src/ai/training/labelGenerator.js';
 import { createMovementScenarioCorpus } from '../src/ai/training/scenarioCorpus.js';
+import { createBalancedRandomScenarios, createFreshSeed, deriveSeed } from '../src/ai/training/scenarioSampling.js';
 import { loadNodeModel, saveNodeModel } from '../src/ai/training/nodeModelCheckpoint.js';
 import { getCandidateFeatureMetadata } from '../src/ai/training/candidateFeatures.js';
 import {
@@ -21,12 +23,20 @@ import {
 
 const DEFAULTS = {
   randomCount: 50,
-  fixtureCount: 5,
+  fixtureCount: 0,
+  rounds: 1,
   maxResponses: 4,
   epochs: 20,
   batchSize: 32,
   objective: 'pairwise',
-  seed: 20261016,
+  evaluationOpponent: 'easyplus',
+  evaluationMode: 'hybrid',
+  shortlistSize: 4,
+  minBalancedRounds: 3,
+  minBestGames: 40,
+  minBestScoreRate: 0.5,
+  // null means a fresh random seed every run, so each run trains and evaluates on new scenarios.
+  seed: null,
   evaluationRandomCount: 20,
   diagnosticRandomCount: 10,
   oracleScenarioCount: 5,
@@ -36,16 +46,24 @@ const DEFAULTS = {
   best: 'models/hardai-movement-best.json',
   champion: 'models/hardai-movement-champion.json',
   resume: false,
+  fresh: false,
   promote: false,
 };
 
 const OPTION_NAMES = new Map([
   ['random-count', 'randomCount'],
   ['fixture-count', 'fixtureCount'],
+  ['rounds', 'rounds'],
   ['max-responses', 'maxResponses'],
   ['epochs', 'epochs'],
   ['batch-size', 'batchSize'],
   ['objective', 'objective'],
+  ['evaluation-opponent', 'evaluationOpponent'],
+  ['evaluation-mode', 'evaluationMode'],
+  ['shortlist-size', 'shortlistSize'],
+  ['min-balanced-rounds', 'minBalancedRounds'],
+  ['min-best-games', 'minBestGames'],
+  ['min-best-score-rate', 'minBestScoreRate'],
   ['seed', 'seed'],
   ['evaluation-random-count', 'evaluationRandomCount'],
   ['diagnostic-random-count', 'diagnosticRandomCount'],
@@ -56,6 +74,7 @@ const OPTION_NAMES = new Map([
   ['best', 'best'],
   ['champion', 'champion'],
   ['resume', 'resume'],
+  ['fresh', 'fresh'],
   ['promote', 'promote'],
 ]);
 
@@ -66,25 +85,37 @@ const parseArguments = (argv) => {
     if (!argument.startsWith('--')) throw new Error(`Unexpected argument: ${argument}`);
     const key = OPTION_NAMES.get(argument.slice(2));
     if (!key) throw new Error(`Unsupported option: ${argument}`);
-    if (key === 'resume' || key === 'promote') {
+    if (key === 'resume' || key === 'fresh' || key === 'promote') {
       options[key] = true;
       continue;
     }
     const value = argv[index + 1];
     if (value === undefined || value.startsWith('--')) throw new Error(`Option ${argument} requires a value`);
     index += 1;
-    options[key] = ['output', 'best', 'champion', 'objective'].includes(key) ? value : Number(value);
+    options[key] = ['output', 'best', 'champion', 'objective', 'evaluationOpponent', 'evaluationMode'].includes(key) ? value : Number(value);
   }
 
-  ['randomCount', 'fixtureCount', 'maxResponses', 'epochs', 'batchSize', 'evaluationRandomCount', 'diagnosticRandomCount', 'oracleScenarioCount', 'disagreementLimit', 'maxRounds']
+  ['randomCount', 'fixtureCount', 'rounds', 'maxResponses', 'epochs', 'batchSize', 'evaluationRandomCount', 'diagnosticRandomCount', 'oracleScenarioCount', 'disagreementLimit', 'maxRounds', 'shortlistSize', 'minBalancedRounds', 'minBestGames']
     .forEach((key) => {
       if (!Number.isInteger(options[key]) || options[key] < 0) {
         throw new Error(`${key} must be a non-negative integer`);
       }
     });
+  if (options.rounds < 1) throw new Error('rounds must be at least 1');
+  if (options.shortlistSize < 1) throw new Error('shortlist-size must be at least 1');
+  if (options.seed === null) options.seed = createFreshSeed();
   if (!Number.isInteger(options.seed)) throw new Error('seed must be an integer');
+  if (!['net', 'hybrid'].includes(options.evaluationMode)) {
+    throw new Error('evaluation-mode must be either net or hybrid');
+  }
   if (!['pairwise', 'mse'].includes(options.objective)) {
     throw new Error('objective must be either pairwise or mse');
+  }
+  if (!['easy', 'easyplus'].includes(options.evaluationOpponent)) {
+    throw new Error('evaluation-opponent must be either easy or easyplus');
+  }
+  if (options.resume && options.fresh) {
+    throw new Error('Choose either --resume or --fresh, not both.');
   }
   if (options.fixtureCount > 5) throw new Error('fixture-count cannot exceed 5');
   if (!options.fixtureCount && !options.randomCount) {
@@ -129,52 +160,80 @@ const main = async () => {
   const outputPath = resolve(options.output);
   const bestPath = resolve(options.best);
   const championPath = resolve(options.champion);
-  const scenarios = selectScenarios(options.randomCount, options.fixtureCount, options.seed);
-  console.log(`[HardAI] Labeling ${scenarios.length} movement scenarios with ${options.maxResponses} response(s) per move.`);
-
-  const labelSets = await generateCorpusLabels(scenarios, {
-    maxResponses: Math.max(1, options.maxResponses),
-    seed: options.seed,
-    onProgress: createScenarioProgressReporter('Labeling', scenarios.length),
-  });
-  const labelCount = labelSets.reduce((total, labelSet) => total + labelSet.labels.length, 0);
-  console.log(`[HardAI] Generated ${labelCount} legal-action labels.`);
-
-  const shouldResume = options.resume && await exists(outputPath);
+  if (options.resume && !await exists(outputPath)) {
+    throw new Error(`Cannot resume: candidate checkpoint does not exist: ${outputPath}. Run without --resume or use --fresh to start from new weights.`);
+  }
+  if (options.resume) {
+    const candidateMetadataPath = outputPath.replace(/\.json$/i, '.metadata.json');
+    const candidateMetadata = await loadMetadata(candidateMetadataPath);
+    if (candidateMetadata?.labelEvaluator !== MOVEMENT_LABEL_EVALUATOR) {
+      throw new Error(`Cannot resume: candidate checkpoint was not trained with ${MOVEMENT_LABEL_EVALUATOR}. Run with --fresh to start with weights trained against the current EasyAI+ labels.`);
+    }
+  }
+  console.log(`[HardAI] Run seed ${options.seed}${process.argv.includes('--seed') ? '' : ' (random; pass --seed to reproduce)'}.`);
+  const shouldResume = options.resume && !options.fresh;
   const model = shouldResume
     ? compileCandidateScorer(await loadNodeModel(outputPath))
     : compileCandidateScorer(createCandidateScorer());
-  console.log(`[HardAI] ${shouldResume ? 'Resuming' : 'Training'} candidate scorer with ${options.objective} objective for ${options.epochs} epoch(s).`);
+  console.log(`[HardAI] ${shouldResume ? 'Resuming existing' : 'Starting fresh'} candidate scorer with ${options.objective} objective: ${options.rounds} round(s) of ${options.randomCount} new random scenario(s), ${options.epochs} epoch(s) each.`);
 
-  const history = await trainCandidateScorer(model, labelSets, {
-    epochs: options.epochs,
-    batchSize: options.batchSize,
-    objective: options.objective,
-    onEpochEnd: ({ epoch, totalEpochs, loss, mse, objective }) => {
-      const mseText = Number.isFinite(mse) ? `, mse=${mse.toFixed(6)}` : '';
-      console.log(`[HardAI] Training epoch ${epoch}/${totalEpochs} (${objective}): loss=${loss.toFixed(6)}${mseText}.`);
-    },
-  });
-  const loss = history.history.loss.at(-1);
+  let scenarioCount = 0;
+  let labelCount = 0;
+  let loss = NaN;
+  for (let round = 1; round <= options.rounds; round += 1) {
+    // Every round trains on newly generated random scenarios, so the corpus never repeats.
+    const scenarios = selectScenarios(options.randomCount, options.fixtureCount, deriveSeed(options.seed, 'train', round));
+    console.log(`[HardAI] Round ${round}/${options.rounds}: labeling ${scenarios.length} movement scenarios with ${options.maxResponses} response(s) per move using the EasyAI+ position evaluator.`);
+    const labelSets = await generateCorpusLabels(scenarios, {
+      maxResponses: Math.max(1, options.maxResponses),
+      seed: deriveSeed(options.seed, 'label', round),
+      onProgress: createScenarioProgressReporter('Labeling', scenarios.length),
+    });
+    const roundLabelCount = labelSets.reduce((total, labelSet) => total + labelSet.labels.length, 0);
+    console.log(`[HardAI] Generated ${roundLabelCount} legal-action labels.`);
+    scenarioCount += scenarios.length;
+    labelCount += roundLabelCount;
+
+    const history = await trainCandidateScorer(model, labelSets, {
+      epochs: options.epochs,
+      batchSize: options.batchSize,
+      objective: options.objective,
+      onEpochEnd: ({ epoch, totalEpochs, loss: epochLoss, mse, objective }) => {
+        const mseText = Number.isFinite(mse) ? `, mse=${mse.toFixed(6)}` : '';
+        console.log(`[HardAI] Round ${round} epoch ${epoch}/${totalEpochs} (${objective}): loss=${epochLoss.toFixed(6)}${mseText}.`);
+      },
+    });
+    loss = history.history.loss.at(-1);
+    await saveNodeModel(model, outputPath);
+  }
   console.log(`[HardAI] Final training loss: ${Number(loss).toFixed(6)}`);
-  await saveNodeModel(model, outputPath);
   console.log(`[HardAI] Saved candidate checkpoint: ${outputPath}`);
 
-  const evaluationScenarios = selectScenarios(
-    options.evaluationRandomCount,
-    options.fixtureCount,
-    options.seed + 1,
-  );
+  console.log(`[HardAI] Selecting ${options.evaluationRandomCount} balanced evaluation scenarios (EasyAI+ mirror match must finish and last at least ${options.minBalancedRounds} rounds).`);
+  const { scenarios: evaluationScenarios, inspected: inspectedScenarios } = await createBalancedRandomScenarios({
+    count: options.evaluationRandomCount,
+    seed: deriveSeed(options.seed, 'evaluation'),
+    minRounds: options.minBalancedRounds,
+    maxRounds: options.maxRounds,
+  });
+  console.log(`[HardAI] Kept ${evaluationScenarios.length} of ${inspectedScenarios} generated scenarios.`);
   const championModel = await exists(championPath)
     ? compileCandidateScorer(await loadNodeModel(championPath))
     : null;
-  console.log(`[HardAI] Evaluating ${evaluationScenarios.length} scenarios against EasyAI${championModel ? ' and the current champion' : ''}.`);
+  const evaluationSearchOptions = {
+    candidateMode: options.evaluationMode,
+    shortlistSize: options.shortlistSize,
+    maxResponses: Math.max(1, options.maxResponses),
+  };
+  console.log(`[HardAI] Evaluating ${evaluationScenarios.length} scenarios (${options.evaluationMode === 'hybrid' ? `model shortlist of ${options.shortlistSize} + search` : 'model only'}) against ${options.evaluationOpponent === 'easyplus' ? 'EasyAI+' : 'EasyAI'}${championModel ? ' and the current champion' : ''}.`);
   const evaluation = await evaluateCandidate({
     candidateModel: model,
     championModel,
     scenarios: evaluationScenarios,
+    evaluationOpponent: options.evaluationOpponent,
     maxRounds: options.maxRounds,
-    seed: options.seed + 2,
+    seed: deriveSeed(options.seed, 'evaluation-match'),
+    ...evaluationSearchOptions,
     onProgress: createScenarioProgressReporter('Evaluating', evaluationScenarios.length),
     onMatchComplete: ({
       benchmark,
@@ -199,25 +258,45 @@ const main = async () => {
     },
   });
   const promotion = evaluatePromotionGate(evaluation);
-  console.log(`[HardAI] EasyAI: ${evaluation.againstEasy.wins}W/${evaluation.againstEasy.draws}D/${evaluation.againstEasy.losses}L/${evaluation.againstEasy.unfinished} unfinished (${(evaluation.againstEasy.winRate * 100).toFixed(1)}% wins).`);
-  console.log(`[HardAI] EasyAI by side: P1 ${evaluation.againstEasy.bySide.p1.wins}W/${evaluation.againstEasy.bySide.p1.draws}D/${evaluation.againstEasy.bySide.p1.losses}L/${evaluation.againstEasy.bySide.p1.unfinished} unfinished; P2 ${evaluation.againstEasy.bySide.p2.wins}W/${evaluation.againstEasy.bySide.p2.draws}D/${evaluation.againstEasy.bySide.p2.losses}L/${evaluation.againstEasy.bySide.p2.unfinished} unfinished.`);
-  console.log(`[HardAI] EasyAI fallbacks: ${evaluation.againstEasy.fallbackCount} total; by controller=${JSON.stringify(evaluation.againstEasy.fallbackByController)}; by reason=${JSON.stringify(evaluation.againstEasy.fallbackByReason)}.`);
-  console.log(`[HardAI] Forced skips: ${evaluation.againstEasy.forcedSkipCount} total; by controller=${JSON.stringify(evaluation.againstEasy.forcedSkipsByController)}.`);
+  const baseline = options.evaluationOpponent === 'easyplus' ? evaluation.againstEasyPlus : evaluation.againstEasy;
+  const baselineLabel = options.evaluationOpponent === 'easyplus' ? 'EasyAI+' : 'EasyAI';
+  console.log(`[HardAI] ${baselineLabel}: ${baseline.wins}W/${baseline.draws}D/${baseline.losses}L/${baseline.unfinished} unfinished (${(baseline.winRate * 100).toFixed(1)}% wins).`);
+  console.log(`[HardAI] ${baselineLabel} by side: P1 ${baseline.bySide.p1.wins}W/${baseline.bySide.p1.draws}D/${baseline.bySide.p1.losses}L/${baseline.bySide.p1.unfinished} unfinished; P2 ${baseline.bySide.p2.wins}W/${baseline.bySide.p2.draws}D/${baseline.bySide.p2.losses}L/${baseline.bySide.p2.unfinished} unfinished.`);
+  console.log(`[HardAI] ${baselineLabel} fallbacks: ${baseline.fallbackCount} total; by controller=${JSON.stringify(baseline.fallbackByController)}; by reason=${JSON.stringify(baseline.fallbackByReason)}.`);
+  console.log(`[HardAI] Forced skips: ${baseline.forcedSkipCount} total; by controller=${JSON.stringify(baseline.forcedSkipsByController)}.`);
   if (evaluation.againstChampion) {
     console.log(`[HardAI] Champion: ${evaluation.againstChampion.wins}W/${evaluation.againstChampion.draws}D/${evaluation.againstChampion.losses}L (${(evaluation.againstChampion.winRate * 100).toFixed(1)}% wins).`);
   }
   console.log(`[HardAI] Promotion gate: ${promotion.passed ? 'PASSED' : 'not passed'}.`);
+  const paired = baseline.paired;
+  console.log(`[HardAI] ${baselineLabel} paired scenarios: won both colors ${paired.wonBoth}, lost both ${paired.lostBoth}, split ${paired.split}${paired.other ? `, other ${paired.other}` : ''} (${(paired.pairedWinRate * 100).toFixed(1)}% of decisive scenarios won).`);
+
+  // The model alone is far cheaper to play than shortlist+search, so report it as a diagnostic too.
+  let netOnlyEvaluation = null;
+  if (options.evaluationMode === 'hybrid') {
+    console.log('[HardAI] Evaluating the model alone (no search) on the same scenarios.');
+    netOnlyEvaluation = await evaluateCandidate({
+      candidateModel: model,
+      scenarios: evaluationScenarios,
+      evaluationOpponent: options.evaluationOpponent,
+      maxRounds: options.maxRounds,
+      seed: deriveSeed(options.seed, 'evaluation-match'),
+      candidateMode: 'net',
+    });
+    const netBaseline = options.evaluationOpponent === 'easyplus' ? netOnlyEvaluation.againstEasyPlus : netOnlyEvaluation.againstEasy;
+    console.log(`[HardAI] Model alone vs ${baselineLabel}: ${netBaseline.wins}W/${netBaseline.draws}D/${netBaseline.losses}L/${netBaseline.unfinished} unfinished (${(netBaseline.winRate * 100).toFixed(1)}% wins); paired won ${netBaseline.paired.wonBoth}, lost ${netBaseline.paired.lostBoth}, split ${netBaseline.paired.split}.`);
+  }
 
   const metadataPath = outputPath.replace(/\.json$/i, '.metadata.json');
   const heldOutScenarios = selectScenarios(
     options.diagnosticRandomCount,
     options.fixtureCount,
-    options.seed + 10,
+    deriveSeed(options.seed, 'held-out'),
   );
   console.log(`[HardAI] Generating held-out labels for ${heldOutScenarios.length} diagnostic scenarios.`);
   const heldOutLabels = await generateCorpusLabels(heldOutScenarios, {
     maxResponses: Math.max(1, options.maxResponses),
-    seed: options.seed + 10,
+    seed: deriveSeed(options.seed, 'held-out-label'),
     onProgress: createScenarioProgressReporter('Held-out labeling', heldOutScenarios.length),
   });
   const heldOutRanking = await evaluateHeldOutRanking(model, heldOutLabels, {
@@ -230,36 +309,60 @@ const main = async () => {
     ? await evaluateShallowSearchOracle(oracleScenarios, {
       maxResponses: Math.max(1, options.maxResponses),
       maxRounds: options.maxRounds,
-      seed: options.seed + 20,
+      seed: deriveSeed(options.seed, 'oracle'),
       onProgress: createScenarioProgressReporter('Oracle benchmark', oracleScenarios.length),
     })
     : null;
   if (oracle) {
-    console.log(`[HardAI] Shallow-search oracle vs EasyAI: ${oracle.wins}W/${oracle.draws}D/${oracle.losses}L/${oracle.unfinished} unfinished (${(oracle.winRate * 100).toFixed(1)}% wins).`);
+    console.log(`[HardAI] Shallow-search oracle vs EasyAI+: ${oracle.wins}W/${oracle.draws}D/${oracle.losses}L/${oracle.unfinished} unfinished (${(oracle.winRate * 100).toFixed(1)}% wins).`);
   }
 
   const quality = {
-    easyScoreRate: evaluation.againstEasy.scoreRate,
+    baselineScoreRate: baseline.scoreRate,
+    pairedWinRate: baseline.paired.pairedWinRate,
     heldOutTop1Agreement: heldOutRanking.top1Agreement,
     heldOutSpearman: heldOutRanking.meanSpearmanCorrelation,
   };
   const bestMetadataPath = bestPath.replace(/\.json$/i, '.metadata.json');
   const previousBest = await loadMetadata(bestMetadataPath);
   const featureMetadata = getCandidateFeatureMetadata();
-  const compatibleBest = previousBest?.featureVersion === featureMetadata.featureVersion ? previousBest : null;
-  const isBest = isCandidateQualityImproved(quality, compatibleBest?.quality);
+  const previousBestGames = previousBest?.evaluation?.[options.evaluationOpponent === 'easyplus' ? 'againstEasyPlus' : 'againstEasy']?.games ?? 0;
+  // A previous best only counts if it was measured the same way and on enough games to be trusted.
+  const comparableBest = previousBest?.featureVersion === featureMetadata.featureVersion
+    && previousBest?.options?.evaluationOpponent === options.evaluationOpponent
+    && (previousBest?.options?.evaluationMode ?? 'net') === options.evaluationMode
+    && previousBestGames >= options.minBestGames
+    ? previousBest
+    : null;
+  const comparableBestQuality = comparableBest?.labelEvaluator === MOVEMENT_LABEL_EVALUATOR
+    ? comparableBest.quality
+    : comparableBest
+      ? {
+        baselineScoreRate: comparableBest.quality?.baselineScoreRate ?? comparableBest.quality?.easyScoreRate,
+      }
+      : null;
+  const bestEligibility = {
+    enoughGames: baseline.games >= options.minBestGames,
+    scoreRate: baseline.scoreRate >= options.minBestScoreRate,
+  };
+  const isBestEligible = Object.values(bestEligibility).every(Boolean);
+  const isBest = isBestEligible && isCandidateQualityImproved(quality, comparableBestQuality);
   const metadata = {
     trainedAt: new Date().toISOString(),
     options,
-    scenarioCount: scenarios.length,
+    scenarioCount,
+    evaluationScenarioCount: evaluationScenarios.length,
     labelCount,
     trainingObjective: options.objective,
+    labelEvaluator: MOVEMENT_LABEL_EVALUATOR,
     finalLoss: loss,
     evaluation,
+    netOnlyEvaluation,
     promotion,
     heldOutRanking,
     oracle,
     quality,
+    bestEligibility,
     isBest,
     featureVersion: featureMetadata.featureVersion,
     featureSize: featureMetadata.featureSize,
@@ -271,7 +374,10 @@ const main = async () => {
     await writeFile(bestMetadataPath, JSON.stringify(metadata, null, 2), 'utf8');
     console.log(`[HardAI] Updated best candidate checkpoint: ${bestPath}`);
   } else {
-    console.log(`[HardAI] Preserved existing best candidate checkpoint: ${bestPath}`);
+    const reason = !isBestEligible
+      ? `candidate not eligible (games ${baseline.games}/${options.minBestGames}, score rate ${(baseline.scoreRate * 100).toFixed(1)}%/${(options.minBestScoreRate * 100).toFixed(1)}% required)`
+      : 'candidate did not beat the existing best';
+    console.log(`[HardAI] Preserved existing best candidate checkpoint: ${bestPath} (${reason}).`);
   }
 
   if (options.promote) {

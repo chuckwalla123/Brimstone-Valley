@@ -106,14 +106,16 @@ const createFixtureScenarios = () => [
   }),
 ];
 
-const randomizeTile = (random, hero) => {
+const randomizeTile = (random, hero, { isReserve = false } = {}) => {
   const maxHealth = Math.max(1, Number(hero.health || 1));
   const effectCount = random() < 0.35 ? randomInteger(random, 1, 2) : 0;
+  const effects = sampleWithoutReplacement(random, RANDOM_EFFECTS, effectCount);
   return createTile(hero, {
     currentHealth: randomInteger(random, Math.max(1, Math.ceil(maxHealth * 0.35)), maxHealth),
     currentArmor: Math.max(0, Number(hero.armor || 0) + randomInteger(random, -1, 2)),
     currentEnergy: Math.max(0, Number(hero.energy || 0) + randomInteger(random, 0, 3)),
-    effects: sampleWithoutReplacement(random, RANDOM_EFFECTS, effectCount),
+    // Shackle is permanent and only reachable on the board; a shackled reserve hero could never move or die, so games never end.
+    effects: isReserve ? effects.filter((effect) => effect !== EFFECTS.Shackle) : effects,
   });
 };
 
@@ -132,7 +134,7 @@ const populateRandomSide = (random, boards, heroes) => {
   for (let index = 0; index < reserveCount; index += 1) {
     boards.reserve[index] = {
       ...boards.reserve[index],
-      ...randomizeTile(random, selectedHeroes[mainCount + index]),
+      ...randomizeTile(random, selectedHeroes[mainCount + index], { isReserve: true }),
     };
   }
 };

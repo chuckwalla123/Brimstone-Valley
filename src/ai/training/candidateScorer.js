@@ -101,17 +101,21 @@ export const preparePairwiseRankingExamples = (labelSets, {
       Number(right.prioritizesBestAction) - Number(left.prioritizesBestAction)
       || right.gap - left.gap
     ));
+    // Pairs reuse one compact feature vector per label instead of copying it per pair.
+    const encoded = new Map();
+    const encodeLabel = (label) => {
+      if (!encoded.has(label)) {
+        encoded.set(label, Float32Array.from(encodeMovementCandidate(
+          labelSet.state,
+          label.action,
+          labelSet.perspectiveSide,
+        )));
+      }
+      return encoded.get(label);
+    };
     pairs.slice(0, maxPairsPerState).forEach((pair) => {
-      preferredFeatures.push(Array.from(encodeMovementCandidate(
-        labelSet.state,
-        pair.preferred.action,
-        labelSet.perspectiveSide,
-      )));
-      otherFeatures.push(Array.from(encodeMovementCandidate(
-        labelSet.state,
-        pair.other.action,
-        labelSet.perspectiveSide,
-      )));
+      preferredFeatures.push(encodeLabel(pair.preferred));
+      otherFeatures.push(encodeLabel(pair.other));
       scoreGaps.push(pair.gap);
     });
     if (pairs.length) stateCount += 1;
@@ -185,14 +189,13 @@ const trainWithPairwiseRanking = async (model, examples, {
     for (let start = 0; start < indices.length; start += batchSize) {
       const batchIndices = indices.slice(start, start + batchSize);
       const loss = optimizer.minimize(() => tf.tidy(() => {
-        const preferredInput = tf.tensor2d(
-          batchIndices.map((index) => examples.preferredFeatures[index]),
-          [batchIndices.length, CANDIDATE_FEATURE_SIZE],
-        );
-        const otherInput = tf.tensor2d(
-          batchIndices.map((index) => examples.otherFeatures[index]),
-          [batchIndices.length, CANDIDATE_FEATURE_SIZE],
-        );
+        const flatten = (source) => {
+          const flat = new Float32Array(batchIndices.length * CANDIDATE_FEATURE_SIZE);
+          batchIndices.forEach((index, row) => flat.set(source[index], row * CANDIDATE_FEATURE_SIZE));
+          return tf.tensor2d(flat, [batchIndices.length, CANDIDATE_FEATURE_SIZE]);
+        };
+        const preferredInput = flatten(examples.preferredFeatures);
+        const otherInput = flatten(examples.otherFeatures);
         const preferredScore = model.apply(preferredInput, { training: true });
         const otherScore = model.apply(otherInput, { training: true });
         return tf.mean(tf.softplus(tf.neg(tf.sub(preferredScore, otherScore))));

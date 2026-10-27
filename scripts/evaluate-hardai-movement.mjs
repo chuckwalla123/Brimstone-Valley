@@ -13,6 +13,7 @@ const parseArguments = (argv) => {
     fixtureCount: 5,
     maxRounds: 20,
     seed: 20261017,
+    evaluationOpponent: 'easyplus',
   };
   const keys = new Map([
     ['model', 'model'],
@@ -21,6 +22,7 @@ const parseArguments = (argv) => {
     ['fixture-count', 'fixtureCount'],
     ['max-rounds', 'maxRounds'],
     ['seed', 'seed'],
+    ['evaluation-opponent', 'evaluationOpponent'],
   ]);
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -30,7 +32,10 @@ const parseArguments = (argv) => {
     const value = argv[index + 1];
     if (value === undefined || value.startsWith('--')) throw new Error(`Option ${argument} requires a value`);
     index += 1;
-    options[key] = ['model', 'champion'].includes(key) ? value : Number(value);
+    options[key] = ['model', 'champion', 'evaluationOpponent'].includes(key) ? value : Number(value);
+  }
+  if (!['easy', 'easyplus'].includes(options.evaluationOpponent)) {
+    throw new Error('evaluation-opponent must be either easy or easyplus');
   }
   return options;
 };
@@ -63,6 +68,7 @@ const main = async () => {
     candidateModel,
     championModel,
     scenarios,
+    evaluationOpponent: options.evaluationOpponent,
     maxRounds: options.maxRounds,
     seed: options.seed,
     onMatchComplete: ({

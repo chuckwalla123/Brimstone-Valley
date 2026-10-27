@@ -6,6 +6,7 @@ import { makeMovementDecision } from '../src/ai/easyAIPlusAI.js';
 const BETTING_MAX_PLAYERS = 12;
 const BETTING_MIN_PLAYERS = 2;
 const BETTING_STARTING_COINS = 10;
+const CARRY_BET_BONUS = 5;
 const BETTING_TOTAL_ROUNDS = 8;
 const BETTING_BET_MS = 60_000;
 const BETTING_BATTLE_SPEED_MULTIPLIER = 4;
@@ -18,6 +19,7 @@ const BETTING_SUMMARY_MS = 15_000;
 const BETTING_SIMULATION_TIMEOUT_MS = 120_000;
 const BETTING_SETTLE_WATCHDOG_MS = 210_000;
 const BETTING_STEP_ACK_TIMEOUT_MS = 8_000;
+const BETTING_STEP_ACK_GRACE_MS = 2_500;
 const BETTING_LIVE_STATE_STREAM_MIN_MS = 180;
 const BETTING_SERVER_INSTANCE_ID = process.env.FLY_ALLOC_ID || process.env.HOSTNAME || `pid:${process.pid}`;
 
@@ -1103,6 +1105,7 @@ function createLiveBattleTracking(spec) {
     winningTeamHealthAtElimination: null,
     winningTeamEnergyAtElimination: null,
     damageByHero: new Map(),
+    healingByHero: new Map(),
     castsByHero: new Map(),
     heroNameByUid: new Map(),
     heroSideByUid: new Map(),
@@ -1111,7 +1114,10 @@ function createLiveBattleTracking(spec) {
     playback: [],
     deathSeq: 0,
     prevAlive: new Map(),
-    prevHealthByUid: new Map()
+    prevHealthByUid: new Map(),
+    prevEffectsByUid: new Map(),
+    uidByInstanceId: new Map(),
+    pendingReactionEffectAttributions: []
   };
 
   const seedSnapshot = {
@@ -1129,10 +1135,171 @@ function createLiveBattleTracking(spec) {
     tracking.heroNameByUid.set(entry.uid, entry.name);
     tracking.heroSideByUid.set(entry.uid, entry.side);
     tracking.damageByHero.set(entry.uid, 0);
+    tracking.healingByHero.set(entry.uid, 0);
     tracking.castsByHero.set(entry.uid, 0);
   });
 
   return tracking;
+}
+
+function resolveEffectOwnerUid(tracking, snapshot, effect) {
+  if (!effect) return null;
+  if (effect.appliedByHeroInstanceId && tracking.uidByInstanceId.has(effect.appliedByHeroInstanceId)) {
+    return tracking.uidByInstanceId.get(effect.appliedByHeroInstanceId);
+  }
+  if (typeof effect.appliedByIndex === 'number' && effect.appliedByBoardName) {
+    const tile = getTileByToken(snapshot, { boardName: effect.appliedByBoardName, index: effect.appliedByIndex });
+    if (tile && tile.hero && tile.hero._bettingUid && (!effect.appliedByHeroId || tile.hero.id === effect.appliedByHeroId)) {
+      return tile.hero._bettingUid;
+    }
+  }
+  return null;
+}
+
+// Damage/heal-over-time effects on a hero, tagged with the hero that applied them.
+function collectDamageHealEffects(tracking, snapshot, entry) {
+  const out = [];
+  const effects = entry && entry.tile && Array.isArray(entry.tile.effects) ? entry.tile.effects : [];
+  effects.forEach((effect) => {
+    const kind = effect && effect.pulse ? effect.pulse.type : null;
+    if (kind !== 'damage' && kind !== 'heal') return;
+    const ownerUid = resolveEffectOwnerUid(tracking, snapshot, effect);
+    if (ownerUid) out.push({ name: effect.name || '', kind, ownerUid });
+  });
+  return out;
+}
+
+function getEffectPulseOwnerUid(tracking, snapshot, action) {
+  const ownerToken = action && action.ownerBoardName && typeof action.ownerIndex === 'number'
+    ? { boardName: action.ownerBoardName, index: action.ownerIndex }
+    : action?.source;
+  const ownerTile = getTileByToken(snapshot, ownerToken);
+  return ownerTile && ownerTile.hero ? ownerTile.hero._bettingUid || null : null;
+}
+
+function isPulseFromDamageHealEffect(entry, action) {
+  if (!entry || !action || !action.effectName) return false;
+  const effects = entry.tile && Array.isArray(entry.tile.effects) ? entry.tile.effects : [];
+  return effects.some((effect) => effect
+    && effect.name === action.effectName
+    && effect.pulse
+    && effect.pulse.type === action.action);
+}
+
+function creditReactionEffect(tracking, ownerUid, targetUid, kind, amount) {
+  const ownerSide = tracking.heroSideByUid.get(ownerUid);
+  const targetSide = tracking.heroSideByUid.get(targetUid);
+  if (!(amount > 0) || !ownerSide || !targetSide) return;
+  if (kind === 'damage' && ownerSide !== targetSide) {
+    tracking.damageByHero.set(ownerUid, Number(tracking.damageByHero.get(ownerUid) || 0) + amount);
+  } else if (kind === 'heal' && ownerSide === targetSide) {
+    tracking.healingByHero.set(ownerUid, Number(tracking.healingByHero.get(ownerUid) || 0) + amount);
+  }
+}
+
+function queueReactionEffectAttribution(tracking, snapshot, action) {
+  if (!action || action.type !== 'effectPulse' || !action.target) return;
+  if (action.action !== 'damage' && action.action !== 'heal') return;
+
+  const targetTile = getTileByToken(snapshot, action.target);
+  const targetUid = targetTile && targetTile.hero ? targetTile.hero._bettingUid : null;
+  const ownerUid = getEffectPulseOwnerUid(tracking, snapshot, action);
+  if (!targetUid || !ownerUid) return;
+
+  const targetEntry = collectAllTiles(snapshot).find((entry) => entry.uid === targetUid);
+  if (isPulseFromDamageHealEffect(targetEntry, action)) return;
+
+  const health = targetTile.currentHealth != null
+    ? Number(targetTile.currentHealth)
+    : Number(targetTile.hero.health || 0);
+  const currentHealth = Math.max(0, health);
+  const previousHealth = Number(tracking.prevHealthByUid.get(targetUid) || 0);
+  const alreadyApplied = action.action === 'damage'
+    ? Math.max(0, previousHealth - currentHealth)
+    : Math.max(0, currentHealth - previousHealth);
+  if (alreadyApplied > 0) {
+    creditReactionEffect(
+      tracking,
+      ownerUid,
+      targetUid,
+      action.action,
+      Math.min(Math.max(0, Number(action.amount || 0)), alreadyApplied)
+    );
+    return;
+  }
+
+  tracking.pendingReactionEffectAttributions.push({
+    targetUid,
+    ownerUid,
+    kind: action.action,
+    amount: Math.max(0, Number(action.amount || 0)),
+    baselineHealth: currentHealth
+  });
+}
+
+function creditPendingReactionEffects(tracking, snapshot) {
+  const entriesByUid = new Map(collectAllTiles(snapshot).map((entry) => [entry.uid, entry]));
+  tracking.pendingReactionEffectAttributions = tracking.pendingReactionEffectAttributions.filter((pending) => {
+    const target = entriesByUid.get(pending.targetUid);
+    const currentHealth = target
+      ? Math.max(0, Number(target.tile.currentHealth != null ? target.tile.currentHealth : target.tile.hero.health || 0))
+      : 0;
+    const actualChange = pending.kind === 'damage'
+      ? Math.max(0, pending.baselineHealth - currentHealth)
+      : Math.max(0, currentHealth - pending.baselineHealth);
+    if (actualChange <= 0) return true;
+
+    const amount = Math.min(pending.amount, actualChange);
+    creditReactionEffect(tracking, pending.ownerUid, pending.targetUid, pending.kind, amount);
+    return false;
+  });
+}
+
+// Credits HP changes that happen outside a cast (DoTs, HoTs, etc.) to the heroes who applied the effects.
+function creditEffectOwners(tracking, snapshot, allNow, nowUids) {
+  const credit = (uid, kind, targetUid, amount) => {
+    const ownerSide = tracking.heroSideByUid.get(uid);
+    const targetSide = tracking.heroSideByUid.get(targetUid);
+    if (!ownerSide || !targetSide) return;
+    if (kind === 'damage' && ownerSide !== targetSide) {
+      tracking.damageByHero.set(uid, Number(tracking.damageByHero.get(uid) || 0) + amount);
+    } else if (kind === 'heal' && ownerSide === targetSide) {
+      tracking.healingByHero.set(uid, Number(tracking.healingByHero.get(uid) || 0) + amount);
+    }
+  };
+
+  const distribute = (entryUid, currentEffects, kind, amount) => {
+    if (!(amount > 0)) return;
+    const merged = new Map();
+    [...(tracking.prevEffectsByUid.get(entryUid) || []), ...currentEffects].forEach((fx) => {
+      if (fx.kind === kind) merged.set(`${fx.name}|${fx.ownerUid}`, fx);
+    });
+    const owners = [...new Set([...merged.values()].map((fx) => fx.ownerUid))];
+    if (!owners.length) return;
+    const share = amount / owners.length;
+    owners.forEach((uid) => credit(uid, kind, entryUid, share));
+  };
+
+  allNow.forEach((entry) => {
+    const currentHp = entry.tile && entry.tile.currentHealth != null
+      ? Number(entry.tile.currentHealth)
+      : Number(entry.tile?.hero?.health || 0);
+    const nowHp = Math.max(0, currentHp);
+    const prevHp = Number(tracking.prevHealthByUid.get(entry.uid) || 0);
+    if (nowHp === prevHp) return;
+    const currentEffects = collectDamageHealEffects(tracking, snapshot, entry);
+    if (nowHp < prevHp) {
+      distribute(entry.uid, currentEffects, 'damage', prevHp - nowHp);
+    } else if (tracking.prevAlive.get(entry.uid) !== false) {
+      distribute(entry.uid, currentEffects, 'heal', nowHp - prevHp);
+    }
+  });
+
+  tracking.prevHealthByUid.forEach((prevHp, uid) => {
+    if (nowUids.has(uid)) return;
+    if (Number(prevHp || 0) > 0) distribute(uid, [], 'damage', Number(prevHp));
+    tracking.prevHealthByUid.set(uid, 0);
+  });
 }
 
 function observeLiveBattleSnapshot(tracking, snapshot, round) {
@@ -1141,21 +1308,39 @@ function observeLiveBattleSnapshot(tracking, snapshot, round) {
   const action = snapshot && snapshot.lastAction ? snapshot.lastAction : null;
 
   collectAllTiles(snapshot).forEach((entry) => {
+    if (entry.tile.hero._instanceId) tracking.uidByInstanceId.set(entry.tile.hero._instanceId, entry.uid);
+  });
+
+  collectAllTiles(snapshot).forEach((entry) => {
     tracking.heroNameByUid.set(entry.uid, entry.name);
     tracking.heroSideByUid.set(entry.uid, entry.side);
     if (!tracking.damageByHero.has(entry.uid)) tracking.damageByHero.set(entry.uid, 0);
+    if (!tracking.healingByHero.has(entry.uid)) tracking.healingByHero.set(entry.uid, 0);
     if (!tracking.castsByHero.has(entry.uid)) tracking.castsByHero.set(entry.uid, 0);
   });
+
+  creditPendingReactionEffects(tracking, snapshot);
 
   if (action && action.type === 'cast' && action.caster) {
     const casterTile = getTileByToken(snapshot, action.caster);
     const casterUid = casterTile && casterTile.hero ? casterTile.hero._bettingUid : null;
+    tracking.pendingCasterUid = casterUid || null;
     if (casterUid) {
       tracking.castsByHero.set(casterUid, Number(tracking.castsByHero.get(casterUid) || 0) + 1);
+    }
+  }
 
+  // HP changes from a cast only appear on the following castApplied step, so credit the pending caster there.
+  if (action && action.type === 'castApplied' && tracking.pendingCasterUid) {
+    const casterUid = tracking.pendingCasterUid;
+    tracking.pendingCasterUid = null;
+    {
       const casterSide = tracking.heroSideByUid.get(casterUid) || null;
       let damage = 0;
+      let healing = 0;
+      const seenUids = new Set();
       collectAllTiles(snapshot).forEach((entry) => {
+        seenUids.add(entry.uid);
         const currentHp = entry.tile && entry.tile.currentHealth != null
           ? Number(entry.tile.currentHealth)
           : Number(entry.tile?.hero?.health || 0);
@@ -1163,16 +1348,19 @@ function observeLiveBattleSnapshot(tracking, snapshot, round) {
         const prevHp = Number(tracking.prevHealthByUid.get(entry.uid) || 0);
         if (casterSide && entry.side !== casterSide) {
           damage += Math.max(0, prevHp - nowHp);
+        } else if (casterSide && entry.side === casterSide) {
+          // Only counts HP actually restored; skip heroes that were already dead
+          if (tracking.prevAlive.get(entry.uid) !== false) healing += Math.max(0, nowHp - prevHp);
         }
       });
-
-      if (damage <= 0) {
-        damage = (Array.isArray(action.results) ? action.results : []).reduce((sum, item) => {
-          const amount = item && item.applied && item.applied.type === 'damage'
-            ? Number(item.applied.amount || 0)
-            : 0;
-          return sum + Math.max(0, amount);
-        }, 0);
+      // Heroes removed from the board by this cast took lethal damage
+      tracking.prevHealthByUid.forEach((prevHp, uid) => {
+        if (seenUids.has(uid)) return;
+        if (casterSide && tracking.heroSideByUid.get(uid) !== casterSide) damage += Math.max(0, Number(prevHp || 0));
+        tracking.prevHealthByUid.set(uid, 0);
+      });
+      if (healing > 0) {
+        tracking.healingByHero.set(casterUid, Number(tracking.healingByHero.get(casterUid) || 0) + healing);
       }
 
       tracking.damageByHero.set(casterUid, Number(tracking.damageByHero.get(casterUid) || 0) + damage);
@@ -1185,6 +1373,14 @@ function observeLiveBattleSnapshot(tracking, snapshot, round) {
 
   const allNow = collectAllTiles(snapshot);
   const nowUids = new Set(allNow.map((entry) => entry.uid));
+
+  if (!(action && action.type === 'castApplied')) {
+    creditEffectOwners(tracking, snapshot, allNow, nowUids);
+  }
+  allNow.forEach((entry) => {
+    tracking.prevEffectsByUid.set(entry.uid, collectDamageHealEffects(tracking, snapshot, entry));
+  });
+  queueReactionEffectAttribution(tracking, snapshot, action);
 
   if (tracking.eliminationRound == null) {
     const p1Alive = countAliveTilesForSide(snapshot, 'p1');
@@ -1275,6 +1471,15 @@ function finalizeLiveBattleOutcome(spec, tracking) {
     .filter(([, value]) => Number(value || 0) === maxDamage)
     .map(([uid]) => uid);
 
+  const carryEntries = [...tracking.damageByHero.keys()].map((uid) => ({
+    uid,
+    value: Number(tracking.damageByHero.get(uid) || 0) + Number(tracking.healingByHero.get(uid) || 0)
+  }));
+  const maxCarryValue = carryEntries.reduce((max, entry) => Math.max(max, entry.value), 0);
+  const carryWinnerHeroes = maxCarryValue > 0
+    ? carryEntries.filter((entry) => entry.value === maxCarryValue).map((entry) => entry.uid)
+    : [];
+
   const aliveTiles = collectAllTiles(finalSnapshot).filter((entry) => entry.alive);
   const aliveCastEntries = aliveTiles.map((entry) => ({
     uid: entry.uid,
@@ -1333,6 +1538,9 @@ function finalizeLiveBattleOutcome(spec, tracking) {
     heroNameByUid: Object.fromEntries(tracking.heroNameByUid.entries()),
     castsByHero: Object.fromEntries(tracking.castsByHero.entries()),
     damageByHero: Object.fromEntries(tracking.damageByHero.entries()),
+    healingByHero: Object.fromEntries(tracking.healingByHero.entries()),
+    carryWinnerHeroes,
+    carryValueByHero: Object.fromEntries(carryEntries.map((entry) => [entry.uid, entry.value])),
     playback: tracking.playback.slice(0, 220),
     finalSnapshot
   };
@@ -1474,6 +1682,31 @@ export function createBettingModeManager(io) {
       clearTimeout(lobby.playbackSession.timeout);
       lobby.playbackSession.timeout = null;
     }
+    if (lobby.playbackSession.graceTimeout) {
+      clearTimeout(lobby.playbackSession.graceTimeout);
+      lobby.playbackSession.graceTimeout = null;
+    }
+  };
+
+  // Players whose clients lag (throttled/background tabs) are not waited on, so one slow client
+  // cannot stall the whole lobby. They rejoin the required set as soon as they ack again.
+  const getAckRequiredPlayerIds = (lobby) => {
+    const active = activeOnlinePlayerIds(lobby).map((id) => String(id));
+    const slow = lobby.slowAckPlayers instanceof Set ? lobby.slowAckPlayers : null;
+    if (!slow || slow.size === 0) return active;
+    const required = active.filter((id) => !slow.has(id));
+    return required.length > 0 ? required : active;
+  };
+
+  const markPendingAckPlayersSlow = (lobby, expectedSeq) => {
+    if (!(lobby.slowAckPlayers instanceof Set)) lobby.slowAckPlayers = new Set();
+    const ackByPlayer = lobby.battleStepAckSeqByPlayer instanceof Map ? lobby.battleStepAckSeqByPlayer : new Map();
+    getAckRequiredPlayerIds(lobby).forEach((playerId) => {
+      if (Number(ackByPlayer.get(playerId) || 0) < expectedSeq) {
+        lobby.slowAckPlayers.add(playerId);
+        console.warn('[Betting] Client is lagging on step acks; no longer waiting on it', { lobbyCode: lobby.code, playerId, expectedSeq });
+      }
+    });
   };
 
   const clearPlaybackStateFeedTimeout = (lobby) => {
@@ -1614,6 +1847,7 @@ export function createBettingModeManager(io) {
     clearPlaybackStepTimeout(lobby);
     session.timeout = setTimeout(() => {
       if (!lobby.playbackSession || lobby.playbackSession !== session) return;
+      markPendingAckPlayersSlow(lobby, Number(step?.seq || 0));
       session.awaitingAck = false;
       session.index += 1;
       sendNextPlaybackStep(lobby);
@@ -1637,7 +1871,7 @@ export function createBettingModeManager(io) {
     const current = Array.isArray(session.steps) ? session.steps[session.index] : null;
     const expectedSeq = Number(current?.seq || 0);
     if (!expectedSeq) return false;
-    const activeIds = activeOnlinePlayerIds(lobby).map((id) => String(id));
+    const activeIds = getAckRequiredPlayerIds(lobby);
     if (activeIds.length === 0) return false;
     const ackByPlayer = lobby.battleStepAckSeqByPlayer instanceof Map ? lobby.battleStepAckSeqByPlayer : new Map();
     return activeIds.every((playerId) => Number(ackByPlayer.get(playerId) || 0) >= expectedSeq);
@@ -1694,7 +1928,7 @@ export function createBettingModeManager(io) {
     if (!lobby) return Promise.resolve();
     clearRoundVisualGate(lobby);
 
-    const requiredPlayerIds = new Set(activeOnlinePlayerIds(lobby).map((id) => String(id)));
+    const requiredPlayerIds = new Set(getAckRequiredPlayerIds(lobby));
     const seq = Number(payload.seq || 0);
     const round = Number(payload.round || 0);
     const timeoutMs = Math.max(2_000, Number(payload.timeoutMs || BETTING_ROUND_VISUAL_ACK_TIMEOUT_MS));
@@ -1801,7 +2035,6 @@ export function createBettingModeManager(io) {
             id: me.playerId,
             username: me.username,
             coins: Number(me.coins || 0),
-            canUseDesperationBet: Number(me.coins || 0) <= 0,
             hasSubmittedBet: !!(mePlayerId && lobby.bets && lobby.bets[mePlayerId])
           }
         : null,
@@ -1868,6 +2101,18 @@ export function createBettingModeManager(io) {
     }
   }, BETTING_LOBBY_RECONNECT_GRACE_MS);
   staleLobbySweepTimer.unref?.();
+
+  // Diagnostics: logs when the server event loop stalls (CPU-heavy simulation blocks every lobby).
+  let lastLagTick = Date.now();
+  const eventLoopLagTimer = setInterval(() => {
+    const now = Date.now();
+    const lagMs = now - lastLagTick - 250;
+    lastLagTick = now;
+    if (lagMs > 400) {
+      console.warn('[Betting] Event loop stall detected', { lagMs, lobbies: lobbiesByCode.size, memory: getProcessMemorySnapshot() });
+    }
+  }, 250);
+  eventLoopLagTimer.unref?.();
 
   const emitLobbyState = (lobby) => {
     lobby.playerOrder.forEach((playerId) => {
@@ -2244,7 +2489,8 @@ export function createBettingModeManager(io) {
         primaryPick: String(bet.primaryPick || ''),
         primaryAmount: Number(bet.primaryAmount || 0),
         sideAmount: Number(bet.sideAmount || 0),
-        sidePrediction: bet.sidePrediction
+        sidePrediction: bet.sidePrediction,
+        carryPick: bet.carryPick ? String(bet.carryPick) : null
       };
     });
 
@@ -2265,7 +2511,10 @@ export function createBettingModeManager(io) {
 
       const primaryPayout = wonPrimary ? primaryAmount * 2 : 0;
       const sidePayout = wonSide ? sideAmount * Number(lobby.battleSpec.sideBet.multiplier || 0) : 0;
-      const payout = primaryPayout + sidePayout;
+      const carryWinnerSet = new Set(Array.isArray(battleOutcome.carryWinnerHeroes) ? battleOutcome.carryWinnerHeroes : []);
+      const wonCarry = !!entry.carryPick && carryWinnerSet.has(entry.carryPick);
+      const carryBonus = wonCarry ? CARRY_BET_BONUS : 0;
+      const payout = primaryPayout + sidePayout + carryBonus;
 
       const after = Math.max(0, before - totalStake + payout);
       player.coins = after;
@@ -2279,6 +2528,9 @@ export function createBettingModeManager(io) {
         primaryAmount,
         sidePrediction: entry.sidePrediction ?? null,
         sideAmount,
+        carryPick: entry.carryPick || null,
+        wonCarry,
+        carryBonus,
         wonPrimary,
         wonSide,
         payout
@@ -2308,6 +2560,8 @@ export function createBettingModeManager(io) {
         firstToDieHeroes: battleOutcome.firstToDieHeroes,
         lastDieOnLosingTeamHeroes: battleOutcome.lastDieOnLosingTeamHeroes,
         roundsWithMostDeaths: battleOutcome.roundsWithMostDeaths,
+        carryWinnerHeroes: battleOutcome.carryWinnerHeroes || [],
+        carryValueByHero: battleOutcome.carryValueByHero || {},
         heroNameByUid: battleOutcome.heroNameByUid
       },
       rows: roundRows
@@ -2436,6 +2690,7 @@ export function createBettingModeManager(io) {
     lobby.battleVisualAcks = null;
     lobby.playbackPending = false;
     lobby.battleStepAckSeqByPlayer = new Map();
+    lobby.slowAckPlayers = new Set();
     clearRoundVisualGate(lobby);
     clearPlaybackSession(lobby, false);
     lobby.summaryDeadlineTs = null;
@@ -2443,6 +2698,11 @@ export function createBettingModeManager(io) {
 
     lobby.battleSpec = createBattleSpec(lobby.currentRound);
     lobby.betDeadlineTs = Date.now() + BETTING_BET_MS;
+
+    // Comeback coin: broke players get 1 coin to use on the main or side bet
+    lobby.players.forEach((p) => {
+      if (Number(p.coins || 0) <= 0) p.coins = 1;
+    });
 
     emitLobbyState(lobby);
 
@@ -2653,29 +2913,24 @@ export function createBettingModeManager(io) {
       const primaryPick = String(payload.primaryPick || '');
       const total = primaryAmount + sideAmount;
       const availableCoins = Number(player.coins || 0);
-      const canUseDesperationBet = availableCoins <= 0;
 
       if (!['p1', 'p2'].includes(primaryPick)) {
         socket.emit('bettingError', { message: 'Primary bet must pick one of the two bots.' });
         return;
       }
-      if (primaryAmount < 1) {
-        socket.emit('bettingError', { message: 'Primary bet minimum is 1 coin.' });
+      if (total < 1) {
+        socket.emit('bettingError', { message: 'You must stake at least 1 coin (main or side bet).' });
         return;
       }
-      if (canUseDesperationBet) {
-        if (primaryAmount !== 1) {
-          socket.emit('bettingError', { message: 'At 0 coins, desperation bet amount must be exactly 1 coin.' });
-          return;
-        }
-        if (sideAmount > 0) {
-          socket.emit('bettingError', { message: 'At 0 coins, desperation bets cannot include a side bet.' });
-          return;
-        }
-      } else if (total > availableCoins) {
+      if (total > availableCoins) {
         socket.emit('bettingError', { message: 'Your total stake exceeds your coins.' });
         return;
       }
+
+      const carryPickRaw = String(payload.carryPick || '');
+      const carryPick = (lobby.battleSpec?.heroOptions || []).some((option) => option.uid === carryPickRaw)
+        ? carryPickRaw
+        : null;
 
       const sideBet = lobby.battleSpec?.sideBet || null;
       let sidePrediction = payload.sidePrediction;
@@ -2704,6 +2959,7 @@ export function createBettingModeManager(io) {
         primaryAmount,
         sideAmount,
         sidePrediction,
+        carryPick,
         submittedAt: Date.now()
       };
 
@@ -2769,14 +3025,25 @@ export function createBettingModeManager(io) {
       if (seq > prevAck) {
         lobby.battleStepAckSeqByPlayer.set(String(playerId), seq);
       }
+      if (lobby.slowAckPlayers instanceof Set) lobby.slowAckPlayers.delete(String(playerId));
 
       if (lobby.playbackSession && lobby.playbackSession.awaitingAck) {
-        const current = Array.isArray(lobby.playbackSession.steps)
-          ? lobby.playbackSession.steps[lobby.playbackSession.index]
-          : null;
-        if (current && Number(current.seq || 0) === seq && hasAllActivePlaybackAcksForCurrentStep(lobby)) {
-          advancePlaybackStep(lobby);
-          return;
+        const session = lobby.playbackSession;
+        const current = Array.isArray(session.steps) ? session.steps[session.index] : null;
+        if (current && Number(current.seq || 0) === seq) {
+          if (hasAllActivePlaybackAcksForCurrentStep(lobby)) {
+            advancePlaybackStep(lobby);
+            return;
+          }
+          // Once someone has finished the step, give the others a short grace period then move on.
+          if (!session.graceTimeout) {
+            session.graceTimeout = setTimeout(() => {
+              session.graceTimeout = null;
+              if (lobby.playbackSession !== session || !session.awaitingAck) return;
+              markPendingAckPlayersSlow(lobby, seq);
+              advancePlaybackStep(lobby);
+            }, BETTING_STEP_ACK_GRACE_MS);
+          }
         }
       }
     });
