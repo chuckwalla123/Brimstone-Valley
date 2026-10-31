@@ -5,7 +5,10 @@ import { deepClone } from '../../../shared/gameLogic.js';
 import { evaluateHeroPointsWithOptions } from '../easyAI.js';
 import { evaluateEffectValue } from '../effectValue.js';
 
-export const EASY_AI_PLUS_EVALUATION_OPTIONS = Object.freeze({ advancedSpellEvaluation: true });
+export const EASY_AI_PLUS_EVALUATION_OPTIONS = Object.freeze({
+  advancedSpellEvaluation: true,
+  useEffectEvaluationOverrides: false,
+});
 
 const countsTowardMainLimit = (tile) => !!(tile && tile.hero && !tile._dead && !tile._revivedExtra && tile.hero.isMinion !== true);
 const isAliveTile = (tile) => !!(tile && tile.hero && !tile._dead);
@@ -96,7 +99,7 @@ const getTargetCoverage = (targets = []) => {
   return coverage;
 };
 
-const estimateEffectValue = evaluateEffectValue;
+const estimateEffectValue = (effect) => evaluateEffectValue(effect, { useOverrides: false });
 
 const getProfileFormulaValue = (formula = {}) => {
   if (!formula) return 0;
@@ -333,8 +336,16 @@ export const evaluateEasyAIPlusEffectMatchup = (allyTiles, enemyTiles, layout = 
   const allyActiveBuffs = getActiveEffectStats(allyTiles.slice(0, layout.allyMainCount ?? allyTiles.length), 'buff');
   const enemyActiveBuffs = getActiveEffectStats(enemyTiles.slice(0, layout.enemyMainCount ?? enemyTiles.length), 'buff');
 
-  const allyCleanseValue = allyProfiles.reduce((sum, profile) => sum + (profile.cleanseCoverage * enemyMaxDebuffValue) + profile.cleanseHealBonus, 0);
-  const enemyCleanseValue = enemyProfiles.reduce((sum, profile) => sum + (profile.cleanseCoverage * allyMaxDebuffValue) + profile.cleanseHealBonus, 0);
+  // Cleanse only pays off against debuffs that exist on the board now; with none, keep a small
+  // anticipatory credit so a cleanser is not valued like a dead slot against a debuff-heavy opponent.
+  const NO_ACTIVE_DEBUFF_CLEANSE_FACTOR = 0.25;
+  const allyActiveDebuffs = getActiveEffectStats(allyTiles.slice(0, layout.allyMainCount ?? allyTiles.length), 'debuff');
+  const enemyActiveDebuffs = getActiveEffectStats(enemyTiles.slice(0, layout.enemyMainCount ?? enemyTiles.length), 'debuff');
+  const allyCleanseGate = allyActiveDebuffs.total > 0 ? 1 : NO_ACTIVE_DEBUFF_CLEANSE_FACTOR;
+  const enemyCleanseGate = enemyActiveDebuffs.total > 0 ? 1 : NO_ACTIVE_DEBUFF_CLEANSE_FACTOR;
+
+  const allyCleanseValue = allyCleanseGate * allyProfiles.reduce((sum, profile) => sum + (profile.cleanseCoverage * enemyMaxDebuffValue) + profile.cleanseHealBonus, 0);
+  const enemyCleanseValue = enemyCleanseGate * enemyProfiles.reduce((sum, profile) => sum + (profile.cleanseCoverage * allyMaxDebuffValue) + profile.cleanseHealBonus, 0);
   const allyBuffStripValue = allyProfiles.reduce((sum, profile) => sum + (profile.buffStripCoverage * enemyActiveBuffs.max), 0);
   const enemyBuffStripValue = enemyProfiles.reduce((sum, profile) => sum + (profile.buffStripCoverage * allyActiveBuffs.max), 0);
 
@@ -402,6 +413,10 @@ export const evaluateEasyAIPlusSetupScore = (p2Main, p2Reserve, p1Main, p1Reserv
           && [...(p1Main || [])].some(enemyTile => isAliveTile(enemyTile)
             && Number(enemyTile.currentEnergy || 0) >= 3 && Number(enemyTile.currentEnergy || 0) <= 4));
       if (!enemyHasEffect && !canProduceEffect) score -= 6;
+    } else if (activeTag === 'ally-debuff') {
+      // Cleanse needs a debuffed ally to do anything this turn.
+      const allyHasDebuff = allyRoster.some(allyTile => getTileEffects(allyTile).some(effect => effect?.kind === 'debuff'));
+      score += allyHasDebuff ? 2 : -2;
     } else if (activeTag && allyProducerTags.has(activeTag)) {
       score += 2;
     } else if (activeTag) {

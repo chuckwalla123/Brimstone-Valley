@@ -10,13 +10,15 @@ const getEffectTurns = (duration) => {
   return EFFECT_VALUE_HORIZON;
 };
 
-export const evaluateEffectValue = (effect) => {
+export const evaluateEffectValue = (effect, options = {}) => {
   const resolved = typeof effect === 'string' ? getEffectByName(effect) : effect;
   if (!resolved) return 0;
 
-  const override = EFFECT_EVALUATION_OVERRIDES[resolved.name];
-  if (typeof override === 'number' && Number.isFinite(override)) {
-    return override;
+  if (options.useOverrides !== false) {
+    const override = EFFECT_EVALUATION_OVERRIDES[resolved.name];
+    if (typeof override === 'number' && Number.isFinite(override)) {
+      return override;
+    }
   }
 
   const turns = getEffectTurns(resolved.duration);
@@ -26,7 +28,8 @@ export const evaluateEffectValue = (effect) => {
     if (resolved.pulse.derivedFrom === 'roundNumber') {
       score += (turns * (turns + 1)) / 2;
     } else if (resolved.pulse.derivedFrom === 'armor') {
-      score += 4 * turns;
+      const targetArmor = Number(options.targetArmor);
+      score += (Number.isFinite(targetArmor) ? Math.max(0, targetArmor) : 4) * turns;
     } else {
       score += Number(resolved.pulse.value || 0) * turns;
     }

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 
 import { EFFECTS } from './src/effects.js';
+import { evaluateEffectValue } from './src/ai/effectValue.js';
 import { HEROES } from './src/heroes.js';
 import { evaluateTileValue } from './src/ai/easyAI.js';
 import {
@@ -9,6 +10,10 @@ import {
   EASY_AI_PLUS_EVALUATION_OPTIONS,
 } from './src/ai/training/easyAIPlusTeacher.js';
 import { deepClone } from './shared/gameLogic.js';
+
+assert.equal(EASY_AI_PLUS_EVALUATION_OPTIONS.useEffectEvaluationOverrides, false);
+assert.equal(evaluateEffectValue(EFFECTS.Treachery), 2);
+assert.equal(evaluateEffectValue(EFFECTS.Treachery, { useOverrides: false, targetArmor: 3 }), 18);
 
 const heroById = (id) => {
   const hero = deepClone(HEROES.find(candidate => candidate.id === id));
@@ -246,8 +251,8 @@ const placeHero = (board, index, hero, overrides = {}) => {
 
   const againstAssassin = getKingRowValues(heroById('assassinID'));
   assert.ok(
-    againstAssassin[2] > againstAssassin[3],
-    `Expected Superiority to beat Subjugation against a 0-armor Assassin (${againstAssassin[2]} vs ${againstAssassin[3]}).`,
+    againstAssassin[3] > againstAssassin[2],
+    `Expected Subjugation to beat Superiority against a 0-armor Assassin under formula-only evaluation (${againstAssassin[3]} vs ${againstAssassin[2]}).`,
   );
 }
 

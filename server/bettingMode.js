@@ -21,6 +21,7 @@ const BETTING_SETTLE_WATCHDOG_MS = 210_000;
 const BETTING_STEP_ACK_TIMEOUT_MS = 8_000;
 const BETTING_STEP_ACK_GRACE_MS = 2_500;
 const BETTING_LIVE_STATE_STREAM_MIN_MS = 180;
+const BETTING_MAX_BUFFERED_BATTLE_STEPS = 128;
 const BETTING_SERVER_INSTANCE_ID = process.env.FLY_ALLOC_ID || process.env.HOSTNAME || `pid:${process.pid}`;
 
 function getProcessMemorySnapshot() {
@@ -634,12 +635,14 @@ function unmirrorP1TokenFromP2Perspective(token) {
   return null;
 }
 
-function chooseMovementDecisionForSide(side, p1Main, p1Reserve, p2Main, p2Reserve) {
+function chooseMovementDecisionForSide(side, p1Main, p1Reserve, p2Main, p2Reserve, movementPhase) {
+  const sequence = Array.isArray(movementPhase?.sequence) ? movementPhase.sequence : ['p1', 'p2'];
+  const index = Number.isInteger(movementPhase?.index) ? movementPhase.index : 0;
   if (side === 'p2') {
     const baseDecision = makeMovementDecision(
       p2Main,
       p2Reserve,
-      { movementPhase: { sequence: ['p2'], index: 0 } },
+      { movementPhase: { sequence, index } },
       p1Main,
       p1Reserve
     );
@@ -651,7 +654,12 @@ function chooseMovementDecisionForSide(side, p1Main, p1Reserve, p2Main, p2Reserv
   const baseDecision = makeMovementDecision(
     mirroredP1Main,
     p1Reserve,
-    { movementPhase: { sequence: ['p2'], index: 0 } },
+    {
+      movementPhase: {
+        sequence: sequence.map((entry) => (entry === 'p1' ? 'p2' : 'p1')),
+        index
+      }
+    },
     mirroredP2Main,
     p2Reserve
   );
@@ -773,7 +781,14 @@ async function simulateBattle(spec, options = {}) {
         const movementPhase = { sequence: movementOrder, index: moveIndex };
         pushReplayState('movementStart', movementPhase);
 
-        const decision = chooseMovementDecisionForSide(mover, p1Main, p1Reserve, p2Main, p2Reserve);
+        const decision = chooseMovementDecisionForSide(
+          mover,
+          p1Main,
+          p1Reserve,
+          p2Main,
+          p2Reserve,
+          movementPhase
+        );
         if (decision) {
           applyValidatedMoveDecisionToBoards({ p1Main, p2Main, p1Reserve, p2Reserve }, decision);
         }
@@ -2278,7 +2293,14 @@ export function createBettingModeManager(io) {
           const movementPhase = { sequence: movementOrder, index: moveIndex };
           steps.push(buildMovementStateStep(tracking, round, 'movementStart', movementPhase));
 
-          const decision = chooseMovementDecisionForSide(mover, tracking.p1Main, tracking.p1Reserve, tracking.p2Main, tracking.p2Reserve);
+          const decision = chooseMovementDecisionForSide(
+            mover,
+            tracking.p1Main,
+            tracking.p1Reserve,
+            tracking.p2Main,
+            tracking.p2Reserve,
+            movementPhase
+          );
           if (decision) {
             applyValidatedMoveDecisionToBoards({
               p1Main: tracking.p1Main,
@@ -2326,7 +2348,10 @@ export function createBettingModeManager(io) {
               speedMultiplier: BETTING_BATTLE_SPEED_MULTIPLIER
             },
             null,
-            { returnSteps: true }
+            {
+              returnSteps: true,
+              maxStepQueueLength: BETTING_MAX_BUFFERED_BATTLE_STEPS
+            }
           ),
           new Promise((resolve) => {
             roundTimeoutId = setTimeout(() => {
@@ -2380,6 +2405,17 @@ export function createBettingModeManager(io) {
             })
             .filter(Boolean)
         : [];
+
+      if (result?.stepsTruncated) {
+        console.warn('[Betting] Battle step queue capped', {
+          lobbyCode: lobby.code,
+          round,
+          generatedSteps: Number(result.generatedStepCount || 0),
+          bufferedSteps: normalizedSteps.length,
+          maxBufferedSteps: BETTING_MAX_BUFFERED_BATTLE_STEPS,
+          memory: getProcessMemorySnapshot()
+        });
+      }
 
       // The playback queue owns socket-safe copies; release the simulator's rich snapshots.
       if (Array.isArray(result?.steps)) {

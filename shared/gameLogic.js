@@ -678,7 +678,12 @@ export function makeReserve(playerId) {
 export async function processMove(gameState, action, io = null, options = {}) {
   const newState = { ...gameState };
   const returnSteps = !!options.returnSteps;
+  const maxStepQueueLength = returnSteps && Number.isFinite(Number(options.maxStepQueueLength))
+    ? Math.max(1, Math.floor(Number(options.maxStepQueueLength)))
+    : Infinity;
   let stepQueue = null;
+  let stepQueueTruncated = false;
+  let generatedStepCount = 0;
 
   switch (action.type) {
     case 'syncBattleState':
@@ -782,7 +787,12 @@ export async function processMove(gameState, action, io = null, options = {}) {
               }
               newState.lastAction = lastAction;
               if (lastAction) {
-                stepQueue.push(deepClone(lastAction));
+                generatedStepCount += 1;
+                if (stepQueue.length < maxStepQueueLength) {
+                  stepQueue.push(deepClone(lastAction));
+                } else {
+                  stepQueueTruncated = true;
+                }
               }
             },
             postEffectDelayMs: 0,
@@ -806,7 +816,16 @@ export async function processMove(gameState, action, io = null, options = {}) {
   }
 
   if (returnSteps) {
-    return { state: newState, steps: stepQueue || [] };
+    if (stepQueueTruncated && stepQueue && stepQueue.length > 0 && newState.lastAction) {
+      // Preserve the authoritative final snapshot when intermediate visual steps are capped.
+      stepQueue[stepQueue.length - 1] = deepClone(newState.lastAction);
+    }
+    return {
+      state: newState,
+      steps: stepQueue || [],
+      stepsTruncated: stepQueueTruncated,
+      generatedStepCount
+    };
   }
   return newState;
 }

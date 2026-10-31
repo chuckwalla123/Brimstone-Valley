@@ -12,7 +12,6 @@ import { getSpellById } from '../spells.js';
 import { getEffectByName } from '../effects.js';
 import { HEROES } from '../heroes.js';
 import { indexToRow, indexToColumn, resolveTargets, columnIndicesForBoard } from '../targeting.js';
-import { EFFECT_EVALUATION_OVERRIDES } from './effectEvaluationOverrides.js';
 import { evaluateEffectValue } from './effectValue.js';
 
 const EASY_AI_DEBUG = (() => {
@@ -43,13 +42,17 @@ const aiLog = (...args) => {
  * @param {Object} hero - Hero object with health, armor properties
  * @returns {number} Effective combat value
  */
-function calculateEffectiveCombatValue(hero) {
-  const health = hero.currentHealth || hero.health || 0;
-  const armor = hero.currentArmor || hero.armor || 0;
+function calculateEffectiveCombatValue(hero, tile = null) {
+  const health = tile
+    ? Number(tile.currentHealth ?? hero.currentHealth ?? hero.health ?? 0)
+    : (hero.currentHealth || hero.health || 0);
+  const armor = tile
+    ? Number(tile.currentArmor ?? hero.currentArmor ?? hero.armor ?? 0)
+    : (hero.currentArmor || hero.armor || 0);
   
   // ECV = √(HP × (HP + Armor × 6))
   // This creates multiplicative scaling where armor and health synergize
-  return Math.sqrt(health * (health + armor * 6));
+  return Math.sqrt(Math.max(0, health) * (Math.max(0, health) + armor * 6));
 }
 
 /**
@@ -178,13 +181,19 @@ const getEffectScore = (effect) => {
   return score > 0 ? score : 1;
 };
 
-const getAdvancedEffectScore = (effect) => {
-  return evaluateEffectValue(effect);
+const getAdvancedEffectScore = (effect, targetTile, evaluationOptions = {}) => {
+  return evaluateEffectValue(effect, {
+    useOverrides: evaluationOptions.useEffectEvaluationOverrides !== false,
+    targetArmor: targetTile?.currentArmor ?? targetTile?.hero?.currentArmor ?? targetTile?.hero?.armor,
+  });
 };
 
-const getRemovedEffectValue = (effect) => {
+const getRemovedEffectValue = (effect, targetTile, evaluationOptions = {}) => {
   const resolved = typeof effect === 'string' ? getEffectByName(effect) : effect;
-  return Math.max(getEffectScore(resolved), evaluateEffectValue(resolved));
+  return Math.max(
+    getEffectScore(resolved),
+    getAdvancedEffectScore(resolved, targetTile, evaluationOptions),
+  );
 };
 
 const getConditionalDamageBranch = (post, casterTile, targetRef) => {
@@ -220,10 +229,19 @@ const getEffectThreatScore = (effect) => {
 };
 
 const estimateIncomingDamagePerTurn = (hero, tileIndex, isP2, enemyBoard = [], enemyReserve = [], allyBoard = [], allyReserve = []) => {
-  if (!hero) return 0;
-  if (tileIndex < 0) return 0; // reserve tiles are untargetable
+  const threat = estimateIncomingThreat(hero, tileIndex, isP2, enemyBoard, enemyReserve, allyBoard, allyReserve);
+  return threat.damage + threat.effects;
+};
 
-  const heroArmor = hero.currentArmor || hero.armor || 0;
+// Splits incoming pressure into direct damage and one-time effect value.
+function estimateIncomingThreat(hero, tileIndex, isP2, enemyBoard = [], enemyReserve = [], allyBoard = [], allyReserve = [], runtimeTile = null) {
+  const threat = { damage: 0, effects: 0 };
+  if (!hero) return threat;
+  if (tileIndex < 0) return threat; // reserve tiles are untargetable
+
+  const heroArmor = runtimeTile
+    ? Number(runtimeTile.currentArmor ?? hero.currentArmor ?? hero.armor ?? 0)
+    : (hero.currentArmor || hero.armor || 0);
   const allyBoardSim = [...(allyBoard || [])];
 
   // Simulate the hero being on the evaluated tile.
@@ -237,8 +255,6 @@ const estimateIncomingDamagePerTurn = (hero, tileIndex, isP2, enemyBoard = [], e
 
   const enemySide = isP2 ? 'p1' : 'p2';
   const targetSide = isP2 ? 'p2' : 'p1';
-
-  let totalIncoming = 0;
 
   (enemyBoard || []).forEach((enemyTile, enemyIdx) => {
     if (!enemyTile || !enemyTile.hero || enemyTile._dead) return;
@@ -291,18 +307,17 @@ const estimateIncomingDamagePerTurn = (hero, tileIndex, isP2, enemyBoard = [], e
 
     if (formula.type === 'attackPower' || formula.type === 'damage' || formula.type === 'roll') {
       const effectiveDamage = getArmorAdjustedDamage(formula, baseValue, heroArmor);
-      totalIncoming += effectiveDamage;
+      threat.damage += effectiveDamage;
     }
 
     const effects = spell.spec.effects || [];
     if (effects.length > 0) {
-      const effectThreat = effects.reduce((sum, effect) => sum + getEffectThreatScore(effect), 0);
-      totalIncoming += effectThreat;
+      threat.effects += effects.reduce((sum, effect) => sum + getEffectThreatScore(effect), 0);
     }
   });
 
-  return totalIncoming;
-};
+  return threat;
+}
 
 const getDeltaEnergyAmount = (deltaEnergy) => {
   if (typeof deltaEnergy === 'number') return deltaEnergy;
@@ -567,22 +582,30 @@ function estimateSpellValue(spell, tileIndex, isP2, enemyBoard = [], enemyReserv
       const effects = [...(spec.effects || []), ...(extra.effects || [])];
       if (isEligible) {
         totalImpact += effects.reduce(
-          (sum, effect) => sum + (useAdvancedSpellEvaluation ? getAdvancedEffectScore(effect) : getEffectScore(effect)),
+          (sum, effect) => sum + (useAdvancedSpellEvaluation
+            ? getAdvancedEffectScore(effect, targetRef.tile, evaluationOptions)
+            : getEffectScore(effect)),
           0,
         );
       }
       if (post.removeTopDebuff && targetHasDebuff) {
         const removed = targetEffects.find(effect => effect?.kind === 'debuff');
-        totalImpact += useAdvancedSpellEvaluation ? getRemovedEffectValue(removed) : getEffectScore(removed);
+        totalImpact += useAdvancedSpellEvaluation
+          ? getRemovedEffectValue(removed, targetRef.tile, evaluationOptions)
+          : getEffectScore(removed);
       }
       if (post.removeTopPositiveEffect) {
         const removed = targetEffects.find(effect => effect?.kind === 'buff');
-        totalImpact += useAdvancedSpellEvaluation ? getRemovedEffectValue(removed) : getEffectScore(removed);
+        totalImpact += useAdvancedSpellEvaluation
+          ? getRemovedEffectValue(removed, targetRef.tile, evaluationOptions)
+          : getEffectScore(removed);
       }
       if (post.removeTopEffectByName?.name) {
         const removedEffect = targetEffects.find(effect => effect?.name === post.removeTopEffectByName.name);
         if (removedEffect) {
-          totalImpact += useAdvancedSpellEvaluation ? getRemovedEffectValue(removedEffect) : getEffectScore(removedEffect);
+          totalImpact += useAdvancedSpellEvaluation
+            ? getRemovedEffectValue(removedEffect, targetRef.tile, evaluationOptions)
+            : getEffectScore(removedEffect);
           const onRemoved = post.removeTopEffectByName.onRemoved || {};
           if (onRemoved.damageTargetAttackPower) {
             totalImpact += getArmorAdjustedDamage(
@@ -1500,8 +1523,22 @@ function calculateHeroPoints(hero, tileIndex, isP2, enemyBoard = [], enemyReserv
   // Dead heroes have zero value
   if (tile && tile._dead) return 0;
   
-  const ecv = calculateEffectiveCombatValue(hero);
+  const advanced = evaluationOptions.advancedSpellEvaluation === true;
+  // Runtime health/armor live on the tile; the hero object only carries base stats.
+  const ecv = calculateEffectiveCombatValue(hero, advanced ? tile : null);
   const tileValue = calculateTileValue(hero, tileIndex, isP2, enemyBoard, enemyReserve, allyBoard, allyReserve, tile, evaluationOptions);
+  const reservePenalty = tileIndex < 0 ? 50 : 0;
+
+  if (advanced) {
+    const threat = estimateIncomingThreat(hero, tileIndex, isP2, enemyBoard, enemyReserve, allyBoard, allyReserve, tile);
+    // A hero cannot lose more than its own value: under lethal pressure its lifetime shrinks instead of
+    // the penalty growing without bound, and one-time effect value is not multiplied by lifetime.
+    const lifetime = ecv / Math.max(4, threat.damage);
+    const damagePenalty = threat.damage * lifetime;
+    const effectPenalty = threat.effects * Math.min(1, lifetime);
+    return ecv + tileValue * lifetime - damagePenalty - effectPenalty - reservePenalty;
+  }
+
   const incomingDamage = estimateIncomingDamagePerTurn(hero, tileIndex, isP2, enemyBoard, enemyReserve, allyBoard, allyReserve);
   
   // Expected turns alive = ECV / 4
@@ -1510,8 +1547,6 @@ function calculateHeroPoints(hero, tileIndex, isP2, enemyBoard = [], enemyReserv
   // Tile contribution weighted by survival expectation
   const tileContribution = tileValue * expectedTurnsAlive;
   const incomingPenalty = incomingDamage * expectedTurnsAlive;
-  
-  const reservePenalty = tileIndex < 0 ? 50 : 0;
 
   return ecv + tileContribution - incomingPenalty - reservePenalty;
 }

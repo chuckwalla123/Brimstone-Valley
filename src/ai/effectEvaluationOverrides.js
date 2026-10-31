@@ -19,14 +19,14 @@ export const EFFECT_EVALUATION_OVERRIDES = {
   "Dexterity": 7.433286333517808,
   "Dexterity II": 14.584089890007993,
   "Bleed": 6,
-  "Leech": 18,
+  "Leech": 12,
   "Elixir": 13.433286333517808,
   "Lie In Wait": 1,
   "Fade": 15,
   "Taunt": 6,
   "Loyalty": 6,
   "Defend": 3.683286333517808,
-  "Subjugation": 6,
+  "Subjugation": 2,
   "Iron Forge": 9.683286333517808,
   "Iron Forge II": 19.084089890007995,
   "Give A Quest": 9,
@@ -48,7 +48,7 @@ export const EFFECT_EVALUATION_OVERRIDES = {
   "Pay The Toll": 12,
   "Ghost": 3,
   "Awaken": 0,
-  "Link": 12,
+  "Link": 6,
   "Void Shield": 9,
   "Frenzy": 9,
   "Lifesteal": 9,
@@ -60,15 +60,15 @@ export const EFFECT_EVALUATION_OVERRIDES = {
   "Rejuvenate": 12,
   "Healing Water": 12,
   "Reap": 12,
-  "Treachery": 6,
+  "Treachery": 2,
   "Prayer": 15,
   "Prayer II": 30,
   "Death Pact": 10,
   "Curse": 6,
   "Counter": 12,
-  "Static Shock": 12,
-  "Power": 12,
-  "Enraged": 10,
+  "Static Shock": 6,
+  "Power": 10,
+  "Enraged": 8,
   "Soul Link": 3,
   "Shackle": 3,
   "Retribution": 18
@@ -236,7 +236,7 @@ export const EFFECT_EVALUATION_OVERRIDE_DIAGNOSTICS = [
     "status": "expression",
     "source": "Target_expected_turns_alive*3",
     "normalized": "Target_expected_turns_alive*3",
-    "resolved": 18,
+    "resolved": 12,
     "unknown": ""
   },
   {
@@ -300,7 +300,7 @@ export const EFFECT_EVALUATION_OVERRIDE_DIAGNOSTICS = [
     "status": "expression",
     "source": "Target_expected_turns_alive*1",
     "normalized": "Target_expected_turns_alive*1",
-    "resolved": 6,
+    "resolved": 2,
     "unknown": ""
   },
   {
@@ -464,7 +464,7 @@ export const EFFECT_EVALUATION_OVERRIDE_DIAGNOSTICS = [
     "status": "expression",
     "source": "Target_expected_turns_alive*2",
     "normalized": "Target_expected_turns_alive*2",
-    "resolved": 12,
+    "resolved": 6,
     "unknown": ""
   },
   {
@@ -554,7 +554,7 @@ export const EFFECT_EVALUATION_OVERRIDE_DIAGNOSTICS = [
     "status": "expression",
     "source": "Target_expected_turns_alive*Target_Armor",
     "normalized": "Target_expected_turns_alive*Target_Armor",
-    "resolved": 6,
+    "resolved": 2,
     "unknown": ""
   },
   {
@@ -600,9 +600,9 @@ export const EFFECT_EVALUATION_OVERRIDE_DIAGNOSTICS = [
   {
     "effect_key": "StaticShock",
     "status": "expression",
-    "source": "Target_expected_turns_alive*2",
-    "normalized": "Target_expected_turns_alive*2",
-    "resolved": 12,
+    "source": "Target_expected_turns_alive*1",
+    "normalized": "Target_expected_turns_alive*1",
+    "resolved": 3,
     "unknown": ""
   },
   {
@@ -610,7 +610,7 @@ export const EFFECT_EVALUATION_OVERRIDE_DIAGNOSTICS = [
     "status": "expression",
     "source": "(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5)",
     "normalized": "(Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5)",
-    "resolved": 12,
+    "resolved": 10,
     "unknown": ""
   },
   {
@@ -618,7 +618,7 @@ export const EFFECT_EVALUATION_OVERRIDE_DIAGNOSTICS = [
     "status": "expression",
     "source": "((Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5)) - 2",
     "normalized": "((Target_ECV_After_Buff - Target_Current_ECV) + ((Target_Tile_Value_After_Buff - Target_Tile_Value_Before) * Target_expected_turns_alive * 0.5)) - 2",
-    "resolved": 10,
+    "resolved": 8,
     "unknown": ""
   },
   {
